@@ -70,6 +70,17 @@ export const INITIAL_APP_LINKS: AppLink[] = [
     badge: 'Rekap Nilai'
   },
   {
+    id: 'link_guru_berita_acara',
+    title: 'Berita Acara Kegiatan Ujian Siswa',
+    url: 'internal:guru_berita_acara',
+    category: 'Fitur Guru',
+    iconName: 'FileText',
+    color: 'purple',
+    description: 'Berita Acara Resmi Asesmen CBT, Rekap Kehadiran, Catatan Insiden & TTD Digital',
+    isInternal: true,
+    badge: 'Berita Acara'
+  },
+  {
     id: 'link_siswa_jadwal',
     title: 'Ruang Ujian Siswa: Jadwal & Kerjakan Soal',
     url: 'internal:siswa_jadwal',
@@ -748,8 +759,25 @@ export const getAllAppLinks = (): AppLink[] => {
     memoryAppLinksCache = INITIAL_APP_LINKS;
     return INITIAL_APP_LINKS;
   }
-  memoryAppLinksCache = stored;
-  return stored;
+
+  // Ensure default core links like Berita Acara are present
+  const hasBeritaAcara = stored.some(l => l.id === 'link_guru_berita_acara' || l.url === 'internal:guru_berita_acara');
+  let finalLinks = stored;
+  if (!hasBeritaAcara) {
+    const beritaLink = INITIAL_APP_LINKS.find(l => l.id === 'link_guru_berita_acara');
+    if (beritaLink) {
+      const rekapIdx = stored.findIndex(l => l.id === 'link_guru_rekap_nilai');
+      if (rekapIdx !== -1) {
+        finalLinks = [...stored.slice(0, rekapIdx + 1), beritaLink, ...stored.slice(rekapIdx + 1)];
+      } else {
+        finalLinks = [...stored, beritaLink];
+      }
+      setStored(STORAGE_KEYS.APP_LINKS, finalLinks);
+    }
+  }
+
+  memoryAppLinksCache = finalLinks;
+  return finalLinks;
 };
 
 export const saveAllAppLinks = (links: AppLink[]): void => {

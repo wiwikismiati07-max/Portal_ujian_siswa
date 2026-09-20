@@ -107,7 +107,7 @@ export default function App() {
     setActiveQuestions([]);
   };
 
-  const [teacherInitialTab, setTeacherInitialTab] = useState<'bank_soal' | 'rekap' | 'paket_ujian'>('bank_soal');
+  const [teacherInitialTab, setTeacherInitialTab] = useState<'bank_soal' | 'rekap' | 'paket_ujian' | 'berita_acara'>('bank_soal');
 
   const handleSelectInternalRoute = (route: string) => {
     const allUsers = getAllUsers();
@@ -160,6 +160,19 @@ export default function App() {
         subjectName: 'Ilmu Pengetahuan Alam (IPA)'
       };
       setTeacherInitialTab('rekap');
+      setLoggedInUser(teacherUser as User);
+      setCurrentUser(teacherUser as User);
+      setActiveExam(null);
+    } else if (route === 'internal:guru_berita_acara') {
+      const teacherUser = allUsers.find(u => u.role === 'guru') || {
+        id: 'user_guru_2',
+        username: 'siti_guru',
+        password: 'guru123',
+        name: 'Siti Rahmawati, S.Pd., M.Si.',
+        role: 'guru',
+        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+      };
+      setTeacherInitialTab('berita_acara');
       setLoggedInUser(teacherUser as User);
       setCurrentUser(teacherUser as User);
       setActiveExam(null);

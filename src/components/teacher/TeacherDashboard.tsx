@@ -23,6 +23,7 @@ import {
 } from '../../utils/storage';
 import { BankSoalReport } from './BankSoalReport';
 import { ClassScoreRecap } from './ClassScoreRecap';
+import { BeritaAcaraExamReport } from './BeritaAcaraExamReport';
 import { QuestionCreatorModal } from './QuestionCreatorModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { TargetClassMultiSelect, ALL_ROMPEL_CLASSES } from './TargetClassMultiSelect';
@@ -51,11 +52,11 @@ import {
 
 interface TeacherDashboardProps {
   teacher: User;
-  initialTab?: 'rekap' | 'bank_soal' | 'paket_ujian';
+  initialTab?: 'rekap' | 'bank_soal' | 'paket_ujian' | 'berita_acara';
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, initialTab = 'paket_ujian' }) => {
-  const [activeTab, setActiveTab] = useState<'rekap' | 'bank_soal' | 'paket_ujian'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'rekap' | 'bank_soal' | 'paket_ujian' | 'berita_acara'>(initialTab);
 
   const [exams, setExams] = useState<Exam[]>(getAllExams());
   const [questions, setQuestions] = useState<Question[]>(getAllQuestions());
@@ -655,6 +656,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               <span>Rekap & Analisa Nilai</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('berita_acara')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'berita_acara'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4 text-purple-600" />
+              <span>Berita Acara Ujian</span>
+            </button>
           </div>
 
           {/* TAB 1: KELOLA PAKET UJIAN */}
@@ -828,6 +842,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               exams={displayExams}
               subjects={displaySubjects}
               teacher={activeTeacher}
+            />
+          )}
+
+          {/* TAB 4: BERITA ACARA KEGIATAN UJIAN */}
+          {activeTab === 'berita_acara' && (
+            <BeritaAcaraExamReport
+              teacher={activeTeacher}
+              preselectedExamId={displayExams[0]?.id}
             />
           )}
 

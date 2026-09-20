@@ -44,7 +44,10 @@ import {
   Settings,
   Share2,
   Copy,
-  LayoutDashboard
+  LayoutDashboard,
+  FileText,
+  ClipboardList,
+  FileCheck
 } from 'lucide-react';
 
 interface Dashboard3DLauncherProps {
@@ -66,7 +69,10 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Globe,
   ShieldCheck,
   Layers,
-  LayoutDashboard
+  LayoutDashboard,
+  FileText,
+  ClipboardList,
+  FileCheck
 };
 
 // Color theme helper (Soft Light Pastel Palette)
