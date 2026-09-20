@@ -358,27 +358,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="bg-gradient-to-br from-rose-950 via-rose-900 to-slate-950 rounded-3xl p-6 sm:p-8 lg:p-10 text-white shadow-xl shadow-rose-950/20 flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden border border-rose-800/30">
+      {/* Header Banner - Soft Light Theme */}
+      <div className="bg-gradient-to-br from-rose-50/90 via-amber-50/50 to-white rounded-3xl p-6 sm:p-8 lg:p-10 text-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden border border-rose-200/80">
         {/* Subtle ambient lighting */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-rose-500/15 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-rose-200/30 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-amber-200/30 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 space-y-2">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-rose-200 border border-white/15 shadow-2xs">
-              <ShieldCheck className="w-3.5 h-3.5 text-rose-300" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full text-xs font-bold text-rose-700 border border-rose-200 shadow-2xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
               <span>Pusat Kendali Administrator</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 backdrop-blur-md rounded-full text-xs font-bold text-emerald-300 border border-emerald-400/30">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full text-xs font-bold text-emerald-800 border border-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
               <span>Supabase Cloud Terhubung</span>
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
             Kelola Pengguna & Kredensial CBT
           </h1>
-          <p className="text-rose-100/85 text-xs sm:text-sm max-w-xl leading-relaxed">
+          <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
             Semua sinkronisasi akun siswa/guru, rekap nilai ujian, dan konfigurasi master data otomatis terpusat di Supabase Cloud dengan integritas tinggi.
           </p>
         </div>
@@ -388,7 +388,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             <button
               type="button"
               onClick={handleCleanDuplicates}
-              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-amber-950/30 animate-pulse"
+              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-500/20 animate-pulse"
               title="Bersihkan Akun Duplikat / Ganda"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
@@ -398,10 +398,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           <button
             type="button"
             onClick={() => setShowSqlModal(true)}
-            className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-rose-100 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             title="Lihat & Salin Kode SQL Supabase"
           >
-            <Database className="w-4 h-4 text-emerald-300" />
+            <Database className="w-4 h-4 text-emerald-600" />
             <span>Skrip SQL Supabase</span>
           </button>
           <button
@@ -409,8 +409,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             onClick={() => setShowExcelImport(!showExcelImport)}
             className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer border ${
               showExcelImport
-                ? 'bg-white text-rose-950 border-white shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-rose-100 border-white/20 backdrop-blur-xs'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-md'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />

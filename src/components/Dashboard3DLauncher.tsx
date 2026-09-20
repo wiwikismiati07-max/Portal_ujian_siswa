@@ -382,14 +382,14 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
       <div className="flex-1 flex flex-col lg:flex-row h-screen overflow-hidden relative">
         
         {/* Ambient Glowing Soft Backdrop */}
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-200/30 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-[120px] pointer-events-none no-print"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-200/30 rounded-full blur-[120px] pointer-events-none no-print"></div>
 
         {/* LEFT SIDEBAR: 3D APP LAUNCHER PANEL */}
         <aside
           className={`${
-            isSidebarOpen ? 'w-full lg:w-96 xl:w-[410px]' : 'w-0 lg:w-16'
-          } shrink-0 bg-white/95 backdrop-blur-2xl border-r border-slate-200/90 flex flex-col transition-all duration-300 z-30 relative shadow-xl overflow-hidden`}
+            isSidebarOpen ? 'w-full lg:w-96 xl:w-[410px]' : 'w-0 max-w-0 border-r-0 p-0 overflow-hidden'
+          } shrink-0 bg-white/95 backdrop-blur-2xl border-r border-slate-200/90 flex flex-col transition-all duration-300 z-30 relative shadow-xl overflow-hidden no-print`}
         >
           {/* Header Dashboard Title & Controls */}
           <div className="p-4 border-b border-slate-200/90 bg-slate-50/80 flex items-center justify-between gap-3">
@@ -630,18 +630,22 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
         <main className="flex-1 flex flex-col bg-slate-50 overflow-hidden relative">
           
           {/* Simulated Browser Top Navigation Bar */}
-          <div className="h-13 bg-white border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between gap-3 shadow-2xs shrink-0 z-20">
+          <div className="h-13 bg-white border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between gap-3 shadow-2xs shrink-0 z-20 no-print">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               
               {/* Toggle Sidebar Button */}
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                title={isSidebarOpen ? 'Sembunyikan Menu Sidebar' : 'Buka Menu Sidebar'}
-                className="p-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl border border-slate-200 cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-bold transition-all"
+                title={isSidebarOpen ? 'Sembunyikan Menu Dashboard' : 'Buka Menu Dashboard'}
+                className={`px-3 py-2 rounded-xl border cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-extrabold transition-all ${
+                  !isSidebarOpen
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-700 shadow-md shadow-indigo-600/20'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                }`}
               >
-                <Menu className="w-4 h-4 text-indigo-600" />
-                <span className="hidden sm:inline">{isSidebarOpen ? 'Sembunyikan Menu' : 'Menu Dashboard'}</span>
+                <Menu className={`w-4 h-4 ${!isSidebarOpen ? 'text-white' : 'text-indigo-600'}`} />
+                <span>{isSidebarOpen ? 'Sembunyikan Menu' : '☰ Menu Dashboard'}</span>
               </button>
 
               {/* Active App Badge */}
@@ -740,6 +744,19 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
           </div>
         </main>
       </div>
+
+      {/* Floating open sidebar button when menu is hidden */}
+      {!isSidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed bottom-5 left-5 z-40 px-3.5 py-2.5 bg-indigo-600/95 hover:bg-indigo-700 text-white rounded-2xl shadow-xl shadow-indigo-950/20 border border-indigo-400 font-extrabold text-xs flex items-center gap-2 cursor-pointer no-print transition-all hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-left duration-200"
+          title="Klik untuk membuka kembali menu Dashboard"
+        >
+          <Menu className="w-4 h-4 text-white" />
+          <span>Menu Dashboard</span>
+        </button>
+      )}
 
       {/* MODAL: ADD / EDIT LINK APLIKASI */}
       {isAddModalOpen && (

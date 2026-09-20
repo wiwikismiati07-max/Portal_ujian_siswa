@@ -107,7 +107,7 @@ export default function App() {
     setActiveQuestions([]);
   };
 
-  const [teacherInitialTab, setTeacherInitialTab] = useState<'bank_soal' | 'rekap'>('rekap');
+  const [teacherInitialTab, setTeacherInitialTab] = useState<'bank_soal' | 'rekap' | 'paket_ujian'>('bank_soal');
 
   const handleSelectInternalRoute = (route: string) => {
     const allUsers = getAllUsers();
@@ -124,7 +124,20 @@ export default function App() {
       setLoggedInUser(studentUser as User);
       setCurrentUser(studentUser as User);
       setActiveExam(null);
-    } else if (route === 'internal:guru_bank_soal') {
+    } else if (route === 'internal:guru_kelola_paket') {
+      const teacherUser = allUsers.find(u => u.role === 'guru') || {
+        id: 'user_guru_2',
+        username: 'siti_guru',
+        password: 'guru123',
+        name: 'Siti Rahmawati, S.Pd., M.Si.',
+        role: 'guru',
+        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+      };
+      setTeacherInitialTab('paket_ujian');
+      setLoggedInUser(teacherUser as User);
+      setCurrentUser(teacherUser as User);
+      setActiveExam(null);
+    } else if (route === 'internal:guru_bank_soal' || route === 'internal:portal' || route === 'internal:input_data') {
       const teacherUser = allUsers.find(u => u.role === 'guru') || {
         id: 'user_guru_2',
         username: 'siti_guru',

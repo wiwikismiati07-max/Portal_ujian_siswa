@@ -132,30 +132,30 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
       
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 rounded-3xl p-6 sm:p-8 lg:p-10 text-white shadow-xl shadow-indigo-950/20 relative overflow-hidden border border-indigo-700/30">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Welcome Banner - Soft Light Palette */}
+      <div className="bg-gradient-to-br from-indigo-50/90 via-sky-50/60 to-white rounded-3xl p-6 sm:p-8 lg:p-10 text-slate-800 shadow-sm relative overflow-hidden border border-indigo-200/80">
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-indigo-200/30 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200 border border-white/15 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white rounded-full text-xs font-bold text-indigo-700 border border-indigo-200 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
               <span>Ruang Belajar & Ujian Siswa SPANJU</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900">
               {getGreeting()}, {student.name}!
             </h1>
             
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs sm:text-sm text-indigo-100/90 font-medium">
-              <span className="px-2.5 py-1 bg-white/10 rounded-lg border border-white/10 font-mono">
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs sm:text-sm text-slate-600 font-medium">
+              <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 font-mono shadow-2xs text-slate-700">
                 NIS: {student.nipOrNis || '-'}
               </span>
-              <span className="px-2.5 py-1 bg-white/10 rounded-lg border border-white/10">
-                Kelas: <strong className="text-white font-bold">{studentClass}</strong>
+              <span className="px-2.5 py-1 bg-white rounded-lg border border-slate-200 shadow-2xs text-slate-700">
+                Kelas: <strong className="text-indigo-700 font-bold">{studentClass}</strong>
               </span>
-              <span className="text-indigo-200/80 hidden sm:inline">
+              <span className="text-slate-500 hidden sm:inline">
                 • Sistem Asesmen Berbasis Komputer
               </span>
             </div>
@@ -163,19 +163,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
           {/* Quick Stats Bento Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 shrink-0">
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 text-center min-w-[120px] shadow-2xs">
-              <span className="text-xs text-indigo-200 font-bold block mb-1">Ujian Selesai</span>
+            <div className="bg-white p-4 rounded-2xl border border-indigo-100 text-center min-w-[120px] shadow-xs">
+              <span className="text-xs text-slate-500 font-bold block mb-1">Ujian Selesai</span>
               <div className="flex items-center justify-center gap-1.5">
-                <FileCheck className="w-5 h-5 text-emerald-300" />
-                <span className="text-2xl font-extrabold text-white">{completedCount}</span>
+                <FileCheck className="w-5 h-5 text-emerald-600" />
+                <span className="text-2xl font-extrabold text-slate-900">{completedCount}</span>
               </div>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 text-center min-w-[120px] shadow-2xs">
-              <span className="text-xs text-indigo-200 font-bold block mb-1">Rata-rata Nilai</span>
+            <div className="bg-white p-4 rounded-2xl border border-indigo-100 text-center min-w-[120px] shadow-xs">
+              <span className="text-xs text-slate-500 font-bold block mb-1">Rata-rata Nilai</span>
               <div className="flex items-center justify-center gap-1.5">
-                <Award className="w-5 h-5 text-amber-300" />
-                <span className="text-2xl font-extrabold text-amber-300">{avgScore}%</span>
+                <Award className="w-5 h-5 text-amber-500" />
+                <span className="text-2xl font-extrabold text-amber-600">{avgScore}%</span>
               </div>
             </div>
           </div>

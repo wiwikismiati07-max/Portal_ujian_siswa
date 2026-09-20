@@ -27,56 +27,67 @@ import {
 export const INITIAL_APP_LINKS: AppLink[] = [
   {
     id: 'link_portal_utama',
-    title: 'Portal Utama SPANJU CBT',
-    url: 'internal:portal',
+    title: 'Portal CBT: Lembar Input Data Soal',
+    url: 'internal:guru_bank_soal',
     category: 'Aplikasi Utama',
     iconName: 'GraduationCap',
     color: 'indigo',
-    description: 'Halaman Utama Portal SPANJU CBT & Akses Multi-Role',
+    description: 'Klik 1 kali langsung menuju lembar input data kisi-kisi, bank soal, dan paket ujian',
     isInternal: true,
-    badge: 'Utama'
+    badge: 'Input Data'
   },
   {
-    id: 'link_siswa_jadwal',
-    title: 'Fitur Siswa: Mata Pelajaran & Jadwal Ujian',
-    url: 'internal:siswa_jadwal',
-    category: 'Fitur Siswa',
-    iconName: 'School',
+    id: 'link_guru_kelola_paket',
+    title: 'Kelola Paket Ujian & Edit Data',
+    url: 'internal:guru_kelola_paket',
+    category: 'Fitur Guru',
+    iconName: 'Layers',
     color: 'emerald',
-    description: 'Daftar Mata Pelajaran, Jadwal Ujian Aktif & Pengerjaan Soal AKM',
+    description: 'Lembar input kelola paket ujian, edit judul, jadwal upload rilis & durasi',
     isInternal: true,
-    badge: 'Siswa'
+    badge: 'Kelola Paket'
   },
   {
     id: 'link_guru_bank_soal',
-    title: 'Fitur Guru: Bank Soal & Kunci Jawaban',
+    title: 'Lembar Input Bank Soal & Kunci Jawaban',
     url: 'internal:guru_bank_soal',
     category: 'Fitur Guru',
     iconName: 'BookOpen',
     color: 'amber',
-    description: 'Input Data Soal AKM, Kunci Jawaban, Bobot & Manajemen Ujian',
+    description: 'Input Data Soal AKM, Kunci Jawaban, Bobot & Matriks Kisi-Kisi Resmi',
     isInternal: true,
     badge: 'Bank Soal'
   },
   {
     id: 'link_guru_rekap_nilai',
-    title: 'Fitur Guru: Rekapitulasi Hasil Nilai Ujian',
+    title: 'Rekapitulasi & Analisis Nilai Ujian',
     url: 'internal:guru_rekap_nilai',
     category: 'Fitur Guru',
     iconName: 'FileSpreadsheet',
     color: 'rose',
-    description: 'Rekap Nilai Siswa, Filter Per Kelas, Ekspor Excel & Cetak Hasil',
+    description: 'Rekap Nilai Siswa, Analisis Ketuntasan KKM, Remedial, Pengayaan & Cetak Nilai',
     isInternal: true,
-    badge: 'Nilai'
+    badge: 'Rekap Nilai'
+  },
+  {
+    id: 'link_siswa_jadwal',
+    title: 'Ruang Ujian Siswa: Jadwal & Kerjakan Soal',
+    url: 'internal:siswa_jadwal',
+    category: 'Fitur Siswa',
+    iconName: 'School',
+    color: 'teal',
+    description: 'Daftar Mata Pelajaran, Jadwal Ujian Aktif & Pengerjaan Soal AKM Siswa',
+    isInternal: true,
+    badge: 'Siswa'
   },
   {
     id: 'link_admin_system',
-    title: 'Fitur Admin: Kelola Akun & Jadwal',
+    title: 'Manajemen Akun & Pengaturan Sistem',
     url: 'internal:admin_management',
     category: 'Fitur Admin',
     iconName: 'ShieldCheck',
     color: 'blue',
-    description: 'Manajemen Akun Siswa, Guru, Mata Pelajaran & Pengaturan CBT',
+    description: 'Manajemen Akun Siswa, Guru, Sinkronisasi Supabase & Konfigurasi CBT',
     isInternal: true,
     badge: 'Admin'
   }
@@ -89,7 +100,7 @@ const STORAGE_KEYS = {
   EXAMS: 'cbt_exams_v2',
   QUESTIONS: 'cbt_questions_v2',
   SUBMISSIONS: 'cbt_submissions_v2',
-  APP_LINKS: 'cbt_app_links_v4'
+  APP_LINKS: 'cbt_app_links_v5'
 };
 
 // Safe storage access helper with memory cache fallback if localStorage fails
