@@ -169,48 +169,107 @@ export const mapQuestionFromDb = (row: any): Question => ({
   imageUrl: row.image_url || undefined
 });
 
-export const mapSubmissionToDb = (s: ExamSubmission) => ({
-  id: s.id,
-  exam_id: s.examId,
-  exam_title: s.examTitle,
-  subject_name: s.subjectName,
-  student_id: s.studentId,
-  student_name: s.studentName,
-  student_class: s.studentClass,
-  student_nip_or_nis: s.studentNipOrNis || null,
-  answers: s.answers || {},
-  earned_score: s.earnedScore,
-  total_score: s.totalScore,
-  percentage: s.percentage,
-  passed: s.passed,
-  violation_count: s.violationCount || 0,
-  violation_logs: s.violationLogs || [],
-  started_at: s.startedAt,
-  submitted_at: s.submittedAt,
-  evaluated_answers: s.evaluatedAnswers || null,
-  updated_at: new Date().toISOString()
-});
+export const mapSubmissionToDb = (s: ExamSubmission, fallbackMode = false) => {
+  const metaObj = {
+    violationCount: s.violationCount || 0,
+    violationLogs: s.violationLogs || [],
+    studentNipOrNis: s.studentNipOrNis || null,
+    evaluatedAnswers: s.evaluatedAnswers || null,
+    startedAt: s.startedAt,
+    submittedAt: s.submittedAt
+  };
 
-export const mapSubmissionFromDb = (row: any): ExamSubmission => ({
-  id: row.id,
-  examId: row.exam_id,
-  examTitle: row.exam_title,
-  subjectName: row.subject_name,
-  studentId: row.student_id,
-  studentName: row.student_name,
-  studentClass: row.student_class,
-  studentNipOrNis: row.student_nip_or_nis || row.nip_or_nis || undefined,
-  answers: row.answers || {},
-  earnedScore: Number(row.earned_score) || 0,
-  totalScore: Number(row.total_score) || 100,
-  percentage: Number(row.percentage) || 0,
-  passed: !!row.passed,
-  violationCount: Number(row.violation_count) || 0,
-  violationLogs: Array.isArray(row.violation_logs) ? row.violation_logs : [],
-  startedAt: row.started_at,
-  submittedAt: row.submitted_at,
-  evaluatedAnswers: row.evaluated_answers || undefined
-});
+  const safeAnswers = {
+    ...(s.answers || {}),
+    _meta: metaObj
+  };
+
+  if (fallbackMode) {
+    return {
+      id: s.id,
+      exam_id: s.examId,
+      exam_title: s.examTitle,
+      subject_name: s.subjectName,
+      student_id: s.studentId,
+      student_name: s.studentName,
+      student_class: s.studentClass,
+      answers: safeAnswers,
+      earned_score: typeof s.earnedScore === 'number' ? s.earnedScore : 0,
+      total_score: typeof s.totalScore === 'number' ? s.totalScore : 100,
+      percentage: typeof s.percentage === 'number' ? s.percentage : 0,
+      passed: !!s.passed,
+      started_at: s.startedAt || new Date().toISOString(),
+      submitted_at: s.submittedAt || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  return {
+    id: s.id,
+    exam_id: s.examId,
+    exam_title: s.examTitle,
+    subject_name: s.subjectName,
+    student_id: s.studentId,
+    student_name: s.studentName,
+    student_class: s.studentClass,
+    student_nip_or_nis: s.studentNipOrNis || null,
+    answers: safeAnswers,
+    earned_score: typeof s.earnedScore === 'number' ? s.earnedScore : 0,
+    total_score: typeof s.totalScore === 'number' ? s.totalScore : 100,
+    percentage: typeof s.percentage === 'number' ? s.percentage : 0,
+    passed: !!s.passed,
+    violation_count: s.violationCount || 0,
+    violation_logs: s.violationLogs || [],
+    started_at: s.startedAt || new Date().toISOString(),
+    submitted_at: s.submittedAt || new Date().toISOString(),
+    evaluated_answers: s.evaluatedAnswers || null,
+    updated_at: new Date().toISOString()
+  };
+};
+
+export const mapSubmissionFromDb = (row: any): ExamSubmission => {
+  const rawAnswers = row.answers || {};
+  const meta = rawAnswers._meta || {};
+
+  // Clean user answers from internal meta
+  const cleanAnswers = { ...rawAnswers };
+  delete cleanAnswers._meta;
+  delete cleanAnswers.__violationLogs;
+  delete cleanAnswers.__violationCount;
+  delete cleanAnswers.__evaluatedAnswers;
+
+  const violationLogs = Array.isArray(row.violation_logs) && row.violation_logs.length > 0
+    ? row.violation_logs
+    : (Array.isArray(meta.violationLogs) ? meta.violationLogs : []);
+
+  const violationCount = row.violation_count !== undefined && row.violation_count !== null
+    ? (typeof row.violation_count === 'number' ? row.violation_count : Number(row.violation_count) || 0)
+    : (meta.violationCount !== undefined ? Number(meta.violationCount) || 0 : violationLogs.length);
+
+  const studentNipOrNis = row.student_nip_or_nis || row.nip_or_nis || meta.studentNipOrNis || undefined;
+  const evaluatedAnswers = row.evaluated_answers || meta.evaluatedAnswers || undefined;
+
+  return {
+    id: row.id,
+    examId: row.exam_id,
+    examTitle: row.exam_title,
+    subjectName: row.subject_name,
+    studentId: row.student_id,
+    studentName: row.student_name,
+    studentClass: row.student_class,
+    studentNipOrNis,
+    answers: cleanAnswers,
+    earnedScore: typeof row.earned_score === 'number' ? row.earned_score : (Number(row.earned_score) || 0),
+    totalScore: typeof row.total_score === 'number' ? row.total_score : (Number(row.total_score) || 100),
+    percentage: typeof row.percentage === 'number' ? row.percentage : (Number(row.percentage) || 0),
+    passed: !!row.passed,
+    violationCount,
+    violationLogs,
+    startedAt: row.started_at || meta.startedAt,
+    submittedAt: row.submitted_at || meta.submittedAt,
+    evaluatedAnswers
+  };
+};
 
 // ==========================================
 // CHUNKING HELPER FOR BULK OPERATIONS
@@ -228,8 +287,22 @@ export const upsertInChunks = async (
       const chunk = rows.slice(i, i + chunkSize);
       const { error } = await supabase.from(tableName).upsert(chunk);
       if (error) {
-        console.error(`Error upserting chunk ${i / chunkSize + 1} to ${tableName}:`, error);
-        return { success: false, error: error.message };
+        console.warn(`Error upserting chunk ${i / chunkSize + 1} to ${tableName}:`, error.message);
+        
+        // If submissions table had missing columns in Supabase, retry this chunk in fallback mode
+        if (tableName === 'cbt_submissions') {
+          const fallbackChunk = chunk.map((r: any) => {
+            const { violation_logs, violation_count, student_nip_or_nis, evaluated_answers, ...rest } = r;
+            return rest;
+          });
+          const { error: fbErr } = await supabase.from(tableName).upsert(fallbackChunk);
+          if (fbErr) {
+            console.error('Fallback chunk upsert also failed:', fbErr.message);
+            return { success: false, error: fbErr.message };
+          }
+        } else {
+          return { success: false, error: error.message };
+        }
       }
       if (onProgress) {
         onProgress(Math.min(i + chunkSize, rows.length), rows.length);
@@ -238,7 +311,7 @@ export const upsertInChunks = async (
     return { success: true };
   } catch (err: any) {
     console.error(`Exception during chunked upsert to ${tableName}:`, err);
-    return { success: false, error: err?.message || 'Network exception during upsert' };
+    return { success: false, error: err.message || 'Gagal menyimpan data ke Supabase' };
   }
 };
 
@@ -557,11 +630,17 @@ export const broadcastCbtEvent = (action: string, data?: any) => {
 
 export const syncSubmissionToSupabase = async (submission: ExamSubmission): Promise<boolean> => {
   try {
-    const dbRow = mapSubmissionToDb(submission);
-    const { error } = await supabase.from('cbt_submissions').upsert(dbRow);
+    const dbRow = mapSubmissionToDb(submission, false);
+    const { error } = await supabase.from('cbt_submissions').upsert(dbRow as any);
     if (error) {
-      console.warn('Supabase submission sync error:', error.message);
-      return false;
+      console.warn('Supabase submission full upsert failed, retrying with fallback compatibility payload:', error.message);
+      // Fallback in case columns like violation_logs or evaluated_answers are not yet in user's Supabase
+      const fallbackRow = mapSubmissionToDb(submission, true);
+      const { error: fbErr } = await supabase.from('cbt_submissions').upsert(fallbackRow as any);
+      if (fbErr) {
+        console.error('Supabase submission fallback upsert also failed:', fbErr.message);
+        return false;
+      }
     }
     broadcastCbtEvent('new_submission', { examId: submission.examId, studentId: submission.studentId });
     return true;
@@ -803,7 +882,7 @@ export const uploadAllLocalToSupabase = async (
     if (questions.length > 0) await upsertInChunks('cbt_questions', questions.map(mapQuestionToDb));
 
     if (onProgress) onProgress(`Menyimpan ${submissions.length} hasil ujian siswa...`);
-    if (submissions.length > 0) await upsertInChunks('cbt_submissions', submissions.map(mapSubmissionToDb));
+    if (submissions.length > 0) await upsertInChunks('cbt_submissions', submissions.map(s => mapSubmissionToDb(s)));
 
     setStatus('connected', 'Semua data berhasil disimpan & disinkronkan ke Supabase!');
     broadcastCbtEvent('full_sync_completed');

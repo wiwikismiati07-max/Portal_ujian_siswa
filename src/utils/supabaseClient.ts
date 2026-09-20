@@ -122,6 +122,12 @@ CREATE TABLE IF NOT EXISTS public.cbt_submissions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Migrasi aman untuk tabel yang sudah ada sebelumnya
+ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS violation_count INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS violation_logs JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS student_nip_or_nis TEXT;
+ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS evaluated_answers JSONB;
+
 CREATE INDEX IF NOT EXISTS idx_cbt_submissions_exam_student ON public.cbt_submissions(exam_id, student_id);
 
 -- 6. TABEL UNIVERSAL SYNC & BACKUP

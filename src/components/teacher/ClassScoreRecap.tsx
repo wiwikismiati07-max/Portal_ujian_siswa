@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Exam, ExamSubmission, Subject } from '../../types';
+import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
+import { getAllUsers } from '../../utils/storage';
 import {
   Printer,
   Search,
@@ -20,7 +21,9 @@ import {
   CheckCircle2,
   Clock,
   Calendar,
-  Sparkles
+  Sparkles,
+  UserX,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface ClassScoreRecapProps {
@@ -39,8 +42,13 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   );
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [integrityFilter, setIntegrityFilter] = useState<'all' | 'clean' | 'violated' | 'critical'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'zero' | 'remedial' | 'passed'>('all');
+  const [showAllClassRoster, setShowAllClassRoster] = useState<boolean>(true);
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [inspectionSubmission, setInspectionSubmission] = useState<ExamSubmission | null>(null);
+
+  const allUsers = useMemo(() => getAllUsers(), []);
+  const allStudents = useMemo(() => allUsers.filter(u => u.role === 'siswa'), [allUsers]);
 
   // Extract unique classes from submissions & exams & default classes (7A-9H)
   const availableClasses = useMemo(() => {
@@ -48,21 +56,60 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       new Set([
         ...DEFAULT_CLASSES,
         ...exams.flatMap(e => e.targetClasses || []),
-        ...submissions.map(s => s.studentClass).filter(Boolean)
+        ...submissions.map(s => s.studentClass).filter(Boolean),
+        ...allStudents.map(s => s.classGroup).filter(Boolean)
       ])
     ).filter(Boolean).sort();
-  }, [exams, submissions]);
+  }, [exams, submissions, allStudents]);
 
-  // Base filtered by Exam & Class (for calculating comparative stats)
+  const currentExam = useMemo(() => exams.find(e => e.id === selectedExamId), [exams, selectedExamId]);
+
+  // Base filtered by Exam & Class (with optional full class roster inclusion)
   const baseSubmissions = useMemo(() => {
-    return submissions.filter(sub => {
+    const rawFiltered = submissions.filter(sub => {
       if (selectedExamId !== 'all' && sub.examId !== selectedExamId) return false;
       if (selectedClass !== 'all' && sub.studentClass !== selectedClass) return false;
       return true;
     });
-  }, [submissions, selectedExamId, selectedClass]);
 
-  // Filter submissions by Integrity and Search keyword
+    if (!showAllClassRoster || selectedClass === 'all') {
+      return rawFiltered;
+    }
+
+    // Merge registered students in the selected class who have not submitted
+    const targetStudents = allStudents.filter(s => s.classGroup === selectedClass);
+    const existingStudentIds = new Set(rawFiltered.map(s => s.studentId));
+
+    const missingRows: ExamSubmission[] = [];
+    targetStudents.forEach(stu => {
+      if (!existingStudentIds.has(stu.id)) {
+        missingRows.push({
+          id: `unsub_${stu.id}_${selectedExamId}`,
+          examId: selectedExamId !== 'all' ? selectedExamId : 'unassigned',
+          examTitle: currentExam ? currentExam.title : 'Belum Mengikuti',
+          subjectName: currentExam ? currentExam.subjectName : 'Semua Mapel',
+          studentId: stu.id,
+          studentName: stu.name,
+          studentClass: stu.classGroup || selectedClass,
+          studentNipOrNis: stu.nipOrNis || undefined,
+          answers: {},
+          earnedScore: 0,
+          totalScore: currentExam ? currentExam.totalScore : 100,
+          percentage: 0,
+          passed: false,
+          violationCount: 0,
+          violationLogs: [],
+          startedAt: '',
+          submittedAt: '',
+          evaluatedAnswers: undefined
+        });
+      }
+    });
+
+    return [...rawFiltered, ...missingRows];
+  }, [submissions, selectedExamId, selectedClass, showAllClassRoster, allStudents, currentExam]);
+
+  // Filter submissions by Integrity, Score Filter, and Search keyword
   const filteredSubmissions = useMemo(() => {
     return baseSubmissions.filter(sub => {
       // Integrity filter
@@ -70,6 +117,12 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       if (integrityFilter === 'clean' && violations > 0) return false;
       if (integrityFilter === 'violated' && violations === 0) return false;
       if (integrityFilter === 'critical' && violations < 3) return false;
+
+      // Score Filter (including 0 scores explicitly)
+      const passing = currentExam ? currentExam.passingScore : 75;
+      if (scoreFilter === 'zero' && sub.percentage !== 0 && sub.earnedScore !== 0) return false;
+      if (scoreFilter === 'remedial' && sub.percentage >= passing) return false;
+      if (scoreFilter === 'passed' && sub.percentage < passing) return false;
 
       // Search keyword
       if (searchKeyword.trim()) {
@@ -82,16 +135,18 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       }
       return true;
     });
-  }, [baseSubmissions, integrityFilter, searchKeyword]);
+  }, [baseSubmissions, integrityFilter, scoreFilter, searchKeyword, currentExam]);
 
   // Calculate statistics from base submissions
   const totalBaseStudents = baseSubmissions.length;
-  const cleanStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) === 0).length;
+  const zeroScoreStudentsCount = baseSubmissions.filter(s => s.percentage === 0 || s.earnedScore === 0).length;
+  const cleanStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) === 0 && !!s.submittedAt).length;
   const violatedStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) > 0).length;
   const criticalStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) >= 3).length;
 
   const cleanPercentage = totalBaseStudents > 0 ? Math.round((cleanStudentsCount / totalBaseStudents) * 100) : 0;
   const violatedPercentage = totalBaseStudents > 0 ? Math.round((violatedStudentsCount / totalBaseStudents) * 100) : 0;
+  const zeroPercentage = totalBaseStudents > 0 ? Math.round((zeroScoreStudentsCount / totalBaseStudents) * 100) : 0;
 
   const scores = baseSubmissions.map(s => s.percentage);
   const avgScore = totalBaseStudents > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / totalBaseStudents) : 0;
@@ -99,8 +154,6 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const minScore = totalBaseStudents > 0 ? Math.min(...scores) : 0;
   const passedCount = baseSubmissions.filter(s => s.passed).length;
   const passedPercentage = totalBaseStudents > 0 ? Math.round((passedCount / totalBaseStudents) * 100) : 0;
-
-  const currentExam = exams.find(e => e.id === selectedExamId);
 
   const handleExportExcel = () => {
     const title = currentExam ? `${currentExam.subjectName}_${currentExam.title}` : 'Semua_Ujian';
@@ -114,38 +167,59 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* Top Segmented Integrity Filter Tabs */}
+      {/* Top Segmented Filter Tabs */}
       <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 no-print">
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          {/* Semua */}
           <button
             type="button"
-            onClick={() => setIntegrityFilter('all')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              integrityFilter === 'all'
+            onClick={() => { setIntegrityFilter('all'); setScoreFilter('all'); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              integrityFilter === 'all' && scoreFilter === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100/80 text-slate-700 hover:bg-slate-200/70'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Semua Peserta</span>
+            <span>Semua Siswa</span>
             <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
-              integrityFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              integrityFilter === 'all' && scoreFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
             }`}>
               {totalBaseStudents}
             </span>
           </button>
 
+          {/* Nilai 0 Filter Button */}
           <button
             type="button"
-            onClick={() => setIntegrityFilter('clean')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            onClick={() => { setScoreFilter(scoreFilter === 'zero' ? 'all' : 'zero'); setIntegrityFilter('all'); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              scoreFilter === 'zero'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 text-rose-800 hover:bg-rose-100/80 border border-rose-200/70'
+            }`}
+          >
+            <UserX className="w-3.5 h-3.5" />
+            <span>Nilai 0 / Belum Submit</span>
+            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+              scoreFilter === 'zero' ? 'bg-white/20 text-white' : 'bg-rose-200/80 text-rose-900'
+            }`}>
+              {zeroScoreStudentsCount}
+            </span>
+          </button>
+
+          {/* Tertib */}
+          <button
+            type="button"
+            onClick={() => { setIntegrityFilter(integrityFilter === 'clean' ? 'all' : 'clean'); setScoreFilter('all'); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               integrityFilter === 'clean'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100/80 border border-emerald-200/60'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Tertib & Disiplin (0x)</span>
+            <span>Tertib (0x)</span>
             <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
               integrityFilter === 'clean' ? 'bg-white/20 text-white' : 'bg-emerald-200/80 text-emerald-900'
             }`}>
@@ -153,17 +227,18 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </span>
           </button>
 
+          {/* Melanggar */}
           <button
             type="button"
-            onClick={() => setIntegrityFilter('violated')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            onClick={() => { setIntegrityFilter(integrityFilter === 'violated' ? 'all' : 'violated'); setScoreFilter('all'); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               integrityFilter === 'violated'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'bg-amber-50 text-amber-900 hover:bg-amber-100/80 border border-amber-200/60'
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Melakukan Pelanggaran</span>
+            <span>Melanggar Layar</span>
             <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
               integrityFilter === 'violated' ? 'bg-white/20 text-white' : 'bg-amber-200/80 text-amber-950'
             }`}>
@@ -174,15 +249,15 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           {criticalStudentsCount > 0 && (
             <button
               type="button"
-              onClick={() => setIntegrityFilter('critical')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              onClick={() => { setIntegrityFilter(integrityFilter === 'critical' ? 'all' : 'critical'); setScoreFilter('all'); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 integrityFilter === 'critical'
-                  ? 'bg-rose-600 text-white shadow-xs'
+                  ? 'bg-rose-700 text-white shadow-xs'
                   : 'bg-rose-50 text-rose-800 hover:bg-rose-100/80 border border-rose-200/60'
               }`}
             >
               <AlertOctagon className="w-3.5 h-3.5" />
-              <span>Kritis (≥3x Auto-Submit)</span>
+              <span>Kritis (≥3x)</span>
               <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
                 integrityFilter === 'critical' ? 'bg-white/20 text-white' : 'bg-rose-200/80 text-rose-900'
               }`}>
@@ -216,7 +291,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         </div>
       </div>
 
-      {/* Top Filter Bar (Exam, Class, Search) */}
+      {/* Top Filter Bar (Exam, Class, Score, Search) */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         
         {/* Dropdowns */}
@@ -257,19 +332,31 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
           <div className="flex items-center gap-2">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
-              Integritas:
+              Nilai:
             </label>
             <select
-              value={integrityFilter}
-              onChange={(e) => setIntegrityFilter(e.target.value as any)}
+              value={scoreFilter}
+              onChange={(e) => setScoreFilter(e.target.value as any)}
               className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              <option value="all">Semua Status (Tertib & Melanggar)</option>
-              <option value="clean">✅ Tertib & Bersih (0x Pelanggaran)</option>
-              <option value="violated">⚠️ Terdeteksi Melanggar (≥1x Pindah Layar)</option>
-              <option value="critical">🚨 Pelanggaran Kritis (≥3x Auto-Submit)</option>
+              <option value="all">Semua Nilai</option>
+              <option value="zero">🔴 Nilai 0 / Belum Selesai</option>
+              <option value="remedial">⚠️ Nilai Remedial (&lt; KKM)</option>
+              <option value="passed">✅ Nilai Tuntas (&ge; KKM)</option>
             </select>
           </div>
+
+          {selectedClass !== 'all' && (
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showAllClassRoster}
+                onChange={(e) => setShowAllClassRoster(e.target.checked)}
+                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span className="font-semibold">Sertakan Siswa Belum Ujian (Nilai 0)</span>
+            </label>
+          )}
         </div>
 
         {/* Search box */}
@@ -307,6 +394,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <span>Mata Pelajaran: <strong>{currentExam ? currentExam.subjectName : 'Semua Mapel'}</strong></span>
           <span>Filter Kelas: <strong>{selectedClass === 'all' ? 'Semua Kelas' : selectedClass}</strong></span>
           <span>Jumlah Peserta: <strong>{totalBaseStudents} Siswa</strong></span>
+          <span>Siswa Nilai 0: <strong>{zeroScoreStudentsCount} ({zeroPercentage}%)</strong></span>
           <span>Siswa Tertib: <strong>{cleanStudentsCount} ({cleanPercentage}%)</strong></span>
           <span>Siswa Melanggar: <strong>{violatedStudentsCount} ({violatedPercentage}%)</strong></span>
           <span>Rata-Rata Nilai: <strong>{avgScore}</strong></span>
@@ -314,20 +402,41 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         </div>
       </div>
 
-      {/* Statistical Summary Cards with Integrity Highlights */}
+      {/* Statistical Summary Cards with Integrity & Zero Score Highlights */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         
         {/* Total Peserta */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wide">Peserta Selesai</span>
+            <span className="text-xs font-bold uppercase tracking-wide">Total Siswa</span>
             <Users className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-extrabold text-slate-900">{totalBaseStudents}</span>
             <span className="text-[11px] font-semibold text-slate-500">Siswa</span>
           </div>
-          <span className="text-[11px] text-slate-500 block mt-0.5">Sudah kumpul jawaban</span>
+          <span className="text-[11px] text-slate-500 block mt-0.5">Daftar kelas & ujian</span>
+        </div>
+
+        {/* Siswa Nilai 0 */}
+        <div className={`p-4 rounded-2xl border shadow-xs transition-colors ${
+          zeroScoreStudentsCount > 0 ? 'bg-rose-50/40 border-rose-200' : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-center justify-between text-rose-700 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wide">Siswa Nilai 0</span>
+            <UserX className="w-4 h-4 text-rose-600" />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-2xl font-extrabold ${zeroScoreStudentsCount > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+              {zeroScoreStudentsCount}
+            </span>
+            <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded ${
+              zeroScoreStudentsCount > 0 ? 'bg-rose-100 text-rose-900' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {zeroPercentage}%
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 block mt-0.5">Skor 0 atau belum submit</span>
         </div>
 
         {/* Siswa Tertib / Disiplin */}
@@ -342,7 +451,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
               {cleanPercentage}%
             </span>
           </div>
-          <span className="text-[11px] text-emerald-700/80 block mt-0.5">0 kali pindah layar / tab</span>
+          <span className="text-[11px] text-emerald-700/80 block mt-0.5">0 kali pelanggaran</span>
         </div>
 
         {/* Siswa Melanggar */}
@@ -366,7 +475,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </span>
           </div>
           <span className="text-[11px] text-slate-500 block mt-0.5">
-            {criticalStudentsCount > 0 ? `${criticalStudentsCount}x Kritis (≥3)` : 'Terdeteksi pindah layar'}
+            {criticalStudentsCount > 0 ? `${criticalStudentsCount}x Kritis (≥3)` : 'Pernah beralih layar'}
           </span>
         </div>
 
@@ -418,9 +527,18 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </span>
           </div>
 
-          {integrityFilter !== 'all' && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-slate-500">Filter Integritas:</span>
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {scoreFilter !== 'all' && (
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                scoreFilter === 'zero' ? 'bg-rose-100 text-rose-800' :
+                scoreFilter === 'remedial' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {scoreFilter === 'zero' && '🔴 Filter: Nilai 0'}
+                {scoreFilter === 'remedial' && '⚠️ Filter: Remedial'}
+                {scoreFilter === 'passed' && '✅ Filter: Tuntas'}
+              </span>
+            )}
+            {integrityFilter !== 'all' && (
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                 integrityFilter === 'clean'
                   ? 'bg-emerald-100 text-emerald-800'
@@ -432,8 +550,8 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                 {integrityFilter === 'violated' && '⚠️ Melakukan Pelanggaran (≥1x)'}
                 {integrityFilter === 'critical' && '🚨 Pelanggaran Kritis (≥3x)'}
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -470,15 +588,21 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                   const violations = sub.violationCount || 0;
                   const isClean = violations === 0;
                   const isCritical = violations >= 3;
+                  const isZero = sub.percentage === 0 || sub.earnedScore === 0;
+                  const isNotSubmitted = !sub.submittedAt;
 
                   return (
                     <tr
                       key={sub.id}
                       className={`transition-colors ${
-                        !isClean
-                          ? isCritical
-                            ? 'bg-rose-50/40 hover:bg-rose-50/70'
-                            : 'bg-amber-50/20 hover:bg-amber-50/50'
+                        isNotSubmitted
+                          ? 'bg-slate-50/60 hover:bg-slate-100/70'
+                          : isCritical
+                          ? 'bg-rose-50/40 hover:bg-rose-50/70'
+                          : !isClean
+                          ? 'bg-amber-50/20 hover:bg-amber-50/50'
+                          : isZero
+                          ? 'bg-rose-50/20 hover:bg-rose-50/40'
                           : 'hover:bg-slate-50/80'
                       }`}
                     >
@@ -490,7 +614,11 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-slate-900 flex items-center gap-1.5">
                           <span>{sub.studentName}</span>
-                          {isClean ? (
+                          {isNotSubmitted ? (
+                            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-bold">
+                              Belum Submit
+                            </span>
+                          ) : isClean ? (
                             <span title="Tertib (0 Pelanggaran)">
                               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             </span>
@@ -526,30 +654,53 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
                       {/* Score earned / total */}
                       <td className="px-4 py-3.5 text-center font-bold text-slate-900">
-                        {sub.earnedScore} <span className="text-slate-400 font-normal">/ {sub.totalScore}</span>
+                        <span className={isZero ? 'text-rose-600 font-extrabold' : ''}>
+                          {sub.earnedScore}
+                        </span>{' '}
+                        <span className="text-slate-400 font-normal">/ {sub.totalScore}</span>
                       </td>
 
                       {/* Percentage */}
                       <td className="px-4 py-3.5 text-center">
-                        <span className={`font-extrabold text-sm ${sub.passed ? 'text-indigo-700' : 'text-rose-600'}`}>
-                          {sub.percentage}%
-                        </span>
+                        {isZero ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[11px] border border-rose-300">
+                            0% (NILAI 0)
+                          </span>
+                        ) : (
+                          <span className={`font-extrabold text-sm ${sub.passed ? 'text-indigo-700' : 'text-rose-600'}`}>
+                            {sub.percentage}%
+                          </span>
+                        )}
                       </td>
 
                       {/* Pass / Remedial status */}
                       <td className="px-4 py-3.5 text-center">
                         <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          sub.passed
+                          isNotSubmitted
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300 font-semibold'
+                            : sub.passed
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : isZero
+                            ? 'bg-rose-100 text-rose-800 border border-rose-300 font-extrabold'
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
-                          {sub.passed ? 'TUNTAS' : 'REMEDIAL'}
+                          {isNotSubmitted
+                            ? 'BELUM MENGERJAKAN'
+                            : sub.passed
+                            ? 'TUNTAS'
+                            : isZero
+                            ? 'NILAI 0 / REMEDIAL'
+                            : 'REMEDIAL'}
                         </span>
                       </td>
 
                       {/* Integrity / Violation status */}
                       <td className="px-4 py-3.5 text-center">
-                        {isClean ? (
+                        {isNotSubmitted ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-[11px] font-medium">
+                            <span>-</span>
+                          </span>
+                        ) : isClean ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
                             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Tertib (0x)</span>
@@ -569,12 +720,24 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
                       {/* Submitted time */}
                       <td className="px-4 py-3.5 text-slate-500 text-[11px]">
-                        <span className="block font-semibold text-slate-700">
-                          {new Date(sub.submittedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {new Date(sub.submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                        </span>
+                        {sub.submittedAt ? (
+                          (() => {
+                            const subDate = new Date(sub.submittedAt);
+                            const isValid = !isNaN(subDate.getTime());
+                            return (
+                              <>
+                                <span className="block font-semibold text-slate-700">
+                                  {isValid ? subDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {isValid ? subDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
+                                </span>
+                              </>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-slate-400 italic">Belum submit</span>
+                        )}
                       </td>
 
                       {/* Actions */}

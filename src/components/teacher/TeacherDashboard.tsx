@@ -321,39 +321,54 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
       )}
 
       {/* Teacher Welcome & Overview Card (No Print) */}
-      <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-emerald-950/10 no-print flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <span className="inline-block px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-200 mb-3 border border-white/15">
-            Dashboard Guru Pengampu Mata Pelajaran
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            Selamat Datang, {teacher.name}
-          </h1>
-          <p className="text-emerald-100/90 text-xs sm:text-sm mt-1 max-w-xl">
-            Akses bank butir soal, buat paket ujian asesmen baru, pantau hasil ujian siswa, dan cetak lembar rekapitulasi nilai secara terstruktur.
-          </p>
-        </div>
+      <div className="bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 rounded-3xl p-6 sm:p-8 lg:p-10 text-white shadow-xl shadow-teal-950/20 no-print relative overflow-hidden border border-teal-800/30">
+        {/* Subtle ambient glow */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsCreateExamOpen(true)}
-            className="px-4 py-2.5 bg-white text-emerald-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-emerald-50 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-emerald-700" />
-            <span>Buat Paket Ujian</span>
-          </button>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-teal-200 border border-white/15 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Dashboard Guru Pengampu Mata Pelajaran</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
+              Selamat Datang, {teacher.name}
+            </h1>
+            <p className="text-teal-100/85 text-xs sm:text-sm max-w-xl leading-relaxed">
+              Kelola bank butir soal berstandar AKM, atur jadwal paket asesmen, pantau integritas pengerjaan siswa, dan cetak lembar rekapitulasi nilai secara fleksibel.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/15 text-center min-w-[90px] shadow-2xs">
+              <span className="text-[11px] text-teal-200 font-bold block">Paket Ujian</span>
+              <span className="text-xl font-black text-white">{exams.length}</span>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/15 text-center min-w-[90px] shadow-2xs">
+              <span className="text-[11px] text-teal-200 font-bold block">Bank Soal</span>
+              <span className="text-xl font-black text-amber-300">{questions.length}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsCreateExamOpen(true)}
+              className="px-5 py-3.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-2xl text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+              <span>Buat Paket Ujian Baru</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Navigation Tabs (No Print) */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-2xl w-full sm:w-fit no-print overflow-x-auto">
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-200/80 rounded-2xl w-full sm:w-fit no-print overflow-x-auto shadow-inner">
         <button
           type="button"
           onClick={() => setActiveTab('rekap')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'rekap'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -364,9 +379,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
         <button
           type="button"
           onClick={() => setActiveTab('bank_soal')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'bank_soal'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -377,9 +392,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
         <button
           type="button"
           onClick={() => setActiveTab('paket_ujian')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'paket_ujian'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -390,9 +405,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
         <button
           type="button"
           onClick={() => setActiveTab('excel')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'excel'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >

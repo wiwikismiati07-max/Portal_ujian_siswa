@@ -359,30 +359,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-rose-900 via-rose-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-rose-950/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="inline-block px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold text-rose-200 border border-white/15">
-              Pusat Pengendali Administrator
+      <div className="bg-gradient-to-br from-rose-950 via-rose-900 to-slate-950 rounded-3xl p-6 sm:p-8 lg:p-10 text-white shadow-xl shadow-rose-950/20 flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden border border-rose-800/30">
+        {/* Subtle ambient lighting */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-rose-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="relative z-10 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-rose-200 border border-white/15 shadow-2xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-rose-300" />
+              <span>Pusat Kendali Administrator</span>
             </span>
-            <span className="inline-block px-3 py-1 bg-emerald-500/20 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-300 border border-emerald-400/30">
-              Supabase Cloud Terhubung
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 backdrop-blur-md rounded-full text-xs font-bold text-emerald-300 border border-emerald-400/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span>Supabase Cloud Terhubung</span>
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
             Kelola Pengguna & Kredensial CBT
           </h1>
-          <p className="text-rose-100/90 text-xs sm:text-sm mt-1 max-w-xl">
-            Semua perubahan data pengguna, impor siswa Excel, dan konfigurasi ujian langsung tersimpan secara instan di database Supabase Cloud.
+          <p className="text-rose-100/85 text-xs sm:text-sm max-w-xl leading-relaxed">
+            Semua sinkronisasi akun siswa/guru, rekap nilai ujian, dan konfigurasi master data otomatis terpusat di Supabase Cloud dengan integritas tinggi.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="relative z-10 flex flex-wrap items-center gap-2.5 shrink-0">
           {duplicateReport.duplicateCount > 0 && (
             <button
               type="button"
               onClick={handleCleanDuplicates}
-              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-amber-950/20 animate-pulse"
+              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-amber-950/30 animate-pulse"
               title="Bersihkan Akun Duplikat / Ganda"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
@@ -392,7 +398,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           <button
             type="button"
             onClick={() => setShowSqlModal(true)}
-            className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-rose-100 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-rose-100 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
             title="Lihat & Salin Kode SQL Supabase"
           >
             <Database className="w-4 h-4 text-emerald-300" />
@@ -401,10 +407,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           <button
             type="button"
             onClick={() => setShowExcelImport(!showExcelImport)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+            className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer border ${
               showExcelImport
                 ? 'bg-white text-rose-950 border-white shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-rose-100 border-white/20'
+                : 'bg-white/10 hover:bg-white/20 text-rose-100 border-white/20 backdrop-blur-xs'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -413,7 +419,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           <button
             type="button"
             onClick={handleResetAll}
-            className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-rose-100 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-rose-100 border border-white/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Awal</span>
@@ -421,7 +427,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="px-3.5 py-2 bg-white text-rose-900 hover:bg-rose-50 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            className="px-4 py-2.5 bg-rose-500 hover:bg-rose-400 active:bg-rose-600 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>Tambah Akun</span>
@@ -430,26 +436,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       </div>
 
       {/* Primary Navigation Tabs */}
-      <div className="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-2xl w-full sm:w-fit no-print overflow-x-auto">
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-200/80 rounded-2xl w-full sm:w-fit no-print overflow-x-auto shadow-inner">
         <button
           type="button"
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'users'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <Users className="w-4 h-4 text-rose-800" />
+          <Users className="w-4 h-4 text-rose-700" />
           <span>Kelola Pengguna & Akun ({users.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('rekap')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'rekap'
-              ? 'bg-white text-slate-900 shadow-xs'
+              ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >

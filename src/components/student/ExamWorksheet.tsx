@@ -327,10 +327,27 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     setViolationLogs(violationLogsRef.current);
     setViolationCount(currentCount);
 
-    // Auto-submit if violation reaches 3 (strict limit)
+    // Auto-submit immediately if violation reaches 3 (strict limit)
     if (currentCount >= 3) {
+      // Calculate and save immediately so no data is lost if browser closes
+      const finalResult = gradeSubmission(
+        exam,
+        questions,
+        student,
+        answers,
+        currentCount,
+        startedAt,
+        violationLogsRef.current
+      );
+      saveSingleSubmission(finalResult);
+      
       setTimeout(() => {
-        handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (3 kali beralih jendela/aplikasi). Ujian otomatis dihentikan dan dikumpulkan ke pengawas.');
+        if (!submittedResult) {
+          setShowViolationModal(false);
+          setShowFinishConfirm(false);
+          setSubmittedResult(finalResult);
+          onFinishExam(finalResult);
+        }
       }, 1200);
     }
   };
