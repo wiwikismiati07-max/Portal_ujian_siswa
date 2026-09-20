@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { getAllUsers } from '../utils/storage';
+import { getAllUsers, saveUsers } from '../utils/storage';
+import { supabase } from '../utils/supabaseClient';
+import { mapUserFromDb } from '../utils/supabaseSync';
 import {
   ShieldCheck,
   GraduationCap,
@@ -12,9 +14,10 @@ import {
   Sparkles,
   ArrowRight,
   AlertCircle,
-  Lock
+  Lock,
+  Loader2,
+  HelpCircle
 } from 'lucide-react';
-import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
@@ -22,12 +25,13 @@ interface LoginViewProps {
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [roleTab, setRoleTab] = useState<UserRole>('siswa');
-  const [username, setUsername] = useState('ahmad_siswa');
-  const [password, setPassword] = useState('siswa123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Quick preset helper
+  // Quick preset helper for instant demo testing
   const selectQuickAccount = (u: string, p: string, role: UserRole) => {
     setUsername(u);
     setPassword(p);
@@ -38,39 +42,113 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const handleRoleTabChange = (role: UserRole) => {
     setRoleTab(role);
     setError(null);
-    if (role === 'admin') {
-      setUsername('admin');
-      setPassword('admin123');
-    } else if (role === 'guru') {
-      setUsername('budi_guru');
-      setPassword('guru123');
-    } else {
-      setUsername('ahmad_siswa');
-      setPassword('siswa123');
-    }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const allUsers = getAllUsers();
-    const cleanUser = username.trim().toLowerCase();
-    const found = allUsers.find(
-      u => u.username.toLowerCase() === cleanUser && u.password === password.trim()
-    );
+    const rawInput = username.trim();
+    const cleanUser = rawInput.replace(/^@/, '').toLowerCase().trim();
+    const inputPass = password.trim();
 
-    if (!found) {
-      setError('Username atau Password salah. Silakan periksa kembali!');
+    if (!cleanUser) {
+      setError('Silakan masukkan Username, NIS, atau Nama Anda.');
       return;
     }
 
-    if (found.role !== roleTab) {
-      setError(`Akun ini terdaftar sebagai peran "${found.role.toUpperCase()}", bukan "${roleTab.toUpperCase()}". Pilih tab yang sesuai.`);
+    if (!inputPass) {
+      setError('Silakan masukkan Password Anda.');
       return;
     }
 
-    onLoginSuccess(found);
+    setIsLoading(true);
+
+    try {
+      // 1. Check in local storage dataset first
+      let allUsers = getAllUsers();
+      
+      const checkMatch = (u: User) => {
+        const uUsername = u.username.toLowerCase().replace(/^@/, '').trim();
+        const uNis = (u.nipOrNis || '').toLowerCase().trim();
+        const uName = u.name.toLowerCase().trim();
+        
+        const identMatch =
+          uUsername === cleanUser ||
+          uNis === cleanUser ||
+          uName === cleanUser ||
+          u.username.toLowerCase() === rawInput.toLowerCase();
+
+        if (!identMatch) return false;
+
+        // Compare password: exact match or case-insensitive match
+        const exactPassMatch = u.password.trim() === inputPass;
+        const caseInsensitivePassMatch =
+          u.password.trim().toLowerCase() === inputPass.toLowerCase();
+
+        return exactPassMatch || caseInsensitivePassMatch;
+      };
+
+      let found = allUsers.find(checkMatch);
+
+      // 2. If not found in local cache, query Supabase cloud directly
+      if (!found) {
+        try {
+          const { data: dbUsers, error: dbErr } = await supabase
+            .from('cbt_users')
+            .select('*')
+            .limit(2000);
+
+          if (!dbErr && dbUsers && dbUsers.length > 0) {
+            const mappedUsers = dbUsers.map(mapUserFromDb);
+            saveUsers(mappedUsers, false);
+            allUsers = mappedUsers;
+            found = mappedUsers.find(checkMatch);
+          }
+        } catch (cloudErr) {
+          console.warn('Cloud login fetch fallback notice:', cloudErr);
+        }
+      }
+
+      if (!found) {
+        // Detailed helpful diagnostics
+        const existsWithWrongPass = allUsers.find(u => {
+          const uUsername = u.username.toLowerCase().replace(/^@/, '').trim();
+          const uNis = (u.nipOrNis || '').toLowerCase().trim();
+          const uName = u.name.toLowerCase().trim();
+          return (
+            uUsername === cleanUser ||
+            uNis === cleanUser ||
+            uName === cleanUser ||
+            u.username.toLowerCase() === rawInput.toLowerCase()
+          );
+        });
+
+        if (existsWithWrongPass) {
+          setError(
+            `Password untuk akun "${existsWithWrongPass.name}" tidak sesuai. Periksa huruf besar/kecil atau hubungi Admin/Guru.`
+          );
+        } else {
+          setError(
+            'Akun tidak ditemukan. Pastikan Username (contoh: abdul_hayyi), NIS (contoh: 9029), atau Nama sudah terdaftar di sistem.'
+          );
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Auto sync role tab if it differs
+      if (found.role !== roleTab) {
+        setRoleTab(found.role);
+      }
+
+      setIsLoading(false);
+      onLoginSuccess(found);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError('Terjadi kendala saat memverifikasi akun. Silakan coba lagi.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -127,7 +205,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <div className="p-1.5 bg-blue-500/20 text-blue-300 rounded-lg">
                 <UserCheck className="w-4 h-4" />
               </div>
-              <span>Import Data Guru, Siswa, & Mapel dari Excel (.xlsx)</span>
+              <span>Dukungan Login via Username, NIS, atau Nama</span>
             </div>
           </div>
 
@@ -146,7 +224,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 Selamat Datang di Portal
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Pilih peran Anda dan masukkan akun untuk melanjutkan ujian atau manajemen.
+                Masukkan akun untuk melanjutkan ujian atau manajemen portal CBT.
               </p>
             </div>
 
@@ -204,19 +282,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  User Name
+                  Username / NIS
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Masukkan username Anda"
+                    placeholder={
+                      roleTab === 'siswa'
+                        ? 'Contoh: abdul_hayyi atau NIS 9029'
+                        : 'Masukkan username atau NIP'
+                    }
                     required
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
                   />
                   <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 </div>
+                {roleTab === 'siswa' && (
+                  <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                    <HelpCircle className="w-3 h-3" />
+                    <span>Bisa masuk memakai Username, NIS (contoh: 9029), atau Nama</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -240,7 +329,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Masukkan password"
                     required
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
                   />
                   <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 </div>
@@ -248,10 +338,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
               <button
                 type="submit"
-                className="w-full mt-2 py-3 px-4 flex items-center justify-center gap-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                disabled={isLoading}
+                className="w-full mt-2 py-3 px-4 flex items-center justify-center gap-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-70"
               >
-                <span>Masuk Sekarang</span>
-                <ArrowRight className="w-4 h-4" />
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Memverifikasi Akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Masuk Sekarang</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
 
@@ -270,10 +370,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectQuickAccount('budi_guru', 'guru123', 'guru')}
+                  onClick={() => selectQuickAccount('andika_mardiatul_masruroh', 'ANDIK', 'guru')}
                   className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
                 >
-                  Guru (Budi, M.Pd.)
+                  Guru (Andika, S.Pd.I)
                 </button>
                 <button
                   type="button"
@@ -284,7 +384,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </button>
               </div>
               <p className="text-[11px] text-slate-400 mt-2">
-                *Username & Password dapat diubah sewaktu-waktu melalui menu profil akun setelah login.
+                *Siswa dapat masuk menggunakan username (contoh: <code>abdul_hayyi</code>), NIS (contoh: <code>9029</code>), atau nama lengkap.
               </p>
             </div>
 
@@ -295,3 +395,4 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     </div>
   );
 };
+

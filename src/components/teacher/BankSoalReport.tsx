@@ -39,7 +39,24 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
   );
 
   const currentExam = exams.find(e => e.id === selectedExamId) || exams[0];
-  const examQuestions = questions.filter(q => q.examId === currentExam?.id);
+  const examQuestions = currentExam ? questions.filter(q => q.examId === currentExam.id) : [];
+
+  if (exams.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+        <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+          <BookOpen className="w-7 h-7" />
+        </div>
+        <h4 className="text-base font-bold text-slate-800 mb-1">
+          Belum Ada Paket Ujian yang Tersedia
+        </h4>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Silakan buka tab <strong>"Kelola Paket Ujian"</strong> terlebih dahulu untuk membuat paket ujian baru sebelum menyusun bank butir soal.
+        </p>
+      </div>
+    );
+  }
+
 
   // Statistics of question types
   const typeCounts = {

@@ -292,11 +292,26 @@ export const pullFromSupabase = async (): Promise<void> => {
       .limit(2000);
 
     if (!usersError && dbUsers && dbUsers.length > 0) {
-      const users = dbUsers.map(mapUserFromDb);
-      saveUsers(users, false); // false = don't re-upload back to Supabase
+      const rawUsers = dbUsers.map(mapUserFromDb);
+      const { cleanAndDeduplicateUsers } = await import('./userDeduplication');
+      const { cleanedUsers, removedUserIds } = cleanAndDeduplicateUsers(rawUsers);
+
+      saveUsers(cleanedUsers, false); // false = don't re-upload back to Supabase
+      
+      // Clean up duplicates and legacy demo user Budi Santoso in Supabase database in background
+      supabase
+        .from('cbt_users')
+        .delete()
+        .or('id.eq.user_guru_1,username.eq.budi_guru,nip_or_nis.eq.198305142008011012')
+        .then(() => {});
+
+      if (removedUserIds.length > 0) {
+        supabase.from('cbt_users').delete().in('id', removedUserIds).then(() => {});
+      }
+
       const current = getCurrentUser();
       if (current) {
-        const matching = users.find(u => u.id === current.id);
+        const matching = cleanedUsers.find(u => u.id === current.id);
         if (matching) setCurrentUser(matching);
       }
     } else if (!usersError && (!dbUsers || dbUsers.length === 0)) {
@@ -324,12 +339,35 @@ export const pullFromSupabase = async (): Promise<void> => {
       .from('cbt_exams')
       .select('*')
       .limit(500);
-    if (!examsError && dbExams && dbExams.length > 0) {
-      saveExams(dbExams.map(mapExamFromDb), false);
-    } else if (!examsError && (!dbExams || dbExams.length === 0)) {
-      const localExams = getAllExams();
-      const examsToSeed = localExams.length > 0 ? localExams : INITIAL_EXAMS;
-      await upsertInChunks('cbt_exams', examsToSeed.map(mapExamToDb));
+    if (!examsError && dbExams) {
+      // Filter out any stale mock exams from DB
+      const cleanExams = dbExams
+        .map(mapExamFromDb)
+        .filter(
+          e =>
+            !e.id.startsWith('exam_inf_pts') &&
+            !e.id.startsWith('exam_ipa_pts') &&
+            !e.id.startsWith('exam_arb_pts')
+        );
+
+      // Clean mock exams from DB in the background
+      const mockIds = dbExams
+        .map(mapExamFromDb)
+        .filter(
+          e =>
+            e.id.startsWith('exam_inf_pts') ||
+            e.id.startsWith('exam_ipa_pts') ||
+            e.id.startsWith('exam_arb_pts')
+        )
+        .map(e => e.id);
+
+      if (mockIds.length > 0) {
+        supabase.from('cbt_submissions').delete().in('exam_id', mockIds).then(() => {});
+        supabase.from('cbt_questions').delete().in('exam_id', mockIds).then(() => {});
+        supabase.from('cbt_exams').delete().in('id', mockIds).then(() => {});
+      }
+
+      saveExams(cleanExams, false);
     }
 
     // 4. Questions
@@ -337,12 +375,16 @@ export const pullFromSupabase = async (): Promise<void> => {
       .from('cbt_questions')
       .select('*')
       .limit(2000);
-    if (!qError && dbQuestions && dbQuestions.length > 0) {
-      saveQuestions(dbQuestions.map(mapQuestionFromDb), false);
-    } else if (!qError && (!dbQuestions || dbQuestions.length === 0)) {
-      const localQ = getAllQuestions();
-      const qToSeed = localQ.length > 0 ? localQ : INITIAL_QUESTIONS;
-      await upsertInChunks('cbt_questions', qToSeed.map(mapQuestionToDb));
+    if (!qError && dbQuestions) {
+      const cleanQuestions = dbQuestions
+        .map(mapQuestionFromDb)
+        .filter(
+          q =>
+            !q.examId.startsWith('exam_inf_pts') &&
+            !q.examId.startsWith('exam_ipa_pts') &&
+            !q.examId.startsWith('exam_arb_pts')
+        );
+      saveQuestions(cleanQuestions, false);
     }
 
     // 5. Submissions
@@ -350,18 +392,46 @@ export const pullFromSupabase = async (): Promise<void> => {
       .from('cbt_submissions')
       .select('*')
       .limit(2000);
-    if (!subError && dbSubmissions && dbSubmissions.length > 0) {
+    if (!subError && dbSubmissions) {
       saveSubmissions(dbSubmissions.map(mapSubmissionFromDb), false);
-    } else if (!subError && (!dbSubmissions || dbSubmissions.length === 0)) {
-      const localSub = getAllSubmissions();
-      if (localSub.length > 0) {
-        await upsertInChunks('cbt_submissions', localSub.map(mapSubmissionToDb));
-      }
     }
 
     notifyDataUpdated();
   } catch (err) {
     console.error('Error during pullFromSupabase:', err);
+  }
+};
+
+// Clear all exams, questions, and submissions from Supabase
+export const clearAllExamsInSupabase = async (): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // 1. Fetch current IDs first to guarantee clean deletion
+    const { data: existingExams } = await supabase.from('cbt_exams').select('id');
+    const examIds = existingExams?.map(e => e.id) || [];
+
+    // 2. Delete submissions first
+    if (examIds.length > 0) {
+      await supabase.from('cbt_submissions').delete().in('exam_id', examIds);
+    }
+    await supabase.from('cbt_submissions').delete().gte('id', '');
+
+    // 3. Delete questions second
+    if (examIds.length > 0) {
+      await supabase.from('cbt_questions').delete().in('exam_id', examIds);
+    }
+    await supabase.from('cbt_questions').delete().gte('id', '');
+
+    // 4. Delete exams third
+    if (examIds.length > 0) {
+      await supabase.from('cbt_exams').delete().in('id', examIds);
+    }
+    await supabase.from('cbt_exams').delete().gte('id', '');
+
+    broadcastCbtEvent('exams_cleared', {});
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error clearing exams from Supabase:', err);
+    return { success: false, error: err?.message || 'Gagal mengosongkan paket ujian di Supabase' };
   }
 };
 
@@ -438,7 +508,24 @@ export const setupRealtimeSubscription = () => {
       }
     )
     .on('broadcast', { event: 'cbt_event' }, payload => {
-      if (payload?.payload?.action) {
+      const action = payload?.payload?.action;
+      if (action === 'exams_cleared') {
+        saveExams([], false);
+        saveQuestions([], false);
+        saveSubmissions([], false);
+        notifyDataUpdated();
+      } else if (action === 'exam_deleted') {
+        const deletedId = payload?.payload?.data?.examId;
+        if (deletedId) {
+          const exams = getAllExams().filter(e => e.id !== deletedId);
+          const questions = getAllQuestions().filter(q => q.examId !== deletedId);
+          const submissions = getAllSubmissions().filter(s => s.examId !== deletedId);
+          saveExams(exams, false);
+          saveQuestions(questions, false);
+          saveSubmissions(submissions, false);
+          notifyDataUpdated();
+        }
+      } else if (action) {
         pullFromSupabase();
       }
     })
@@ -498,8 +585,21 @@ export const syncExamToSupabase = async (exam: Exam): Promise<boolean> => {
 
 export const deleteExamFromSupabase = async (examId: string): Promise<boolean> => {
   try {
-    await supabase.from('cbt_exams').delete().eq('id', examId);
-    await supabase.from('cbt_questions').delete().eq('exam_id', examId);
+    // 1. Delete dependent submissions first
+    const { error: subErr } = await supabase.from('cbt_submissions').delete().eq('exam_id', examId);
+    if (subErr) console.warn('Supabase sub delete error:', subErr.message);
+
+    // 2. Delete dependent questions second
+    const { error: qErr } = await supabase.from('cbt_questions').delete().eq('exam_id', examId);
+    if (qErr) console.warn('Supabase questions delete error:', qErr.message);
+
+    // 3. Delete the exam record itself
+    const { error: exErr } = await supabase.from('cbt_exams').delete().eq('id', examId);
+    if (exErr) {
+      console.warn('Supabase exam delete error:', exErr.message);
+      return false;
+    }
+
     broadcastCbtEvent('exam_deleted', { examId });
     return true;
   } catch (err) {

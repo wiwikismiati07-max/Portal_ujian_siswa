@@ -20,6 +20,7 @@ import {
   syncQuestionToSupabase,
   deleteQuestionFromSupabase,
   syncSubmissionToSupabase,
+  clearAllExamsInSupabase,
   notifyDataUpdated
 } from './supabaseSync';
 
@@ -66,14 +67,21 @@ export const initializeStorage = (): void => {
   if (!localStorage.getItem(STORAGE_KEYS.SUBJECTS)) {
     setStored(STORAGE_KEYS.SUBJECTS, INITIAL_SUBJECTS);
   }
-  if (!localStorage.getItem(STORAGE_KEYS.EXAMS)) {
-    setStored(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.QUESTIONS)) {
-    setStored(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.SUBMISSIONS)) {
-    setStored(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  
+  // Clean mock exams if any or default to empty
+  const storedExams = getStored<Exam[]>(STORAGE_KEYS.EXAMS, []);
+  const hasMockExams = storedExams.some(e =>
+    e.id.startsWith('exam_inf_pts') ||
+    e.id.startsWith('exam_ipa_pts') ||
+    e.id.startsWith('exam_arb_pts')
+  );
+  if (!localStorage.getItem(STORAGE_KEYS.EXAMS) || hasMockExams) {
+    setStored(STORAGE_KEYS.EXAMS, []);
+    setStored(STORAGE_KEYS.QUESTIONS, []);
+    setStored(STORAGE_KEYS.SUBMISSIONS, []);
+    memoryExamsCache = [];
+    memoryQuestionsCache = [];
+    memorySubmissionsCache = [];
   }
 };
 
@@ -87,12 +95,23 @@ export const setCurrentUser = (user: User | null): void => {
 };
 
 export const getAllUsers = (): User[] => {
-  if (memoryUsersCache && memoryUsersCache.length > 0) {
+  if (memoryUsersCache !== null) {
     return memoryUsersCache;
   }
   const stored = getStored<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-  memoryUsersCache = stored;
-  return stored;
+  const clean = stored.filter(
+    u =>
+      u.id !== 'user_guru_1' &&
+      u.username !== 'budi_guru' &&
+      u.nipOrNis !== '198305142008011012' &&
+      !u.name?.toLowerCase().includes('budi santoso, s.kom')
+  );
+  if (clean.length !== stored.length) {
+    setStored(STORAGE_KEYS.USERS, clean);
+    deleteUserFromSupabase('user_guru_1').catch(() => {});
+  }
+  memoryUsersCache = clean;
+  return clean;
 };
 
 export const saveUsers = (users: User[], syncToDb = true): void => {
@@ -152,27 +171,107 @@ export const deleteUser = async (userId: string): Promise<void> => {
   notifyDataUpdated();
 };
 
+import {
+  cleanAndDeduplicateUsers,
+  mergeImportedUsers,
+  DeduplicationResult
+} from './userDeduplication';
+
+// Direct Deduplicate Users across all records
+export const deduplicateUsersDirect = async (): Promise<{
+  success: boolean;
+  duplicateCount: number;
+  cleanedCount: number;
+}> => {
+  const currentUsers = getAllUsers();
+  const { cleanedUsers, removedUserIds, duplicateCount } = cleanAndDeduplicateUsers(currentUsers);
+
+  if (duplicateCount > 0) {
+    saveUsers(cleanedUsers, false);
+
+    // Delete duplicates from Supabase in background
+    for (const id of removedUserIds) {
+      deleteUserFromSupabase(id).catch(() => {});
+    }
+  }
+
+  return {
+    success: true,
+    duplicateCount,
+    cleanedCount: cleanedUsers.length
+  };
+};
+
+// Flexible Import with User-Selected Mode ('merge_upsert' or 'replace_role')
+export const importUsersWithModeDirect = async (
+  role: 'siswa' | 'guru',
+  newUsers: User[],
+  mode: 'merge_upsert' | 'replace_role' = 'merge_upsert',
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  const allUsers = getAllUsers();
+
+  if (mode === 'replace_role') {
+    return overwriteUsersByRoleDirect(role, newUsers, onProgress);
+  }
+
+  // mode === 'merge_upsert' (Tindih / Perbarui Data yang Sama & Tambah Baru)
+  const { mergedUsers, usersToSync, deletedUserIds } = mergeImportedUsers(
+    allUsers,
+    newUsers,
+    role,
+    'merge_upsert'
+  );
+
+  memoryUsersCache = mergedUsers;
+  setStored(STORAGE_KEYS.USERS, mergedUsers);
+  notifyDataUpdated();
+
+  // Delete any extraneous duplicates from Supabase if found
+  for (const delId of deletedUserIds) {
+    deleteUserFromSupabase(delId).catch(() => {});
+  }
+
+  // Upsert updated and new users to Supabase in chunks
+  const res = await syncUsersBatchToSupabase(usersToSync, onProgress);
+
+  // Refresh current session if needed
+  const current = getCurrentUser();
+  if (current && current.role === role) {
+    const matched = mergedUsers.find(
+      u => u.username.toLowerCase() === current.username.toLowerCase() || u.id === current.id
+    );
+    if (matched) {
+      setCurrentUser(matched);
+    }
+  }
+
+  notifyDataUpdated();
+  return { success: res.success, count: usersToSync.length, error: res.error };
+};
+
 // Direct Overwrite Users with real-time Supabase save
 export const overwriteUsersByRoleDirect = async (
   role: 'siswa' | 'guru',
   newUsers: User[],
   onProgress?: (processed: number, total: number) => void
 ): Promise<{ success: boolean; count: number; error?: string }> => {
+  const { cleanedUsers: deduplicatedNew } = cleanAndDeduplicateUsers(newUsers);
   const allUsers = getAllUsers();
   const keptUsers = allUsers.filter(u => u.role !== role);
-  const updatedAll = [...keptUsers, ...newUsers];
+  const updatedAll = [...keptUsers, ...deduplicatedNew];
 
   memoryUsersCache = updatedAll;
   setStored(STORAGE_KEYS.USERS, updatedAll);
   notifyDataUpdated();
 
   // Overwrite directly in Supabase in chunks
-  const res = await overwriteUsersByRoleInSupabase(role, newUsers, onProgress);
+  const res = await overwriteUsersByRoleInSupabase(role, deduplicatedNew, onProgress);
 
   // Refresh current session if needed
   const current = getCurrentUser();
   if (current && current.role === role) {
-    const matched = newUsers.find(
+    const matched = deduplicatedNew.find(
       u => u.username.toLowerCase() === current.username.toLowerCase() || u.id === current.id
     );
     if (matched) {
@@ -194,7 +293,7 @@ export const overwriteUsersByRole = (
 
 // --- SUBJECTS ---
 export const getAllSubjects = (): Subject[] => {
-  if (memorySubjectsCache && memorySubjectsCache.length > 0) {
+  if (memorySubjectsCache !== null) {
     return memorySubjectsCache;
   }
   const stored = getStored<Subject[]>(STORAGE_KEYS.SUBJECTS, INITIAL_SUBJECTS);
@@ -242,10 +341,10 @@ export const overwriteAllSubjects = (newSubjects: Subject[]): void => {
 
 // --- EXAMS ---
 export const getAllExams = (): Exam[] => {
-  if (memoryExamsCache && memoryExamsCache.length > 0) {
+  if (memoryExamsCache !== null) {
     return memoryExamsCache;
   }
-  const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
+  const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, []);
   memoryExamsCache = stored;
   return stored;
 };
@@ -277,19 +376,37 @@ export const deleteExam = async (examId: string): Promise<void> => {
   const exams = getAllExams().filter(e => e.id !== examId);
   memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
+  
   const questions = getAllQuestions().filter(q => q.examId !== examId);
   memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  await deleteExamFromSupabase(examId);
+
+  const submissions = getAllSubmissions().filter(s => s.examId !== examId);
+  memorySubmissionsCache = submissions;
+  setStored(STORAGE_KEYS.SUBMISSIONS, submissions);
+
   notifyDataUpdated();
+  await deleteExamFromSupabase(examId);
 };
+
+export const clearAllExamsDirect = async (): Promise<{ success: boolean; error?: string }> => {
+  memoryExamsCache = [];
+  memoryQuestionsCache = [];
+  memorySubmissionsCache = [];
+  setStored(STORAGE_KEYS.EXAMS, []);
+  setStored(STORAGE_KEYS.QUESTIONS, []);
+  setStored(STORAGE_KEYS.SUBMISSIONS, []);
+  notifyDataUpdated();
+  return await clearAllExamsInSupabase();
+};
+
 
 // --- QUESTIONS ---
 export const getAllQuestions = (): Question[] => {
-  if (memoryQuestionsCache && memoryQuestionsCache.length > 0) {
+  if (memoryQuestionsCache !== null) {
     return memoryQuestionsCache;
   }
-  const stored = getStored<Question[]>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
+  const stored = getStored<Question[]>(STORAGE_KEYS.QUESTIONS, []);
   memoryQuestionsCache = stored;
   return stored;
 };
@@ -331,10 +448,10 @@ export const deleteQuestion = async (questionId: string): Promise<void> => {
 
 // --- SUBMISSIONS & REKAP ---
 export const getAllSubmissions = (): ExamSubmission[] => {
-  if (memorySubmissionsCache && memorySubmissionsCache.length > 0) {
+  if (memorySubmissionsCache !== null) {
     return memorySubmissionsCache;
   }
-  const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, []);
   memorySubmissionsCache = stored;
   return stored;
 };

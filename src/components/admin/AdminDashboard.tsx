@@ -8,10 +8,15 @@ import {
   updateUserCredentials,
   deleteUser,
   overwriteUsersByRoleDirect,
+  importUsersWithModeDirect,
+  deduplicateUsersDirect,
   overwriteSubjectsDirect
 } from '../../utils/storage';
+import { cleanAndDeduplicateUsers } from '../../utils/userDeduplication';
 import { ExcelManager } from '../teacher/ExcelManager';
 import { SUPABASE_SETUP_SQL } from '../../utils/supabaseClient';
+import { ConfirmModal } from '../ConfirmModal';
+import { DEFAULT_CLASSES } from '../../utils/classHelper';
 import {
   ShieldCheck,
   UserPlus,
@@ -31,7 +36,10 @@ import {
   Database,
   Copy,
   Check,
-  Filter
+  Filter,
+  X,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -52,6 +60,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const [showSqlModal, setShowSqlModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
+  // Confirm Modal state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    isDanger?: boolean;
+    isLoading?: boolean;
+    onConfirm: () => Promise<void> | void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Ya, Lanjutkan',
+    isDanger: true,
+    isLoading: false,
+    onConfirm: () => {}
+  });
+
+  // Global Notification state
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => {
+      setNotification(prev => (prev?.message === message ? null : prev));
+    }, 5000);
+  };
+
   useEffect(() => {
     const handleUpdate = () => {
       setUsers(getAllUsers());
@@ -71,7 +111,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
 
   // Available classes for filter
   const availableClasses = useMemo(() => {
-    const classes = new Set<string>();
+    const classes = new Set<string>(DEFAULT_CLASSES);
     users.forEach(u => {
       if (u.classGroup && u.role === 'siswa') {
         classes.add(u.classGroup);
@@ -84,6 +124,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const adminCount = useMemo(() => users.filter(u => u.role === 'admin').length, [users]);
   const guruCount = useMemo(() => users.filter(u => u.role === 'guru').length, [users]);
   const siswaCount = useMemo(() => users.filter(u => u.role === 'siswa').length, [users]);
+
+  // Duplicate detection
+  const duplicateReport = useMemo(() => {
+    return cleanAndDeduplicateUsers(users);
+  }, [users]);
+
+  const handleCleanDuplicates = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Bersihkan & Gabungkan Data Duplikat?',
+      message: `Sistem mendeteksi ${duplicateReport.duplicateCount} entri akun duplikat (NIP, Nama, atau Username yang sama). Tindakan ini akan menindih/menggabungkan data yang sama menjadi satu entri rapi dan menghapus baris duplikat dari Supabase Cloud. Lanjutkan?`,
+      confirmLabel: 'Ya, Bersihkan Duplikat',
+      isDanger: false,
+      isLoading: false,
+      onConfirm: async () => {
+        const res = await deduplicateUsersDirect();
+        setUsers(getAllUsers());
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        showNotification(
+          'success',
+          `Berhasil membersihkan ${res.duplicateCount} akun duplikat! Total ${res.cleanedCount} akun tersimpan rapi di Supabase Cloud.`
+        );
+      }
+    });
+  };
 
   // Filter and search
   const filteredUsers = useMemo(() => {
@@ -140,15 +205,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     setMsg(null);
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = (userId: string) => {
     if (userId === admin.id) {
-      alert('Tidak dapat menghapus akun Anda sendiri.');
+      showNotification('error', 'Tidak dapat menghapus akun Anda sendiri.');
       return;
     }
-    if (window.confirm('Hapus akun pengguna ini dari sistem dan database Supabase?')) {
-      await deleteUser(userId);
-      setUsers(getAllUsers());
-    }
+    const targetUser = users.find(u => u.id === userId);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Akun Pengguna?',
+      message: `Hapus akun "${targetUser?.name || 'Pengguna'}" (@${targetUser?.username || ''}) dari sistem dan database Supabase?`,
+      confirmLabel: 'Ya, Hapus Akun',
+      isDanger: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        try {
+          await deleteUser(userId);
+          setUsers(getAllUsers());
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          showNotification('success', 'Akun pengguna berhasil dihapus.');
+        } catch (err: any) {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          showNotification('error', `Gagal menghapus pengguna: ${err?.message || 'Error'}`);
+        }
+      }
+    });
   };
 
   const handleSaveUser = (e: React.FormEvent) => {
@@ -184,6 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       saveUsers(currentUsers, true);
       setUsers(currentUsers);
       setIsAddUserOpen(false);
+      showNotification('success', 'Data akun berhasil diperbarui.');
     } else {
       if (users.some(u => u.username.toLowerCase() === formUsername.trim().toLowerCase())) {
         setMsg({ type: 'error', text: 'Username tersebut sudah terdaftar.' });
@@ -205,20 +288,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       saveUsers(updated, true);
       setUsers(updated);
       setIsAddUserOpen(false);
+      showNotification('success', `Akun baru "${newUser.name}" berhasil ditambahkan.`);
     }
   };
 
   const handleResetAll = () => {
-    if (
-      window.confirm(
-        'PERINGATAN: Apakah Anda yakin ingin mereset seluruh data sistem kembali ke data awal bawaan aplikasi?'
-      )
-    ) {
-      resetToInitialData();
-      setUsers(getAllUsers());
-      alert('Data sistem telah berhasil direset ke pengaturan awal!');
-      window.location.reload();
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reset Seluruh Data Sistem?',
+      message: 'PERINGATAN: Apakah Anda yakin ingin mereset seluruh data sistem kembali ke data awal bawaan aplikasi? Seluruh penyesuaian lokal akan direset.',
+      confirmLabel: 'Ya, Reset Sistem',
+      isDanger: true,
+      isLoading: false,
+      onConfirm: () => {
+        resetToInitialData();
+        setUsers(getAllUsers());
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        showNotification('success', 'Data sistem telah berhasil direset ke pengaturan awal!');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      }
+    });
   };
 
   const handleCopySql = () => {
@@ -229,6 +320,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Global In-App Notification Toast */}
+      {notification && (
+        <div className="fixed top-20 right-4 sm:right-8 z-50 animate-in fade-in slide-in-from-top duration-200">
+          <div
+            className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-xs sm:text-sm font-semibold max-w-md ${
+              notification.type === 'success'
+                ? 'bg-emerald-900 text-white border-emerald-700 shadow-emerald-950/20'
+                : 'bg-rose-900 text-white border-rose-700 shadow-rose-950/20'
+            }`}
+          >
+            {notification.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            )}
+            <span className="flex-1">{notification.message}</span>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              className="p-1 text-white/70 hover:text-white rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-rose-900 via-rose-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-rose-950/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -249,6 +367,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {duplicateReport.duplicateCount > 0 && (
+            <button
+              type="button"
+              onClick={handleCleanDuplicates}
+              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-amber-950/20 animate-pulse"
+              title="Bersihkan Akun Duplikat / Ganda"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" />
+              <span>Bersihkan Duplikat ({duplicateReport.duplicateCount})</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowSqlModal(true)}
@@ -289,34 +418,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         </div>
       </div>
 
+      {/* Duplicate Notice Banner */}
+      {duplicateReport.duplicateCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-xs shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs sm:text-sm font-bold text-amber-950">
+                  Ditemukan {duplicateReport.duplicateCount} Akun Guru / Siswa Ganda (Duplikat)
+                </h4>
+                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md text-[10px] font-extrabold uppercase">
+                  Perhatian
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Terdapat data akun dengan NIP atau Nama yang sama. Klik tombol <strong>"Bersihkan Duplikat Sekarang"</strong> untuk otomatis menindih data ganda menjadi satu baris bersih dan menyinkronkan Supabase Cloud.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCleanDuplicates}
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shrink-0 shadow-xs cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Bersihkan Duplikat Sekarang ({duplicateReport.duplicateCount})</span>
+          </button>
+        </div>
+      )}
+
       {/* Excel Importer Section */}
       {showExcelImport && (
         <div className="animate-in fade-in duration-200">
           <ExcelManager
-            onImportStudents={async (newStudents, onProgress) => {
-              const res = await overwriteUsersByRoleDirect('siswa', newStudents, onProgress);
+            onImportStudents={async (newStudents, mode, onProgress) => {
+              const res = await importUsersWithModeDirect('siswa', newStudents, mode, onProgress);
               setUsers(getAllUsers());
               setRoleFilter('siswa');
               if (res.success) {
-                alert(`Berhasil! ${newStudents.length} data siswa baru langsung tersimpan di Supabase Cloud & tabel sistem.`);
+                showNotification(
+                  'success',
+                  `Berhasil! ${res.count} data siswa ${
+                    mode === 'merge_upsert' ? 'ditindih & diperbarui' : 'baru'
+                  } tersimpan di Supabase Cloud & tabel sistem.`
+                );
               } else {
-                alert(`Perhatian: Data tersimpan secara lokal. Kendala Supabase: ${res.error}`);
+                showNotification(
+                  'success',
+                  `Data tersimpan secara lokal. Kendala Supabase: ${res.error}`
+                );
               }
             }}
-            onImportTeachers={async (newTeachers, onProgress) => {
-              const res = await overwriteUsersByRoleDirect('guru', newTeachers, onProgress);
+            onImportTeachers={async (newTeachers, mode, onProgress) => {
+              const res = await importUsersWithModeDirect('guru', newTeachers, mode, onProgress);
               setUsers(getAllUsers());
               setRoleFilter('guru');
               if (res.success) {
-                alert(`Berhasil! ${newTeachers.length} data guru baru langsung tersimpan di Supabase Cloud.`);
+                showNotification(
+                  'success',
+                  `Berhasil! ${res.count} data guru ${
+                    mode === 'merge_upsert' ? 'ditindih & diperbarui' : 'baru'
+                  } tersimpan di Supabase Cloud.`
+                );
               } else {
-                alert(`Perhatian: Data tersimpan secara lokal. Kendala Supabase: ${res.error}`);
+                showNotification(
+                  'success',
+                  `Data tersimpan secara lokal. Kendala Supabase: ${res.error}`
+                );
               }
             }}
             onImportSubjects={async (newSubjects, onProgress) => {
               const res = await overwriteSubjectsDirect(newSubjects, onProgress);
               if (res.success) {
-                alert(`Berhasil! ${newSubjects.length} mata pelajaran baru langsung tersimpan di Supabase Cloud.`);
+                showNotification(
+                  'success',
+                  `Berhasil! ${newSubjects.length} mata pelajaran baru tersimpan di Supabase Cloud.`
+                );
               }
             }}
           />
@@ -716,11 +896,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
                   </label>
                   <input
                     type="text"
+                    list={formRole === 'siswa' ? 'student-classes-list' : undefined}
                     value={formClassOrSubject}
                     onChange={e => setFormClassOrSubject(e.target.value)}
-                    placeholder={formRole === 'siswa' ? 'Contoh: 7-A' : 'Contoh: IPA'}
+                    placeholder={formRole === 'siswa' ? 'Pilih/Ketik: 7A, 7B, 8A, dst.' : 'Contoh: IPA'}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
                   />
+                  {formRole === 'siswa' && (
+                    <datalist id="student-classes-list">
+                      {DEFAULT_CLASSES.map(cls => (
+                        <option key={cls} value={cls} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
               </div>
 
@@ -743,6 +931,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           </div>
         </div>
       )}
+      {/* IN-APP CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        isDanger={confirmDialog.isDanger}
+        isLoading={confirmDialog.isLoading}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

@@ -15,13 +15,27 @@ import {
   GraduationCap,
   BookOpen,
   ArrowRight,
-  Loader2
+  Loader2,
+  RefreshCw,
+  Trash2,
+  Layers
 } from 'lucide-react';
 
 interface ExcelManagerProps {
-  onImportStudents: (students: User[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
-  onImportTeachers: (teachers: User[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
-  onImportSubjects: (subjects: Subject[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
+  onImportStudents: (
+    students: User[],
+    mode: 'merge_upsert' | 'replace_role',
+    onProgress?: (processed: number, total: number) => void
+  ) => Promise<any> | void;
+  onImportTeachers: (
+    teachers: User[],
+    mode: 'merge_upsert' | 'replace_role',
+    onProgress?: (processed: number, total: number) => void
+  ) => Promise<any> | void;
+  onImportSubjects: (
+    subjects: Subject[],
+    onProgress?: (processed: number, total: number) => void
+  ) => Promise<any> | void;
 }
 
 export const ExcelManager: React.FC<ExcelManagerProps> = ({
@@ -29,7 +43,8 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
   onImportTeachers,
   onImportSubjects
 }) => {
-  const [targetType, setTargetType] = useState<'siswa' | 'guru' | 'mapel'>('siswa');
+  const [targetType, setTargetType] = useState<'siswa' | 'guru' | 'mapel'>('guru');
+  const [importMode, setImportMode] = useState<'merge_upsert' | 'replace_role'>('merge_upsert');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -42,7 +57,7 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
 
     setSelectedFile(file);
     setIsProcessing(true);
-    setProgressStatus('Membaca dan memproses berkas Excel...');
+    setProgressStatus('Membaca dan memvalidasi berkas Excel...');
     setProgressPercent(10);
     setImportResult(null);
 
@@ -55,27 +70,33 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
         return;
       }
 
-      setProgressPercent(40);
-      setProgressStatus(`Mengekstrak ${result.importedStudents?.length || result.importedTeachers?.length || result.importedSubjects?.length} data...`);
+      setProgressPercent(35);
+      setProgressStatus(
+        `Memproses ${
+          result.importedStudents?.length ||
+          result.importedTeachers?.length ||
+          result.importedSubjects?.length
+        } data dengan mode ${importMode === 'merge_upsert' ? 'Tindih & Perbarui' : 'Ganti Bersih Semua'}...`
+      );
 
       if (result.importedStudents && result.importedStudents.length > 0) {
         setProgressStatus(`Menyimpan ${result.importedStudents.length} data siswa ke database Supabase...`);
-        await onImportStudents(result.importedStudents, (processed, total) => {
-          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+        await onImportStudents(result.importedStudents, importMode, (processed, total) => {
+          const pct = Math.min(98, 35 + Math.round((processed / total) * 63));
           setProgressPercent(pct);
           setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} siswa...`);
         });
       } else if (result.importedTeachers && result.importedTeachers.length > 0) {
         setProgressStatus(`Menyimpan ${result.importedTeachers.length} data guru ke database Supabase...`);
-        await onImportTeachers(result.importedTeachers, (processed, total) => {
-          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+        await onImportTeachers(result.importedTeachers, importMode, (processed, total) => {
+          const pct = Math.min(98, 35 + Math.round((processed / total) * 63));
           setProgressPercent(pct);
           setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} guru...`);
         });
       } else if (result.importedSubjects && result.importedSubjects.length > 0) {
         setProgressStatus(`Menyimpan ${result.importedSubjects.length} data mata pelajaran ke database Supabase...`);
         await onImportSubjects(result.importedSubjects, (processed, total) => {
-          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+          const pct = Math.min(98, 35 + Math.round((processed / total) * 63));
           setProgressPercent(pct);
           setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} mapel...`);
         });
@@ -85,7 +106,11 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
       setProgressStatus('Selesai disimpan ke Supabase & sistem!');
       setImportResult({
         ...result,
-        message: `${result.message} Data langsung tersimpan di Supabase & tabel aktif.`
+        message: `${result.message} Data ${
+          importMode === 'merge_upsert'
+            ? 'berhasil ditindih & diperbarui (anti-duplikat)'
+            : 'berhasil menggantikan data lama secara bersih'
+        } di Supabase & tabel aktif.`
       });
     } catch (err: any) {
       console.error('Import processing error:', err);
@@ -107,10 +132,10 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
         <div>
           <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-            Pusat Impor Data Excel (.xlsx) & Sinkronisasi Langsung ke Supabase
+            Pusat Impor Data Excel (.xlsx) & Sinkronisasi Supabase
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Unggah berkas spreadsheet Excel untuk memperbarui data Siswa, Guru, dan Mata Pelajaran. Data yang diunggah akan otomatis <strong>langsung tersimpan di Supabase Cloud</strong> dan menindih data lama pada kategori terkait.
+            Unggah spreadsheet Excel untuk memperbarui data Siswa, Guru, dan Mata Pelajaran. Pilih apakah data lama ingin <strong>ditindih/diperbarui</strong> atau <strong>dihapus bersih diganti baru</strong>.
           </p>
         </div>
 
@@ -121,19 +146,19 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
           </span>
           <button
             type="button"
-            onClick={() => downloadExcelTemplate('siswa')}
-            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-indigo-200 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Format Siswa.xlsx</span>
-          </button>
-          <button
-            type="button"
             onClick={() => downloadExcelTemplate('guru')}
             className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-emerald-200 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Format Guru.xlsx</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadExcelTemplate('siswa')}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-indigo-200 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Format Siswa.xlsx</span>
           </button>
           <button
             type="button"
@@ -147,35 +172,13 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
       </div>
 
       {/* Upload Zone Card */}
-      <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs space-y-6">
         {/* Step 1: Select Type */}
-        <div className="mb-6">
+        <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-            Langkah 1: Pilih Jenis Data yang Ingin Diunggah
+            Langkah 1: Pilih Jenis Data yang Ingin Diimpor
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              type="button"
-              disabled={isProcessing}
-              onClick={() => {
-                setTargetType('siswa');
-                setImportResult(null);
-              }}
-              className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
-                targetType === 'siswa'
-                  ? 'bg-indigo-50/80 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
-                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-              }`}
-            >
-              <div className={`p-2 rounded-lg ${targetType === 'siswa' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                <GraduationCap className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs sm:text-sm font-bold">Data Siswa</h4>
-                <p className="text-[11px] text-slate-500">NIS, Nama Lengkap, Kelas/Rombel, Username, Password</p>
-              </div>
-            </button>
-
             <button
               type="button"
               disabled={isProcessing}
@@ -189,12 +192,42 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
                   : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
               }`}
             >
-              <div className={`p-2 rounded-lg ${targetType === 'guru' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              <div
+                className={`p-2 rounded-lg ${
+                  targetType === 'guru' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
                 <Users className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold">Data Guru</h4>
-                <p className="text-[11px] text-slate-500">NIP, Nama Lengkap Guru, Mata Pelajaran</p>
+                <p className="text-[11px] text-slate-500">NIP, Nama Lengkap Guru, Mata Pelajaran, Username, Password</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={() => {
+                setTargetType('siswa');
+                setImportResult(null);
+              }}
+              className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                targetType === 'siswa'
+                  ? 'bg-indigo-50/80 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div
+                className={`p-2 rounded-lg ${
+                  targetType === 'siswa' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold">Data Siswa</h4>
+                <p className="text-[11px] text-slate-500">NIS/NISN, Nama Lengkap, Kelas/Rombel, Username, Password</p>
               </div>
             </button>
 
@@ -211,25 +244,102 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
                   : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
               }`}
             >
-              <div className={`p-2 rounded-lg ${targetType === 'mapel' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              <div
+                className={`p-2 rounded-lg ${
+                  targetType === 'mapel' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
                 <BookOpen className="w-5 h-5" />
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold">Mata Pelajaran</h4>
-                <p className="text-[11px] text-slate-500">Kode Mapel, Nama Mapel, Guru, KKM</p>
+                <p className="text-[11px] text-slate-500">Kode Mapel, Nama Mapel, Guru Pengampu, KKM</p>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Step 2: Upload Area */}
+        {/* Step 2: Select Mode for Users (Tindih vs Gantikan) */}
+        {targetType !== 'mapel' && (
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
+              Langkah 2: Pilih Perlakuan Terhadap Data Lama
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => setImportMode('merge_upsert')}
+                className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                  importMode === 'merge_upsert'
+                    ? 'bg-emerald-50/90 border-emerald-600 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs'
+                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg shrink-0 ${
+                    importMode === 'merge_upsert'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-bold">Tindih & Perbarui (Anti-Duplikat)</h4>
+                    <span className="px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded-md text-[10px] font-extrabold uppercase">
+                      Rekomendasi
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    Data lama yang memiliki <strong>NIP, Nama, atau Username yang sama</strong> akan otomatis <strong>ditindih/diperbarui</strong> dengan data terbaru. Data yang belum ada akan ditambahkan baru (mencegah data ganda/double).
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => setImportMode('replace_role')}
+                className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                  importMode === 'replace_role'
+                    ? 'bg-rose-50/90 border-rose-600 text-rose-950 ring-2 ring-rose-500/20 shadow-xs'
+                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg shrink-0 ${
+                    importMode === 'replace_role'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold">Hapus Semua Data Lama Kategori Ini</h4>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    <strong>Hapus bersih</strong> seluruh data {targetType === 'guru' ? 'Guru' : 'Siswa'} yang ada saat ini di Supabase & sistem, lalu gantikan seluruhnya dengan data segar dari file Excel ini.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Upload Area */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-            Langkah 2: Unggah File Excel (.xlsx / .xls)
+            Langkah {targetType !== 'mapel' ? '3' : '2'}: Unggah File Excel (.xlsx / .xls)
           </label>
-          <div className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
-            isProcessing ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-300 hover:border-indigo-500 bg-slate-50/50 hover:bg-slate-50'
-          }`}>
+          <div
+            className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+              isProcessing
+                ? 'border-indigo-400 bg-indigo-50/30'
+                : 'border-slate-300 hover:border-indigo-500 bg-slate-50/50 hover:bg-slate-50'
+            }`}
+          >
             <input
               type="file"
               accept=".xlsx, .xls"
@@ -238,9 +348,13 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             />
             <div className="flex flex-col items-center justify-center space-y-3">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-transform ${
-                isProcessing ? 'bg-indigo-600 text-white animate-pulse' : 'bg-white text-indigo-600 border border-slate-200'
-              }`}>
+              <div
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-transform ${
+                  isProcessing
+                    ? 'bg-indigo-600 text-white animate-pulse'
+                    : 'bg-white text-indigo-600 border border-slate-200'
+                }`}
+              >
                 {isProcessing ? (
                   <Loader2 className="w-7 h-7 animate-spin" />
                 ) : (
@@ -251,7 +365,9 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
                 <p className="text-sm font-bold text-slate-800">
                   {isProcessing
                     ? progressStatus
-                    : 'Klik atau Seret Berkas Excel ke Sini'}
+                    : `Klik atau Seret Berkas Excel Data ${
+                        targetType === 'guru' ? 'Guru' : targetType === 'siswa' ? 'Siswa' : 'Mapel'
+                      } ke Sini`}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   Format yang didukung: .xlsx atau .xls (Ukuran maks: 15MB)
@@ -279,7 +395,7 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
         {/* Feedback Alert */}
         {importResult && (
           <div
-            className={`mt-6 p-4 rounded-xl flex items-start gap-3 border animate-in fade-in ${
+            className={`p-4 rounded-xl flex items-start gap-3 border animate-in fade-in ${
               importResult.success
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                 : 'bg-rose-50 border-rose-200 text-rose-900'
@@ -292,7 +408,7 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
             )}
             <div>
               <h5 className="text-xs sm:text-sm font-bold">
-                {importResult.success ? 'Berhasil Mengimpor Data & Tersimpan ke Supabase!' : 'Gagal Mengimpor Berkas'}
+                {importResult.success ? 'Berhasil Memproses & Menyimpan Data ke Supabase!' : 'Gagal Mengimpor Berkas'}
               </h5>
               <p className="text-xs mt-0.5 opacity-90">{importResult.message}</p>
             </div>
@@ -302,3 +418,4 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
     </div>
   );
 };
+

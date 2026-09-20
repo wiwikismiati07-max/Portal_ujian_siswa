@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, ExamSubmission } from '../../types';
 import { getAllExams, getAllSubmissions, getQuestionsByExamId } from '../../utils/storage';
+import { isStudentEligibleForExam } from '../../utils/classHelper';
 import {
   BookOpen,
   Clock,
@@ -35,11 +36,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
   }, []);
 
   // Filter exams that are active and targeted to this student's class
-  const studentClass = student.classGroup || 'X-IPA-1';
+  const studentClass = student.classGroup || '';
   const availableExams = exams.filter(e => {
     if (e.status !== 'active') return false;
-    if (!e.targetClasses || e.targetClasses.length === 0) return true;
-    return e.targetClasses.includes(studentClass);
+    return isStudentEligibleForExam(e.targetClasses, studentClass);
   });
 
   // Check submissions by this student

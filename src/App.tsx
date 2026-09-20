@@ -21,6 +21,8 @@ import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { SupabaseModal } from './components/SupabaseModal';
 import { SupabaseSyncBanner } from './components/SupabaseSyncBanner';
+import { ConfirmModal } from './components/ConfirmModal';
+import { AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setLoggedInUser] = useState<User | null>(null);
@@ -29,6 +31,8 @@ export default function App() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>(getSupabaseStatus().status);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [appAlert, setAppAlert] = useState<string | null>(null);
 
   // Initialize dataset & Supabase sync on mount
   useEffect(() => {
@@ -67,21 +71,25 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    // If student is currently taking an exam, confirm before quitting
     if (activeExam) {
-      if (!window.confirm('Peringatan: Ujian sedang berlangsung. Apakah Anda yakin ingin membatalkan dan keluar?')) {
-        return;
-      }
+      setIsLogoutConfirmOpen(true);
+      return;
     }
+    executeLogout();
+  };
+
+  const executeLogout = () => {
     setLoggedInUser(null);
     setCurrentUser(null);
     setActiveExam(null);
+    setIsLogoutConfirmOpen(false);
   };
 
   const handleStartExam = (exam: Exam) => {
     const questions = getQuestionsByExamId(exam.id);
     if (questions.length === 0) {
-      alert('Paket ujian ini belum memiliki butir soal. Silakan hubungi guru pengampu.');
+      setAppAlert('Paket ujian ini belum memiliki butir soal. Silakan hubungi guru pengampu.');
+      setTimeout(() => setAppAlert(null), 5000);
       return;
     }
     setActiveQuestions(questions);
@@ -162,6 +170,34 @@ export default function App() {
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
       />
+
+      {/* Logout Confirmation Modal while Exam is active */}
+      <ConfirmModal
+        isOpen={isLogoutConfirmOpen}
+        title="Batalkan & Keluar Ujian?"
+        message="Peringatan: Sesi ujian sedang berlangsung. Jika Anda keluar sekarang, jawaban yang belum disimpan akan hilang dan Anda harus login kembali."
+        confirmLabel="Ya, Keluar Ujian"
+        isDanger={true}
+        onConfirm={executeLogout}
+        onCancel={() => setIsLogoutConfirmOpen(false)}
+      />
+
+      {/* Floating Notice Banner */}
+      {appAlert && (
+        <div className="fixed top-20 right-4 sm:right-8 z-50 animate-in fade-in slide-in-from-top duration-200">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-900 text-white border border-amber-700 shadow-xl shadow-amber-950/20 text-xs sm:text-sm font-semibold max-w-md">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            <span className="flex-1">{appAlert}</span>
+            <button
+              type="button"
+              onClick={() => setAppAlert(null)}
+              className="p-1 text-white/70 hover:text-white rounded-lg transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer (No print) */}
       {!activeExam && (

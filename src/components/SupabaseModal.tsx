@@ -94,9 +94,6 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
   };
 
   const handleUploadAll = async () => {
-    if (!window.confirm('Unggah seluruh data lokal saat ini ke database Supabase?')) {
-      return;
-    }
     setIsUploading(true);
     setUploadMessage(null);
     try {

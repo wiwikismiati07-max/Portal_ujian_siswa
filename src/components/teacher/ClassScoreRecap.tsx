@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
+import { DEFAULT_CLASSES } from '../../utils/classHelper';
 import {
   Download,
   Printer,
@@ -34,15 +35,14 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [inspectionSubmission, setInspectionSubmission] = useState<ExamSubmission | null>(null);
 
-  // Extract unique classes from submissions & exams
+  // Extract unique classes from submissions & exams & default classes (7A-9H)
   const availableClasses = Array.from(
     new Set([
-      'X-IPA-1',
-      'X-IPA-2',
-      'XI-IPA-1',
+      ...DEFAULT_CLASSES,
+      ...exams.flatMap(e => e.targetClasses || []),
       ...submissions.map(s => s.studentClass).filter(Boolean)
     ])
-  ).sort();
+  ).filter(Boolean).sort();
 
   // Filter submissions
   const filteredSubmissions = submissions.filter(sub => {
