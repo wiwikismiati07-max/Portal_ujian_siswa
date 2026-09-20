@@ -62,50 +62,78 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lastViolationTimeRef = useRef<number>(0);
+  const audioCtxRef = useRef<any>(null);
   const currentQ = questions[currentIndex];
 
-  // Synthesize warning beep via Web Audio API
-  const playWarningBeep = useCallback(() => {
+  // Initialize and unlock audio context on mobile & desktop user interaction
+  const initOrResumeAudio = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(520, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
-      osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.28);
-      gain.gain.setValueAtTime(0.35, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.35);
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
     } catch {}
   }, []);
 
-  const enterFullscreen = useCallback(() => {
+  // Synthesize warning siren beep via Web Audio API
+  const playWarningBeep = useCallback(() => {
     try {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else if ((document.documentElement as any).webkitRequestFullscreen) {
-        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+      initOrResumeAudio();
+      const ctx = audioCtxRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(650, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1150, ctx.currentTime + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch {}
+  }, [initOrResumeAudio]);
+
+  const enterFullscreen = useCallback(() => {
+    initOrResumeAudio();
+    try {
+      const docEl = document.documentElement as any;
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen().catch(() => {});
+      } else if (docEl.mozRequestFullScreen) {
+        docEl.mozRequestFullScreen().catch(() => {});
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen().catch(() => {});
       }
       setIsFullscreen(true);
     } catch {
       setIsFullscreen(true);
     }
-  }, []);
 
-  // Auto-request fullscreen & screen lock immediately on mount
-  useEffect(() => {
-    enterFullscreen();
+    try {
+      if (screen.orientation && (screen.orientation as any).lock) {
+        (screen.orientation as any).lock('portrait').catch(() => {});
+      }
+    } catch {}
+
     try {
       if ('wakeLock' in navigator && (navigator as any).wakeLock) {
         (navigator as any).wakeLock.request('screen').catch(() => {});
       }
     } catch {}
+  }, [initOrResumeAudio]);
+
+  // Auto-request fullscreen & screen lock immediately on mount
+  useEffect(() => {
+    enterFullscreen();
   }, [enterFullscreen]);
 
   // Timer countdown
@@ -126,18 +154,34 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     return () => clearInterval(timer);
   }, [isLockdownStarted, submittedResult]);
 
-  // Anti-cheat event listeners (Lockdown mode)
+  // Mobile & Desktop Anti-cheat event listeners (Strict Lockdown mode)
   useEffect(() => {
     if (!isLockdownStarted || submittedResult) return;
 
+    // Trap Mobile Hardware Back Button & Back Swipe Gestures
+    try {
+      window.history.pushState({ cbt: 'lockdown' }, '', window.location.href);
+    } catch {}
+
+    const handlePopState = () => {
+      try {
+        window.history.pushState({ cbt: 'lockdown' }, '', window.location.href);
+      } catch {}
+      triggerViolation('Aksi Kembali / Back Gesture pada HP diblokir! Layar tetap dikunci di lembar ujian.');
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        triggerViolation('Anda terdeteksi beralih tab browser, meminimalkan layar, atau membuka aplikasi lain.');
+        triggerViolation('Anda terdeteksi beralih aplikasi, meminimalkan layar HP, atau membuka tab lain.');
       }
     };
 
     const handleWindowBlur = () => {
-      triggerViolation('Fokus layar ujian terputus! Dilarang membuka aplikasi lain, kalkulator, catatan, atau jendela sekunder.');
+      triggerViolation('Fokus layar ujian terputus! Dilarang membuka aplikasi lain, kalkulator, catatan, atau menu split-screen.');
+    };
+
+    const handlePageHide = () => {
+      triggerViolation('Layar browser HP diminimalkan atau berpindah aplikasi.');
     };
 
     const handleFullscreenChange = () => {
@@ -174,7 +218,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      triggerViolation('Klik kanan dinonaktifkan untuk menjaga keamanan dan kerahasiaan lembar soal.');
+      triggerViolation('Klik kanan / menu konteks dinonaktifkan untuk menjaga keamanan dan kerahasiaan lembar soal.');
     };
 
     const handleCopyPaste = (e: ClipboardEvent) => {
@@ -183,17 +227,31 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     };
 
     const handleSelectStart = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target && target.tagName === 'TEXTAREA') {
+        return;
+      }
       e.preventDefault();
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      initOrResumeAudio();
+      // Prevent multi-touch pinch / 3-finger OS gestures
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
     };
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = 'Ujian sedang berlangsung! Jangan keluar sebelum mengumpulkan lembar jawaban.';
+      e.returnValue = 'Ujian sedang berlangsung! Jangan keluar atau menutup aplikasi sebelum lembar jawaban dikumpulkan.';
       return e.returnValue;
     };
 
+    window.addEventListener('popstate', handlePopState);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('pagehide', handlePageHide);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('contextmenu', handleContextMenu);
@@ -201,11 +259,14 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     document.addEventListener('cut', handleCopyPaste);
     document.addEventListener('paste', handleCopyPaste);
     document.addEventListener('selectstart', handleSelectStart);
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('contextmenu', handleContextMenu);
@@ -213,9 +274,10 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       document.removeEventListener('cut', handleCopyPaste);
       document.removeEventListener('paste', handleCopyPaste);
       document.removeEventListener('selectstart', handleSelectStart);
+      window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [isLockdownStarted, submittedResult]);
+  }, [isLockdownStarted, submittedResult, initOrResumeAudio]);
 
   const triggerViolation = (reason: string) => {
     const now = Date.now();
@@ -392,7 +454,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[99990] w-screen h-screen overflow-y-auto bg-slate-100 flex flex-col select-none relative"
+      className="cbt-lockdown-container fixed inset-0 z-[99990] w-screen h-screen overflow-y-auto bg-slate-100 flex flex-col select-none relative"
     >
       {/* MANDATORY FULLSCREEN LOCK ENFORCEMENT OVERLAY */}
       {!isFullscreen && !submittedResult && (
@@ -804,7 +866,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                   value={answers[currentQ.id] || ''}
                   onChange={(e) => setAnswerForCurrent(e.target.value)}
                   placeholder="Ketikkan argumen, analisis situasi, dan langkah solusi Anda di sini..."
-                  className="w-full p-4 text-sm bg-white border border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none leading-relaxed"
+                  className="cbt-allow-typing w-full p-4 text-sm bg-white border border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none leading-relaxed"
                 />
               </div>
             )}
