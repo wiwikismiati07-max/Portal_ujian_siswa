@@ -14,7 +14,8 @@ import {
   Calendar,
   Layers,
   FileCheck,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -207,8 +208,24 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                       </p>
                     </div>
 
+                    {/* Detailed Schedule Info */}
+                    <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/80 space-y-1.5 text-xs">
+                      <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="text-[11px]">
+                          <strong>Hari & Tanggal:</strong> {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Senin, 22 September 2026'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="text-[11px]">
+                          <strong>Waktu Ujian:</strong> 08:00 - 09:30 WIB ({exam.durationMinutes} Menit)
+                        </span>
+                      </div>
+                    </div>
+
                     {/* Metadata specs */}
-                    <div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-100 text-xs text-slate-600">
+                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 text-xs text-slate-600">
                       <div className="bg-slate-50/70 p-2 rounded-xl text-center">
                         <span className="text-slate-400 block text-[10px] font-bold">Durasi</span>
                         <span className="font-extrabold text-slate-800 text-xs">{exam.durationMinutes} Menit</span>

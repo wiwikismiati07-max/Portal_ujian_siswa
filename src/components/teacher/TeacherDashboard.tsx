@@ -54,6 +54,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
   const [questions, setQuestions] = useState<Question[]>(getAllQuestions());
   const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());
   const [submissions, setSubmissions] = useState<ExamSubmission[]>(getAllSubmissions());
+  
+  // Multi-User Teacher Accounts
+  const [allTeachers, setAllTeachers] = useState<User[]>(() => {
+    const list = getAllUsers().filter(u => u.role === 'guru');
+    return list.length > 0 ? list : [teacher];
+  });
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teacher.id);
+  const activeTeacher = allTeachers.find(t => t.id === selectedTeacherId) || teacher;
 
   // Confirm Modal state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -327,15 +335,54 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-teal-200 border border-white/15 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Dashboard Guru Pengampu Mata Pelajaran</span>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-teal-200 border border-white/15 shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Dashboard Guru Pengampu</span>
+              </div>
+
+              {/* Multi User Teacher Account Selector */}
+              {allTeachers.length > 1 && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 backdrop-blur-md rounded-full text-xs font-bold text-emerald-200 border border-emerald-400/30">
+                  <Users className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Switch Guru:</span>
+                  <select
+                    value={selectedTeacherId}
+                    onChange={(e) => setSelectedTeacherId(e.target.value)}
+                    className="bg-transparent text-white font-extrabold text-xs outline-none cursor-pointer border-b border-dashed border-emerald-300/60"
+                  >
+                    {allTeachers.map((t) => (
+                      <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                        {t.name} ({t.subjectName || 'Guru'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-              Selamat Datang, {teacher.name}
+              Selamat Datang, {activeTeacher.name}
             </h1>
-            <p className="text-teal-100/85 text-xs sm:text-sm max-w-xl leading-relaxed">
+
+            {/* Teacher Specs Pills: Nama Guru, Mata Pelajaran, Kelas */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-teal-100 font-medium">
+              <span className="px-3 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold">
+                <Users className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+                <span>Nama Guru: <strong className="text-white font-extrabold">{activeTeacher.name}</strong></span>
+              </span>
+              <span className="px-3 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold">
+                <BookOpen className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span>Mata Pelajaran: <strong className="text-amber-200 font-extrabold">{activeTeacher.subjectName || 'Informatika & Umum'}</strong></span>
+              </span>
+              <span className="px-3 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold">
+                <GraduationCap className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                <span>Kelas: <strong className="text-emerald-200 font-extrabold">{activeTeacher.classGroup || 'Semua Kelas (7A, 7B, 8A, 8B, 9A, 9B, X, XI)'}</strong></span>
+              </span>
+            </div>
+
+            <p className="text-teal-100/80 text-xs sm:text-sm max-w-xl leading-relaxed pt-1">
               Kelola bank butir soal berstandar AKM, atur jadwal paket asesmen, pantau integritas pengerjaan siswa, dan cetak lembar rekapitulasi nilai secara fleksibel.
             </p>
           </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole } from '../types';
 import { getAllUsers, saveUsers } from '../utils/storage';
+import { INITIAL_USERS } from '../data/initialData';
 import { supabase } from '../utils/supabaseClient';
 import { mapUserFromDb } from '../utils/supabaseSync';
 import {
@@ -116,6 +117,33 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  // Direct 1-Click Login to Page 2 (Portal Dashboard)
+  const handleDirectOneClickLogin = (targetRole?: UserRole) => {
+    setError(null);
+    setIsLoading(true);
+    const roleToUse = targetRole || roleTab || 'siswa';
+
+    const allUsers = getAllUsers();
+    let targetUser: User | undefined = allUsers.find(u => u.role === roleToUse);
+
+    if (!targetUser) {
+      if (roleToUse === 'admin') {
+        targetUser = INITIAL_USERS.find(u => u.role === 'admin') || INITIAL_USERS[0];
+      } else if (roleToUse === 'guru') {
+        targetUser = INITIAL_USERS.find(u => u.role === 'guru') || INITIAL_USERS[1];
+      } else {
+        targetUser = INITIAL_USERS.find(u => u.role === 'siswa') || INITIAL_USERS[2];
+      }
+    }
+
+    const finalUser: User = targetUser || INITIAL_USERS[0];
+
+    setTimeout(() => {
+      setIsLoading(false);
+      onLoginSuccess(finalUser);
+    }, 150);
+  };
+
   const handleRoleTabChange = (role: UserRole) => {
     setRoleTab(role);
     setError(null);
@@ -129,13 +157,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     const cleanUser = rawInput.replace(/^@/, '').toLowerCase().trim();
     const inputPass = password.trim();
 
-    if (!cleanUser) {
-      setError('Silakan masukkan Username, NIS, atau Nama Anda.');
-      return;
-    }
-
-    if (!inputPass) {
-      setError('Silakan masukkan Password Anda.');
+    // 1-Click Fallback: If credentials are not entered, seamlessly log in to Halaman 2
+    if (!cleanUser || !inputPass) {
+      handleDirectOneClickLogin(roleTab);
       return;
     }
 
@@ -303,16 +327,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </div>
                 ))}
               </div>
-
-              {/* CTA Button: Masuk Login */}
-              <button
-                type="button"
-                onClick={() => focusLoginForm()}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:from-amber-500 active:to-amber-600 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer group"
-              >
-                <span>Masuk Login Sekarang</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
             </div>
           </div>
 
