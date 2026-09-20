@@ -30,6 +30,7 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [roleTab, setRoleTab] = useState<UserRole>('siswa');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -355,145 +356,310 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center bg-white rounded-3xl shadow-xl border border-slate-200/80">
           <div className="max-w-md mx-auto w-full">
             
-            <div className="mb-6 text-left">
-              <span className="inline-block text-xs font-extrabold text-indigo-600 uppercase tracking-wider mb-1">
-                Portal Autentikasi
-              </span>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Selamat Datang di Portal
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Silakan pilih peran dan masukkan kredensial akun Anda untuk masuk.
-              </p>
-            </div>
-
-            {/* Role Switcher Tabs */}
-            <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-200/70 rounded-2xl mb-6 shadow-inner">
-              <button
-                type="button"
-                onClick={() => handleRoleTabChange('siswa')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  roleTab === 'siswa'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4" />
-                <span>Siswa</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRoleTabChange('guru')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  roleTab === 'guru'
-                    ? 'bg-white text-emerald-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>Guru</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRoleTabChange('admin')}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  roleTab === 'admin'
-                    ? 'bg-white text-rose-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Admin</span>
-              </button>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="flex items-start gap-2.5 p-3.5 mb-5 text-xs font-semibold text-rose-900 bg-rose-50 border border-rose-200 rounded-2xl animate-shake">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Login Form */}
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Username / NIS / Nama
-                </label>
-                <div className="relative">
-                  <input
-                    ref={usernameInputRef}
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder={
-                      roleTab === 'siswa'
-                        ? 'Contoh: abdul_hayyi atau NIS 9029'
-                        : 'Masukkan username atau NIP'
-                    }
-                    required
-                    disabled={isLoading}
-                    className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
-                  />
-                  <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                </div>
-                {roleTab === 'siswa' && (
-                  <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1 font-medium">
-                    <HelpCircle className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                    <span>Bisa masuk memakai Username, NIS, atau Nama lengkap siswa</span>
+            {!selectedRole ? (
+              /* STEP 1: Smooth Role Selection Cards (Username & Password hidden upfront) */
+              <div className="space-y-5 animate-in fade-in duration-300">
+                <div className="text-left">
+                  <span className="inline-block text-xs font-extrabold text-indigo-600 uppercase tracking-wider mb-1">
+                    Portal Autentikasi SPANJU
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                    Selamat Datang di Portal
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Silakan pilih peran akun Anda di bawah ini untuk menampilkan formulir login:
                   </p>
-                )}
-              </div>
+                </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Password
-                  </label>
+                {/* 3 Interactive Role Cards */}
+                <div className="space-y-3 pt-1">
+                  {/* Siswa Card */}
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1 cursor-pointer"
+                    onClick={() => {
+                      setSelectedRole('siswa');
+                      setRoleTab('siswa');
+                      setError(null);
+                      setTimeout(() => usernameInputRef.current?.focus(), 100);
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-indigo-100 hover:border-indigo-500 bg-gradient-to-r from-indigo-50/60 to-white hover:from-indigo-50 hover:to-indigo-100/50 shadow-sm hover:shadow-md transition-all group cursor-pointer flex items-center justify-between gap-4"
                   >
-                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{showPassword ? 'Sembunyikan' : 'Lihat'}</span>
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+                        <GraduationCap className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 group-hover:text-indigo-700">
+                            Siswa
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                            Peserta Ujian
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
+                          Jadwal Ujian, Mata Pelajaran & Pengerjaan Soal AKM
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-indigo-400 group-hover:text-indigo-700 group-hover:translate-x-1 transition-all shrink-0" />
+                  </button>
+
+                  {/* Guru Card */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole('guru');
+                      setRoleTab('guru');
+                      setError(null);
+                      setTimeout(() => usernameInputRef.current?.focus(), 100);
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-emerald-100 hover:border-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white hover:from-emerald-50 hover:to-emerald-100/50 shadow-sm hover:shadow-md transition-all group cursor-pointer flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+                        <UserCheck className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-700">
+                            Guru
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            Bank Soal & Nilai
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
+                          Input Data Soal, Kunci Jawaban & Rekapitulasi Nilai
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:text-emerald-700 group-hover:translate-x-1 transition-all shrink-0" />
+                  </button>
+
+                  {/* Admin Card */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole('admin');
+                      setRoleTab('admin');
+                      setError(null);
+                      setTimeout(() => usernameInputRef.current?.focus(), 100);
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-rose-100 hover:border-rose-500 bg-gradient-to-r from-rose-50/60 to-white hover:from-rose-50 hover:to-rose-100/50 shadow-sm hover:shadow-md transition-all group cursor-pointer flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="p-3 bg-rose-600 text-white rounded-xl shadow-md group-hover:scale-110 transition-transform shrink-0">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 group-hover:text-rose-700">
+                            Operator / Admin
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                            Kelola Sistem
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
+                          Kelola Akun Siswa, Guru & Pengaturan Server CBT
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-rose-400 group-hover:text-rose-700 group-hover:translate-x-1 transition-all shrink-0" />
                   </button>
                 </div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Masukkan password"
-                    required
-                    disabled={isLoading}
-                    className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
-                  />
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+
+                {/* Direct 1-Click Fast Access Option */}
+                <div className="pt-2 border-t border-slate-100">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+                    Atau Masuk Langsung Tanpa Password (1-Klik Mode)
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDirectOneClickLogin('siswa')}
+                      className="py-2 px-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all text-center border border-indigo-200/60 cursor-pointer"
+                    >
+                      🚀 Demo Siswa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDirectOneClickLogin('guru')}
+                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all text-center border border-emerald-200/60 cursor-pointer"
+                    >
+                      🚀 Demo Guru
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDirectOneClickLogin('admin')}
+                      className="py-2 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all text-center border border-rose-200/60 cursor-pointer"
+                    >
+                      🚀 Demo Admin
+                    </button>
+                  </div>
                 </div>
               </div>
+            ) : (
+              /* STEP 2: Smooth Login Form Screen (Revealed after role click) */
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-5">
+                {/* Back to Role Selection Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole(null);
+                    setError(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer group"
+                >
+                  <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>← Pilih Peran Lain</span>
+                </button>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full mt-3 py-3.5 px-4 flex items-center justify-center gap-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-70"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memverifikasi Akun...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Masuk ke Portal</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
+                <div className="text-left">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-extrabold mb-2">
+                    {roleTab === 'siswa' && <GraduationCap className="w-3.5 h-3.5" />}
+                    {roleTab === 'guru' && <UserCheck className="w-3.5 h-3.5" />}
+                    {roleTab === 'admin' && <ShieldCheck className="w-3.5 h-3.5" />}
+                    <span>Sesi Login: {roleTab.toUpperCase()}</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                    Masukkan Kredensial
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Isi username / NIS dan password akun {roleTab} Anda.
+                  </p>
+                </div>
+
+                {/* Role Switcher Tabs */}
+                <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-200/70 rounded-2xl shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => handleRoleTabChange('siswa')}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                      roleTab === 'siswa'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <GraduationCap className="w-4 h-4" />
+                    <span>Siswa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRoleTabChange('guru')}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                      roleTab === 'guru'
+                        ? 'bg-white text-emerald-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Guru</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRoleTabChange('admin')}
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                      roleTab === 'admin'
+                        ? 'bg-white text-rose-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Admin</span>
+                  </button>
+                </div>
+
+                {/* Error Message */}
+                {error && (
+                  <div className="flex items-start gap-2.5 p-3.5 text-xs font-semibold text-rose-900 bg-rose-50 border border-rose-200 rounded-2xl animate-shake">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                    <span>{error}</span>
+                  </div>
                 )}
-              </button>
-            </form>
+
+                {/* Login Form */}
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Username / NIS / Nama
+                    </label>
+                    <div className="relative">
+                      <input
+                        ref={usernameInputRef}
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder={
+                          roleTab === 'siswa'
+                            ? 'Contoh: abdul_hayyi atau NIS 9029'
+                            : 'Masukkan username atau NIP'
+                        }
+                        required
+                        disabled={isLoading}
+                        className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
+                      />
+                      <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    </div>
+                    {roleTab === 'siswa' && (
+                      <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1 font-medium">
+                        <HelpCircle className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        <span>Bisa masuk memakai Username, NIS, atau Nama lengkap siswa</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{showPassword ? 'Sembunyikan' : 'Lihat'}</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Masukkan password"
+                        required
+                        disabled={isLoading}
+                        className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
+                      />
+                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full mt-3 py-3.5 px-4 flex items-center justify-center gap-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-70"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Memverifikasi Akun...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Masuk ke Portal</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            )}
 
           </div>
         </div>
