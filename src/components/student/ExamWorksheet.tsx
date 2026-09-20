@@ -47,8 +47,8 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
   const [startedAt] = useState<string>(new Date().toISOString());
 
-  // CBT Safe Exam Lockdown state
-  const [isLockdownStarted, setIsLockdownStarted] = useState(false);
+  // CBT Safe Exam Lockdown state (Automatic lock on mount)
+  const [isLockdownStarted, setIsLockdownStarted] = useState(true);
   const [violationCount, setViolationCount] = useState(0);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationReason, setViolationReason] = useState('');
@@ -85,28 +85,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     } catch {}
   }, []);
 
-  // Request fullscreen and initiate lockdown
-  const handleStartLockdown = async () => {
-    try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen().catch(() => {});
-      } else if ((document.documentElement as any).webkitRequestFullscreen) {
-        await (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
-      }
-      setIsFullscreen(true);
-    } catch {
-      setIsFullscreen(true);
-    }
-    setIsLockdownStarted(true);
-
-    try {
-      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
-        await (navigator as any).wakeLock.request('screen').catch(() => {});
-      }
-    } catch {}
-  };
-
-  const enterFullscreen = () => {
+  const enterFullscreen = useCallback(() => {
     try {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -117,7 +96,17 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     } catch {
       setIsFullscreen(true);
     }
-  };
+  }, []);
+
+  // Auto-request fullscreen & screen lock immediately on mount
+  useEffect(() => {
+    enterFullscreen();
+    try {
+      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+        (navigator as any).wakeLock.request('screen').catch(() => {});
+      }
+    } catch {}
+  }, [enterFullscreen]);
 
   // Timer countdown
   useEffect(() => {
@@ -143,12 +132,12 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        triggerViolation('Anda terdeteksi berpindah tab browser, meminimalkan layar, atau membuka jendela lain.');
+        triggerViolation('Anda terdeteksi beralih tab browser, meminimalkan layar, atau membuka aplikasi lain.');
       }
     };
 
     const handleWindowBlur = () => {
-      triggerViolation('Fokus layar ujian hilang! Dilarang membuka aplikasi kalkulator, browser lain, atau jendela sekunder.');
+      triggerViolation('Fokus layar ujian terputus! Dilarang membuka aplikasi lain, kalkulator, catatan, atau jendela sekunder.');
     };
 
     const handleFullscreenChange = () => {
@@ -159,37 +148,38 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
         (document as any).msFullscreenElement
       );
       setIsFullscreen(fs);
-      if (!fs && isLockdownStarted) {
-        triggerViolation('Layar ujian keluar dari mode layar penuh (Fullscreen). Segera kunci kembali layar.');
+      if (!fs && !submittedResult) {
+        triggerViolation('Layar ujian keluar dari mode Layar Penuh (Fullscreen). Layar wajib dikunci kembali untuk melanjutkan.');
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      // Prevent navigation shortcuts, developer tools, new tabs, copy/paste
+      // Block all navigation shortcuts, function keys, devtools, new tab, window switch, copy/paste
       if (
         e.altKey ||
-        (e.ctrlKey && ['t', 'n', 'w', 'j', 'u', 'r', 'h', 'p', 's', 'c', 'v', 'x', 'a', 'f'].includes(key)) ||
-        (e.metaKey && ['t', 'n', 'w', 'j', 'u', 'r', 'h', 'p', 's', 'c', 'v', 'x', 'a', 'f'].includes(key)) ||
+        e.metaKey ||
+        e.key === 'Tab' ||
         e.key.startsWith('F') ||
         e.key === 'Escape' ||
-        e.key === 'PrintScreen'
+        e.key === 'PrintScreen' ||
+        (e.ctrlKey && ['t', 'n', 'w', 'j', 'u', 'r', 'h', 'p', 's', 'c', 'v', 'x', 'a', 'f', 'b', 'd', 'e', 'k', 'o', 'l', 'q'].includes(key))
       ) {
         e.preventDefault();
         e.stopPropagation();
-        triggerViolation(`Penggunaan tombol pintasan '${e.key}' diblokir selama ujian terkunci.`);
+        triggerViolation(`Penggunaan tombol atau pintasan '${e.key}' diblokir selama ujian terkunci.`);
         return false;
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      triggerViolation('Klik kanan dinonaktifkan untuk menjaga keamanan lembar soal.');
+      triggerViolation('Klik kanan dinonaktifkan untuk menjaga keamanan dan kerahasiaan lembar soal.');
     };
 
     const handleCopyPaste = (e: ClipboardEvent) => {
       e.preventDefault();
-      triggerViolation('Operasi Salin (Copy) & Tempel (Paste) dilarang selama ujian.');
+      triggerViolation('Operasi Salin (Copy) & Tempel (Paste) diblokir selama ujian.');
     };
 
     const handleSelectStart = (e: Event) => {
@@ -198,7 +188,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = 'Ujian sedang berlangsung! Jawaban Anda akan terkirim jika meninggalkan halaman ini.';
+      e.returnValue = 'Ujian sedang berlangsung! Jangan keluar sebelum mengumpulkan lembar jawaban.';
       return e.returnValue;
     };
 
@@ -229,7 +219,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
   const triggerViolation = (reason: string) => {
     const now = Date.now();
-    if (now - lastViolationTimeRef.current < 1500) return;
+    if (now - lastViolationTimeRef.current < 1200) return;
     lastViolationTimeRef.current = now;
 
     playWarningBeep();
@@ -238,11 +228,11 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     setViolationCount(prev => {
       const updated = prev + 1;
-      // Auto-submit if violation exceeds 5
-      if (updated >= 5) {
+      // Auto-submit if violation reaches 3 (strict limit)
+      if (updated >= 3) {
         setTimeout(() => {
-          handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (5 kali). Ujian otomatis dikumpulkan oleh sistem pengawas.');
-        }, 1500);
+          handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (3 kali beralih jendela/aplikasi). Ujian otomatis dihentikan dan dikumpulkan ke pengawas.');
+        }, 1200);
       }
       return updated;
     });
@@ -266,6 +256,17 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
         origin: { y: 0.6 }
       });
     } catch {}
+  };
+
+  const handleExitToHome = () => {
+    try {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen().catch(() => {});
+      }
+    } catch {}
+    onExitToDashboard();
   };
 
   // Answer handler
@@ -308,81 +309,11 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const answeredCount = questions.filter(isQuestionAnswered).length;
   const unansweredCount = questions.length - answeredCount;
 
-  // 1. PRE-FLIGHT LOCKDOWN GATE SCREEN (Before entering exam)
-  if (!isLockdownStarted && !submittedResult) {
-    return (
-      <div className="min-h-[calc(100vh-4.5rem)] py-8 px-4 sm:px-6 max-w-3xl mx-auto flex flex-col justify-center animate-in fade-in duration-200">
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden p-6 sm:p-10 text-center relative">
-          
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-5 shadow-xs">
-            <Shield className="w-10 h-10 text-indigo-600" />
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 rounded-full text-xs font-extrabold border border-amber-200 mb-3">
-            <Lock className="w-3.5 h-3.5" /> SISTEM CBT TERKUNCI (SAFE EXAM BROWSER)
-          </div>
-
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            {exam.title}
-          </h2>
-          <p className="text-sm text-slate-500 max-w-lg mx-auto mt-2">
-            Mata Pelajaran: <span className="font-semibold text-slate-700">{exam.subjectName}</span> • Durasi: <span className="font-semibold text-slate-700">{exam.durationMinutes} Menit</span> • Total: <span className="font-semibold text-slate-700">{questions.length} Butir Soal</span>
-          </p>
-
-          {/* Student details */}
-          <div className="my-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs max-w-lg mx-auto space-y-2">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Nama Siswa:</span>
-              <span className="font-bold text-slate-800">{student.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">NIS / Kelas:</span>
-              <span className="font-bold text-slate-800">{student.nipOrNis || '-'} / {student.classGroup}</span>
-            </div>
-          </div>
-
-          {/* Security Rules Box */}
-          <div className="p-5 bg-amber-50/70 rounded-2xl border border-amber-200 text-left text-xs text-amber-950 max-w-lg mx-auto mb-8 space-y-2.5">
-            <div className="font-bold flex items-center gap-2 text-amber-900 text-sm">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              Peraturan Integritas & Keamanan Ujian:
-            </div>
-            <ul className="list-disc list-inside space-y-1.5 text-amber-900">
-              <li>Layar ujian akan otomatis dikunci dalam mode <span className="font-bold">Layar Penuh (Fullscreen)</span>.</li>
-              <li><span className="font-bold text-rose-700">Dilarang membuka tab browser lain, aplikasi kalkulator, atau jendela lain.</span></li>
-              <li>Tombol pintasan (Shortcut), klik kanan, dan salin-tempel dinonaktifkan.</li>
-              <li>Sistem akan mendeteksi perpindahan fokus layar & membunyikan alarm peringatan.</li>
-              <li>Pelanggaran sebanyak <span className="font-bold text-rose-700">5 kali</span> akan mengakibatkan lembar ujian otomatis terkumpul paksa.</li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={onExitToDashboard}
-              className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
-            >
-              Kembali ke Menu
-            </button>
-            <button
-              type="button"
-              onClick={handleStartLockdown}
-              className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all cursor-pointer inline-flex items-center justify-center gap-2"
-            >
-              <Lock className="w-4 h-4" />
-              <span>Kunci Layar & Mulai Mengerjakan Ujian</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. POST-EXAM RESULT SCREEN
+  // POST-EXAM RESULT SCREEN (Displayed ONLY after exam is submitted)
   if (submittedResult) {
     return (
-      <div className="min-h-[calc(100vh-4.5rem)] py-8 px-4 sm:px-6 max-w-3xl mx-auto flex flex-col justify-center">
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden text-center p-6 sm:p-10">
+      <div className="fixed inset-0 z-[99999] w-screen h-screen overflow-y-auto bg-slate-900 py-8 px-4 sm:px-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden text-center p-6 sm:p-10 max-w-3xl w-full">
           
           <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-5">
             <Award className="w-10 h-10" />
@@ -396,7 +327,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             Lembar Jawaban Berhasil Dikumpulkan
           </h2>
           <p className="text-sm text-slate-500 max-w-md mx-auto mt-2">
-            Terima kasih telah mengerjakan ujian dengan tertib dan jujur. Berikut hasil penilaian lembar kerja Anda:
+            Terima kasih telah mengerjakan ujian dengan tertib dan jujur. Kunci layar kini telah dibuka kembali.
           </p>
 
           {/* Score Card */}
@@ -447,7 +378,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
           <button
             type="button"
-            onClick={onExitToDashboard}
+            onClick={handleExitToHome}
             className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer inline-flex items-center gap-2"
           >
             <RotateCcw className="w-4 h-4" />
@@ -461,10 +392,42 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-slate-100 flex flex-col select-none relative"
+      className="fixed inset-0 z-[99990] w-screen h-screen overflow-y-auto bg-slate-100 flex flex-col select-none relative"
     >
+      {/* MANDATORY FULLSCREEN LOCK ENFORCEMENT OVERLAY */}
+      {!isFullscreen && !submittedResult && (
+        <div className="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 text-center text-white animate-in fade-in duration-200">
+          <div className="max-w-md w-full bg-slate-900 border-2 border-amber-500/80 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col items-center">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4 animate-pulse">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider mb-2">
+              Sistem CBT Terkunci Otomatis
+            </span>
+
+            <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-2">
+              Layar Penuh Wajib Diaktifkan
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-300 mb-6 leading-relaxed">
+              Untuk mencegah pembukaan aplikasi lain (browser, catatan, kalkulator, atau split-screen), lembar soal berada di layar terdepan dan hanya dapat dikerjakan dalam mode <strong className="text-white">Layar Penuh Terkunci</strong>.
+            </p>
+
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Maximize2 className="w-5 h-5" />
+              <span>KUNCI LAYAR CBT & KERJAKAN SOAL SEKARANG</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Lockdown Status Banner */}
-      <div className="bg-slate-900 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md z-30">
+      <div className="bg-slate-900 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md z-30 shrink-0">
         <div className="flex items-center gap-2.5">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
           <span className="font-bold flex items-center gap-1.5 text-amber-300">
@@ -483,7 +446,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             <span className={`font-bold px-1.5 py-0.5 rounded text-[11px] ${
               violationCount > 0 ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-300'
             }`}>
-              {violationCount} / 5
+              {violationCount} / 3
             </span>
           </div>
 
@@ -1105,7 +1068,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
             <div className="flex items-center justify-center gap-1.5 mb-2">
               <span className="inline-flex items-center gap-1 px-3 py-1 bg-rose-100 text-rose-800 rounded-full text-xs font-extrabold tracking-wider uppercase">
-                <Volume2 className="w-3.5 h-3.5" /> Peringatan Integritas Ujian #{violationCount} / 5
+                <Volume2 className="w-3.5 h-3.5" /> Peringatan Integritas Ujian #{violationCount} / 3
               </span>
             </div>
 
@@ -1118,8 +1081,8 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             </p>
 
             <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 font-medium text-left mb-6 space-y-1">
-              <p>⚠️ Lembar kerja dilockdown untuk memastikan pengerjaan mandiri tanpa membuka aplikasi lain (browser, kalkulator, atau split-screen).</p>
-              <p>Pelanggaran ini tercatat di pengawas. Jika mencapai <span className="font-bold text-rose-700">5 pelanggaran</span>, ujian Anda otomatis dikumpulkan paksa.</p>
+              <p>⚠️ Lembar kerja dilockdown untuk memastikan pengerjaan mandiri tanpa membuka aplikasi lain (browser, kalkulator, catatan, atau split-screen).</p>
+              <p>Pelanggaran ini tercatat di pengawas. Jika mencapai <span className="font-bold text-rose-700">3 kali pelanggaran</span>, ujian otomatis dihentikan dan dikumpulkan paksa ke server pengawas.</p>
             </div>
 
             <button

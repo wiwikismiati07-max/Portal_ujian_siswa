@@ -53,6 +53,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
       ? Math.round(mySubmissions.reduce((acc, curr) => acc + curr.percentage, 0) / completedCount)
       : 0;
 
+  const handleStartExamWithLockdown = (exam: Exam) => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+      }
+    } catch {}
+    onStartExam(exam);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -260,11 +271,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                 onClick={() => {
                   const examToStart = selectedExamForModal;
                   setSelectedExamForModal(null);
-                  onStartExam(examToStart);
+                  if (examToStart) {
+                    handleStartExamWithLockdown(examToStart);
+                  }
                 }}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-2"
               >
-                Mulai Ujian Sekarang
+                <span>Kunci Layar & Mulai Ujian</span>
               </button>
             </div>
           </div>

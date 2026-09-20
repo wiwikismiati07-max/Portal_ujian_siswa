@@ -119,15 +119,17 @@ export default function App() {
         />
       )}
 
-      {/* Universal Top Navbar */}
-      <Navbar
-        user={currentUser}
-        onLogout={handleLogout}
-        onOpenChangePassword={() => setIsChangePasswordOpen(true)}
-        isExamLockActive={!!activeExam}
-        supabaseStatus={supabaseStatus}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-      />
+      {/* Universal Top Navbar (Hidden completely during active exam to lock screen) */}
+      {!activeExam && (
+        <Navbar
+          user={currentUser}
+          onLogout={handleLogout}
+          onOpenChangePassword={() => setIsChangePasswordOpen(true)}
+          isExamLockActive={false}
+          supabaseStatus={supabaseStatus}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        />
+      )}
 
       {/* Main Content Area based on Authentication and Role */}
       <main className="flex-1 flex flex-col">
