@@ -1,5 +1,5 @@
 {
-  "name": "PORTAL UJIAN SISWA",
+  "name": "PORTAL UJIAN SISWA SPANJU",
   "description": "Media pembelajaran interaktif dan sistem ujian CBT online profesional dengan manajemen soal multi-tipe, lockdown mode, import Excel, dan rekap nilai otomatis.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -14,13 +14,14 @@ import {
   Users,
   GraduationCap,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 
 interface ExcelManagerProps {
-  onImportStudents: (students: User[]) => void;
-  onImportTeachers: (teachers: User[]) => void;
-  onImportSubjects: (subjects: Subject[]) => void;
+  onImportStudents: (students: User[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
+  onImportTeachers: (teachers: User[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
+  onImportSubjects: (subjects: Subject[], onProgress?: (processed: number, total: number) => void) => Promise<any> | void;
 }
 
 export const ExcelManager: React.FC<ExcelManagerProps> = ({
@@ -30,6 +31,8 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
 }) => {
   const [targetType, setTargetType] = useState<'siswa' | 'guru' | 'mapel'>('siswa');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStatus, setProgressStatus] = useState<string>('');
+  const [progressPercent, setProgressPercent] = useState<number>(0);
   const [importResult, setImportResult] = useState<ExcelImportResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -39,37 +42,75 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
 
     setSelectedFile(file);
     setIsProcessing(true);
+    setProgressStatus('Membaca dan memproses berkas Excel...');
+    setProgressPercent(10);
     setImportResult(null);
 
-    const result = await parseUploadedExcel(file, targetType);
-    setImportResult(result);
-    setIsProcessing(false);
+    try {
+      const result = await parseUploadedExcel(file, targetType);
 
-    if (result.success) {
+      if (!result.success) {
+        setImportResult(result);
+        setIsProcessing(false);
+        return;
+      }
+
+      setProgressPercent(40);
+      setProgressStatus(`Mengekstrak ${result.importedStudents?.length || result.importedTeachers?.length || result.importedSubjects?.length} data...`);
+
       if (result.importedStudents && result.importedStudents.length > 0) {
-        onImportStudents(result.importedStudents);
+        setProgressStatus(`Menyimpan ${result.importedStudents.length} data siswa ke database Supabase...`);
+        await onImportStudents(result.importedStudents, (processed, total) => {
+          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+          setProgressPercent(pct);
+          setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} siswa...`);
+        });
+      } else if (result.importedTeachers && result.importedTeachers.length > 0) {
+        setProgressStatus(`Menyimpan ${result.importedTeachers.length} data guru ke database Supabase...`);
+        await onImportTeachers(result.importedTeachers, (processed, total) => {
+          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+          setProgressPercent(pct);
+          setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} guru...`);
+        });
+      } else if (result.importedSubjects && result.importedSubjects.length > 0) {
+        setProgressStatus(`Menyimpan ${result.importedSubjects.length} data mata pelajaran ke database Supabase...`);
+        await onImportSubjects(result.importedSubjects, (processed, total) => {
+          const pct = Math.min(98, 40 + Math.round((processed / total) * 58));
+          setProgressPercent(pct);
+          setProgressStatus(`Menyimpan ke Supabase: ${processed} dari ${total} mapel...`);
+        });
       }
-      if (result.importedTeachers && result.importedTeachers.length > 0) {
-        onImportTeachers(result.importedTeachers);
-      }
-      if (result.importedSubjects && result.importedSubjects.length > 0) {
-        onImportSubjects(result.importedSubjects);
-      }
+
+      setProgressPercent(100);
+      setProgressStatus('Selesai disimpan ke Supabase & sistem!');
+      setImportResult({
+        ...result,
+        message: `${result.message} Data langsung tersimpan di Supabase & tabel aktif.`
+      });
+    } catch (err: any) {
+      console.error('Import processing error:', err);
+      setImportResult({
+        success: false,
+        message: `Terjadi kendala saat menyimpan data: ${err?.message || 'Gagal'}`
+      });
+    } finally {
+      setIsProcessing(false);
+      // Reset file input so user can re-upload if needed
+      e.target.value = '';
     }
   };
 
   return (
     <div className="space-y-6">
-      
       {/* Header Info */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-            Pusat Impor Data Excel (.xlsx)
+            Pusat Impor Data Excel (.xlsx) & Sinkronisasi Langsung ke Supabase
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Unggah berkas spreadsheet Excel untuk memperbarui data Siswa, Guru, dan Mata Pelajaran. Data yang diunggah akan otomatis <strong>menindih (overwrite)</strong> data kategori terkait.
+            Unggah berkas spreadsheet Excel untuk memperbarui data Siswa, Guru, dan Mata Pelajaran. Data yang diunggah akan otomatis <strong>langsung tersimpan di Supabase Cloud</strong> dan menindih data lama pada kategori terkait.
           </p>
         </div>
 
@@ -107,7 +148,6 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
 
       {/* Upload Zone Card */}
       <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-xs">
-        
         {/* Step 1: Select Type */}
         <div className="mb-6">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
@@ -116,6 +156,7 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
+              disabled={isProcessing}
               onClick={() => {
                 setTargetType('siswa');
                 setImportResult(null);
@@ -131,12 +172,13 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold">Data Siswa</h4>
-                <p className="text-[11px] text-slate-500">NIS, Nama, Kelas, Username, Password</p>
+                <p className="text-[11px] text-slate-500">NIS, Nama Lengkap, Kelas/Rombel, Username, Password</p>
               </div>
             </button>
 
             <button
               type="button"
+              disabled={isProcessing}
               onClick={() => {
                 setTargetType('guru');
                 setImportResult(null);
@@ -151,13 +193,14 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
                 <Users className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs sm:text-sm font-bold">Data Guru Pengampu</h4>
-                <p className="text-[11px] text-slate-500">NIP, Nama Guru, Mapel, Akun Login</p>
+                <h4 className="text-xs sm:text-sm font-bold">Data Guru</h4>
+                <p className="text-[11px] text-slate-500">NIP, Nama Lengkap Guru, Mata Pelajaran</p>
               </div>
             </button>
 
             <button
               type="button"
+              disabled={isProcessing}
               onClick={() => {
                 setTargetType('mapel');
                 setImportResult(null);
@@ -172,63 +215,90 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
                 <BookOpen className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs sm:text-sm font-bold">Data Mata Pelajaran</h4>
-                <p className="text-[11px] text-slate-500">Kode Mapel, Nama Mapel, KKM, Guru</p>
+                <h4 className="text-xs sm:text-sm font-bold">Mata Pelajaran</h4>
+                <p className="text-[11px] text-slate-500">Kode Mapel, Nama Mapel, Guru, KKM</p>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Step 2: Dropzone */}
+        {/* Step 2: Upload Area */}
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-            Langkah 2: Pilih File Spreadsheet (.xlsx)
+            Langkah 2: Unggah File Excel (.xlsx / .xls)
           </label>
-
-          <label className="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-indigo-50/20 transition-all">
+          <div className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+            isProcessing ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-300 hover:border-indigo-500 bg-slate-50/50 hover:bg-slate-50'
+          }`}>
             <input
               type="file"
               accept=".xlsx, .xls"
+              disabled={isProcessing}
               onChange={handleFileChange}
-              className="hidden"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             />
-            <div className="w-14 h-14 rounded-2xl bg-white shadow-xs border border-slate-200 flex items-center justify-center text-emerald-600 mb-3">
-              <UploadCloud className="w-7 h-7" />
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-transform ${
+                isProcessing ? 'bg-indigo-600 text-white animate-pulse' : 'bg-white text-indigo-600 border border-slate-200'
+              }`}>
+                {isProcessing ? (
+                  <Loader2 className="w-7 h-7 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-7 h-7" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800">
+                  {isProcessing
+                    ? progressStatus
+                    : 'Klik atau Seret Berkas Excel ke Sini'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Format yang didukung: .xlsx atau .xls (Ukuran maks: 15MB)
+                </p>
+              </div>
+
+              {isProcessing && (
+                <div className="w-full max-w-md mt-4 space-y-2">
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-500 font-medium">
+                    <span>{progressStatus}</span>
+                    <span>{progressPercent}%</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <span className="text-sm font-bold text-slate-800">
-              {isProcessing ? 'Sedang membaca file Excel...' : 'Klik atau Seret Berkas Excel ke Sini'}
-            </span>
-            <span className="text-xs text-slate-400 mt-1">
-              Format yang didukung: .xlsx atau .xls (Ukuran maks: 10MB)
-            </span>
-          </label>
+          </div>
         </div>
 
-        {/* Feedback Message */}
+        {/* Feedback Alert */}
         {importResult && (
-          <div className="mt-6">
+          <div
+            className={`mt-6 p-4 rounded-xl flex items-start gap-3 border animate-in fade-in ${
+              importResult.success
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-rose-50 border-rose-200 text-rose-900'
+            }`}
+          >
             {importResult.success ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs sm:text-sm text-emerald-900 flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-emerald-950">Berhasil Mengimpor Data!</h4>
-                  <p className="mt-0.5">{importResult.message}</p>
-                </div>
-              </div>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
             ) : (
-              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs sm:text-sm text-rose-900 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-rose-950">Gagal Mengimpor File</h4>
-                  <p className="mt-0.5">{importResult.message}</p>
-                </div>
-              </div>
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             )}
+            <div>
+              <h5 className="text-xs sm:text-sm font-bold">
+                {importResult.success ? 'Berhasil Mengimpor Data & Tersimpan ke Supabase!' : 'Gagal Mengimpor Berkas'}
+              </h5>
+              <p className="text-xs mt-0.5 opacity-90">{importResult.message}</p>
+            </div>
           </div>
         )}
-
       </div>
-
     </div>
   );
 };

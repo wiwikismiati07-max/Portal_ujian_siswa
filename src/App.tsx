@@ -168,7 +168,7 @@ export default function App() {
         <footer className="py-6 border-t border-slate-200 bg-white text-center text-xs text-slate-400 no-print">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-700">PORTAL UJIAN SISWA</span>
+              <span className="font-bold text-slate-700">PORTAL UJIAN SISWA SPANJU</span>
               <span>•</span>
               <span>Sistem Computer-Based Test (CBT) Terintegrasi</span>
             </div>

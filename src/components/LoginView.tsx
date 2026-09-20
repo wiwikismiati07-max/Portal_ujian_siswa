@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Lock
 } from 'lucide-react';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
@@ -99,7 +100,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-3">
-              PORTAL UJIAN SISWA
+              PORTAL UJIAN SISWA SPANJU
             </h1>
             <p className="text-sm text-indigo-100/80 leading-relaxed">
               Platform asesmen berbasis komputer dengan teknologi lockdown anti-curang, berbagai tipe soal AKM & Kurikulum Merdeka, serta rekapitulasi nilai otomatis.

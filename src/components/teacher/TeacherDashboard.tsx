@@ -14,8 +14,8 @@ import {
   addQuestion,
   updateQuestion,
   deleteQuestion,
-  overwriteUsersByRole,
-  overwriteAllSubjects
+  overwriteUsersByRoleDirect,
+  overwriteSubjectsDirect
 } from '../../utils/storage';
 import { BankSoalReport } from './BankSoalReport';
 import { ClassScoreRecap } from './ClassScoreRecap';
@@ -132,27 +132,46 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) =
     setNewExamTitle('');
   };
 
-  // Handle Excel Imports - Mengganti/menindih data lama dengan data baru dari file Excel
-  const handleImportStudents = (newStudents: User[]) => {
-    overwriteUsersByRole('siswa', newStudents);
-    alert(`Berhasil memperbarui data! Seluruh data siswa lama telah ditindih dengan ${newStudents.length} data siswa baru dari Excel.`);
+  // Handle Excel Imports - Mengganti/menindih data lama dengan data baru dari file Excel & langsung ke Supabase
+  const handleImportStudents = async (
+    newStudents: User[],
+    onProgress?: (processed: number, total: number) => void
+  ) => {
+    const res = await overwriteUsersByRoleDirect('siswa', newStudents, onProgress);
+    if (res.success) {
+      alert(`Berhasil! Seluruh data siswa lama telah ditindih dengan ${newStudents.length} data siswa baru dan langsung tersimpan di Supabase.`);
+    } else {
+      alert(`Data siswa diperbarui secara lokal. Catatan Supabase: ${res.error}`);
+    }
   };
 
-  const handleImportTeachers = (newTeachers: User[]) => {
+  const handleImportTeachers = async (
+    newTeachers: User[],
+    onProgress?: (processed: number, total: number) => void
+  ) => {
     // Retain current logged-in teacher if not present in the new list to avoid sudden session ejection
     const hasCurrentTeacher = newTeachers.some(
       t => t.id === teacher.id || t.username.toLowerCase() === teacher.username.toLowerCase()
     );
     const finalTeachers = hasCurrentTeacher ? newTeachers : [teacher, ...newTeachers];
 
-    overwriteUsersByRole('guru', finalTeachers);
-    alert(`Berhasil memperbarui data! Seluruh data guru telah ditindih dengan ${newTeachers.length} data guru baru dari Excel.`);
+    const res = await overwriteUsersByRoleDirect('guru', finalTeachers, onProgress);
+    if (res.success) {
+      alert(`Berhasil! Seluruh data guru telah ditindih dengan ${finalTeachers.length} data guru baru dan langsung tersimpan di Supabase.`);
+    } else {
+      alert(`Data guru diperbarui secara lokal. Catatan Supabase: ${res.error}`);
+    }
   };
 
-  const handleImportSubjects = (newSubjects: Subject[]) => {
-    overwriteAllSubjects(newSubjects);
+  const handleImportSubjects = async (
+    newSubjects: Subject[],
+    onProgress?: (processed: number, total: number) => void
+  ) => {
+    const res = await overwriteSubjectsDirect(newSubjects, onProgress);
     setSubjects(newSubjects);
-    alert(`Berhasil memperbarui data! Seluruh data mata pelajaran lama telah ditindih dengan ${newSubjects.length} mata pelajaran baru dari Excel.`);
+    if (res.success) {
+      alert(`Berhasil! Seluruh data mata pelajaran lama telah ditindih dengan ${newSubjects.length} mata pelajaran baru dan langsung tersimpan di Supabase.`);
+    }
   };
 
   return (

@@ -159,7 +159,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       {/* PRINT HEADER KOP SURAT (Shown only on Print) */}
       <div className="print-only mb-6 border-b-2 border-black pb-4 text-center">
         <h2 className="text-xl font-bold uppercase tracking-wider">
-          PORTAL UJIAN SISWA • REKAPITULASI HASIL ASESMEN SUMATIF
+          PORTAL UJIAN SISWA SPANJU • REKAPITULASI HASIL ASESMEN SUMATIF
         </h2>
         <p className="text-sm font-medium">
           LAPORAN NILAI PESERTA DIDIK PER KELAS & MATA PELAJARAN

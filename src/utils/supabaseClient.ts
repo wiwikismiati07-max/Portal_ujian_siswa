@@ -21,11 +21,13 @@ export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON
 });
 
 // Complete SQL setup script for Supabase SQL Editor
-export const SUPABASE_SETUP_SQL = `-- CBT System Schema for Supabase
--- Jalankan skrip ini di Supabase SQL Editor (Dashboard > SQL Editor):
--- https://supabase.com/dashboard/project/omuhzeuzxfincumsnjrd/sql
+export const SUPABASE_SETUP_SQL = `-- ====================================================================
+-- SKRIP STRUKTUR DATABASE LENGKAP: PORTAL UJIAN SISWA CBT (SPANJU)
+-- Salin seluruh teks ini dan jalankan di Supabase Dashboard -> SQL Editor
+-- Link: https://supabase.com/dashboard/project/omuhzeuzxfincumsnjrd/sql
+-- ====================================================================
 
--- 1. Tabel Pengguna (Admin, Guru, Siswa)
+-- 1. TABEL PENGGUNA (Admin, Guru, Siswa)
 CREATE TABLE IF NOT EXISTS public.cbt_users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -39,7 +41,12 @@ CREATE TABLE IF NOT EXISTS public.cbt_users (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Tabel Mata Pelajaran
+-- Indeks untuk pencarian cepat
+CREATE INDEX IF NOT EXISTS idx_cbt_users_role ON public.cbt_users(role);
+CREATE INDEX IF NOT EXISTS idx_cbt_users_username ON public.cbt_users(username);
+CREATE INDEX IF NOT EXISTS idx_cbt_users_class ON public.cbt_users(class_group);
+
+-- 2. TABEL MATA PELAJARAN
 CREATE TABLE IF NOT EXISTS public.cbt_subjects (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL,
@@ -49,7 +56,7 @@ CREATE TABLE IF NOT EXISTS public.cbt_subjects (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Tabel Paket Ujian
+-- 3. TABEL PAKET UJIAN
 CREATE TABLE IF NOT EXISTS public.cbt_exams (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -67,7 +74,9 @@ CREATE TABLE IF NOT EXISTS public.cbt_exams (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Tabel Butir Soal
+CREATE INDEX IF NOT EXISTS idx_cbt_exams_status ON public.cbt_exams(status);
+
+-- 4. TABEL BUTIR SOAL
 CREATE TABLE IF NOT EXISTS public.cbt_questions (
   id TEXT PRIMARY KEY,
   exam_id TEXT NOT NULL,
@@ -88,7 +97,9 @@ CREATE TABLE IF NOT EXISTS public.cbt_questions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Tabel Submisi / Hasil Ujian Siswa
+CREATE INDEX IF NOT EXISTS idx_cbt_questions_exam_id ON public.cbt_questions(exam_id);
+
+-- 5. TABEL HASIL & SUBMISI UJIAN SISWA
 CREATE TABLE IF NOT EXISTS public.cbt_submissions (
   id TEXT PRIMARY KEY,
   exam_id TEXT NOT NULL,
@@ -109,14 +120,18 @@ CREATE TABLE IF NOT EXISTS public.cbt_submissions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Tabel Universal Storage (Sync Cepat & Redundansi)
+CREATE INDEX IF NOT EXISTS idx_cbt_submissions_exam_student ON public.cbt_submissions(exam_id, student_id);
+
+-- 6. TABEL UNIVERSAL SYNC & BACKUP
 CREATE TABLE IF NOT EXISTS public.cbt_sync_store (
   key TEXT PRIMARY KEY,
   value JSONB,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Aktifkan Row Level Security (RLS) & Berikan Akses Read/Write Publik
+-- ====================================================================
+-- ROW LEVEL SECURITY (RLS) & AKSES PUBLIK (ANON)
+-- ====================================================================
 ALTER TABLE public.cbt_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_exams ENABLE ROW LEVEL SECURITY;
@@ -143,11 +158,63 @@ BEGIN
   CREATE POLICY "cbt_sync_store_all" ON public.cbt_sync_store FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
--- Aktifkan Supabase Realtime agar multi-user tersinkronisasi otomatis
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_users;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_subjects;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_exams;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_questions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_submissions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_sync_store;
+-- ====================================================================
+-- REALTIME SUBSCRIPTIONS (Aman dieksekusi berulang kali)
+-- ====================================================================
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_users'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_users;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_subjects'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_subjects;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_exams'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_exams;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_questions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_questions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_submissions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_submissions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_sync_store'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_sync_store;
+  END IF;
+END $$;
 `;

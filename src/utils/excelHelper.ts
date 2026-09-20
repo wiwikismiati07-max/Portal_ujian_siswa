@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { User, Subject, ExamSubmission } from '../types';
+import { User, Subject } from '../types';
 
 export interface ExcelImportResult {
   success: boolean;
@@ -20,21 +20,21 @@ export const downloadExcelTemplate = (type: 'siswa' | 'guru' | 'mapel') => {
       {
         'Nomor Induk Siswa (NIS)': '20241010',
         'Nama Lengkap': 'Muhammad Rizky Pratama',
-        'Kelas': 'X-IPA-1',
+        'Kelas': '7-A',
         'Username': 'rizky_siswa',
         'Password': 'siswa123'
       },
       {
         'Nomor Induk Siswa (NIS)': '20241011',
         'Nama Lengkap': 'Nabila Putri Zahra',
-        'Kelas': 'X-IPA-1',
+        'Kelas': '7-A',
         'Username': 'nabila_siswa',
         'Password': 'siswa123'
       },
       {
         'Nomor Induk Siswa (NIS)': '20241012',
         'Nama Lengkap': 'Dimas Anggara',
-        'Kelas': 'X-IPA-2',
+        'Kelas': '7-B',
         'Username': 'dimas_siswa',
         'Password': 'siswa123'
       }
@@ -47,14 +47,14 @@ export const downloadExcelTemplate = (type: 'siswa' | 'guru' | 'mapel') => {
       {
         'NIP': '198904122014021004',
         'Nama Lengkap Guru': 'Dr. Haryanto, M.Pd.',
-        'Mata Pelajaran': 'Matematika Peminatan',
+        'Mata Pelajaran': 'Matematika',
         'Username': 'haryanto_guru',
         'Password': 'guru123'
       },
       {
         'NIP': '199108152018032007',
         'Nama Lengkap Guru': 'Maya Anggraini, S.Si.',
-        'Mata Pelajaran': 'Biologi',
+        'Mata Pelajaran': 'IPA Terpadu',
         'Username': 'maya_guru',
         'Password': 'guru123'
       }
@@ -65,20 +65,20 @@ export const downloadExcelTemplate = (type: 'siswa' | 'guru' | 'mapel') => {
   } else {
     const data = [
       {
-        'Kode Mapel': 'BIO-10',
-        'Nama Mata Pelajaran': 'Biologi Sel & Genetik',
+        'Kode Mapel': 'MAT-7',
+        'Nama Mata Pelajaran': 'Matematika Kelas 7',
+        'Guru Pengampu': 'Dr. Haryanto, M.Pd.',
+        'KKM': 75
+      },
+      {
+        'Kode Mapel': 'IPA-7',
+        'Nama Mata Pelajaran': 'IPA Terpadu',
         'Guru Pengampu': 'Maya Anggraini, S.Si.',
         'KKM': 75
       },
       {
-        'Kode Mapel': 'KIM-10',
-        'Nama Mata Pelajaran': 'Kimia Dasar',
-        'Guru Pengampu': 'Drs. Supriyanto',
-        'KKM': 75
-      },
-      {
-        'Kode Mapel': 'SEJ-10',
-        'Nama Mata Pelajaran': 'Sejarah Indonesia',
+        'Kode Mapel': 'IND-7',
+        'Nama Mata Pelajaran': 'Bahasa Indonesia',
         'Guru Pengampu': 'Nurul Hidayah, S.Pd.',
         'KKM': 78
       }
@@ -87,6 +87,40 @@ export const downloadExcelTemplate = (type: 'siswa' | 'guru' | 'mapel') => {
     XLSX.utils.book_append_sheet(wb, ws, 'Data_Mata_Pelajaran');
     XLSX.writeFile(wb, 'Template_Data_MataPelajaran.xlsx');
   }
+};
+
+/**
+ * Helper to normalize object keys for flexible Indonesian header matching
+ */
+const normalizeRowKeys = (row: Record<string, any>): Record<string, string> => {
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(row)) {
+    const cleanKey = key
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, ''); // e.g. "Nomor Induk Siswa (NIS)" -> "nomorinduksiswanis"
+    normalized[cleanKey] = value !== undefined && value !== null ? String(value).trim() : '';
+  }
+  return normalized;
+};
+
+const findField = (row: Record<string, string>, possibleKeys: string[]): string => {
+  for (const key of possibleKeys) {
+    const cleanTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (row[cleanTarget] !== undefined && row[cleanTarget] !== '') {
+      return row[cleanTarget];
+    }
+  }
+  // Fallback: check if any key in row contains the target substring
+  for (const key of possibleKeys) {
+    const cleanTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [rKey, rVal] of Object.entries(row)) {
+      if (rVal && (rKey.includes(cleanTarget) || cleanTarget.includes(rKey))) {
+        return rVal;
+      }
+    }
+  }
+  return '';
 };
 
 /**
@@ -100,6 +134,9 @@ export const parseUploadedExcel = async (
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      return { success: false, message: 'Berkas Excel tidak memiliki sheet yang dapat dibaca.' };
+    }
     const worksheet = workbook.Sheets[firstSheetName];
     const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
@@ -109,33 +146,105 @@ export const parseUploadedExcel = async (
 
     if (targetType === 'siswa') {
       const students: User[] = [];
-      for (const row of rawRows) {
-        // Find fields by flexible matching
-        const nis = row['Nomor Induk Siswa (NIS)'] || row['NIS'] || row['nis'] || '';
-        const name = row['Nama Lengkap'] || row['Nama'] || row['nama'] || '';
-        const classGroup = row['Kelas'] || row['kelas'] || 'X-IPA-1';
-        const username =
-          row['Username'] ||
-          row['username'] ||
-          (name ? name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : `siswa_${Date.now()}`);
-        const password = row['Password'] || row['password'] || 'siswa123';
+      const usedUsernames = new Set<string>();
 
-        if (name) {
-          students.push({
-            id: `user_siswa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            username: String(username).trim(),
-            password: String(password).trim(),
-            name: String(name).trim(),
-            role: 'siswa',
-            nipOrNis: String(nis).trim(),
-            classGroup: String(classGroup).trim()
-          });
+      rawRows.forEach((rawRow, index) => {
+        const row = normalizeRowKeys(rawRow);
+
+        // Flexible search for name
+        const name = findField(row, [
+          'namalengkap',
+          'nama',
+          'namasiswa',
+          'namapeserta',
+          'namalengkapsiswa',
+          'fullname',
+          'studentname',
+          'peserta'
+        ]);
+
+        if (!name) return; // Skip empty rows
+
+        // Flexible search for NIS / NISN
+        const nis = findField(row, [
+          'nomorinduksiswanis',
+          'nomorinduk',
+          'nis',
+          'nisn',
+          'nisnisn',
+          'nopeserta',
+          'nomorpeserta',
+          'noinduk',
+          'idpeserta'
+        ]);
+
+        // Flexible search for class/rombel
+        const classGroup = findField(row, [
+          'kelas',
+          'rombel',
+          'kelasrombel',
+          'tingkat',
+          'ruang',
+          'kelassiswa'
+        ]) || '7-A';
+
+        // Flexible search for username
+        let rawUsername = findField(row, [
+          'username',
+          'user',
+          'userid',
+          'idpengguna',
+          'nopeserta',
+          'nis'
+        ]);
+
+        if (!rawUsername) {
+          if (nis) {
+            rawUsername = `siswa_${nis.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+          } else {
+            const cleanName = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+            rawUsername = `${cleanName || 'siswa'}_${index + 1}`;
+          }
+        } else {
+          rawUsername = rawUsername.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         }
-      }
+
+        // Ensure unique username
+        let finalUsername = rawUsername;
+        let suffix = 1;
+        while (usedUsernames.has(finalUsername)) {
+          finalUsername = `${rawUsername}_${suffix}`;
+          suffix++;
+        }
+        usedUsernames.add(finalUsername);
+
+        // Flexible search for password
+        const password = findField(row, [
+          'password',
+          'katasandi',
+          'pass',
+          'sandi',
+          'pin'
+        ]) || 'siswa123';
+
+        students.push({
+          id: `user_siswa_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
+          username: finalUsername,
+          password: password,
+          name: name,
+          role: 'siswa',
+          nipOrNis: nis || undefined,
+          classGroup: classGroup
+        });
+      });
 
       if (students.length === 0) {
-        return { success: false, message: 'Tidak ditemukan data siswa yang valid pada file Excel.' };
+        return {
+          success: false,
+          message: 'Tidak ditemukan kolom data siswa (Nama Lengkap) yang valid pada berkas Excel.'
+        };
       }
+
       return {
         success: true,
         message: `Berhasil mengekstrak ${students.length} data siswa dari Excel.`,
@@ -145,32 +254,84 @@ export const parseUploadedExcel = async (
 
     if (targetType === 'guru') {
       const teachers: User[] = [];
-      for (const row of rawRows) {
-        const nip = row['NIP'] || row['nip'] || '';
-        const name = row['Nama Lengkap Guru'] || row['Nama'] || row['nama'] || '';
-        const subject = row['Mata Pelajaran'] || row['Mapel'] || row['mapel'] || '';
-        const username =
-          row['Username'] ||
-          row['username'] ||
-          (name ? name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : `guru_${Date.now()}`);
-        const password = row['Password'] || row['password'] || 'guru123';
+      const usedUsernames = new Set<string>();
 
-        if (name) {
-          teachers.push({
-            id: `user_guru_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            username: String(username).trim(),
-            password: String(password).trim(),
-            name: String(name).trim(),
-            role: 'guru',
-            nipOrNis: String(nip).trim(),
-            subjectName: String(subject).trim()
-          });
+      rawRows.forEach((rawRow, index) => {
+        const row = normalizeRowKeys(rawRow);
+
+        const name = findField(row, [
+          'namalengkapguru',
+          'namaguru',
+          'namalengkap',
+          'nama',
+          'fullname',
+          'teachername'
+        ]);
+
+        if (!name) return;
+
+        const nip = findField(row, [
+          'nip',
+          'nuptk',
+          'nomorindukpegawai',
+          'noinduk'
+        ]);
+
+        const subject = findField(row, [
+          'matapelajaran',
+          'mapel',
+          'subject',
+          'pengampu'
+        ]) || 'Guru Mata Pelajaran';
+
+        let rawUsername = findField(row, [
+          'username',
+          'user',
+          'userid',
+          'idpengguna',
+          'nip'
+        ]);
+
+        if (!rawUsername) {
+          const cleanName = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          rawUsername = `guru_${cleanName || index + 1}`;
+        } else {
+          rawUsername = rawUsername.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         }
-      }
+
+        let finalUsername = rawUsername;
+        let suffix = 1;
+        while (usedUsernames.has(finalUsername)) {
+          finalUsername = `${rawUsername}_${suffix}`;
+          suffix++;
+        }
+        usedUsernames.add(finalUsername);
+
+        const password = findField(row, [
+          'password',
+          'katasandi',
+          'pass',
+          'sandi'
+        ]) || 'guru123';
+
+        teachers.push({
+          id: `user_guru_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
+          username: finalUsername,
+          password: password,
+          name: name,
+          role: 'guru',
+          nipOrNis: nip || undefined,
+          subjectName: subject
+        });
+      });
 
       if (teachers.length === 0) {
-        return { success: false, message: 'Tidak ditemukan data guru yang valid pada file Excel.' };
+        return {
+          success: false,
+          message: 'Tidak ditemukan kolom data guru (Nama Lengkap) yang valid pada berkas Excel.'
+        };
       }
+
       return {
         success: true,
         message: `Berhasil mengekstrak ${teachers.length} data guru dari Excel.`,
@@ -180,26 +341,57 @@ export const parseUploadedExcel = async (
 
     if (targetType === 'mapel') {
       const subjects: Subject[] = [];
-      for (const row of rawRows) {
-        const code = row['Kode Mapel'] || row['Kode'] || row['kode'] || `MP-${Math.floor(Math.random() * 900) + 100}`;
-        const name = row['Nama Mata Pelajaran'] || row['Nama'] || row['mapel'] || '';
-        const teacher = row['Guru Pengampu'] || row['Guru'] || row['Pengampu'] || 'Guru Pengampu';
-        const kkm = Number(row['KKM'] || row['kkm'] || 75);
 
-        if (name) {
-          subjects.push({
-            id: `subj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            code: String(code).trim(),
-            name: String(name).trim(),
-            teacherName: String(teacher).trim(),
-            passingGrade: isNaN(kkm) ? 75 : kkm
-          });
-        }
-      }
+      rawRows.forEach((rawRow, index) => {
+        const row = normalizeRowKeys(rawRow);
+
+        const name = findField(row, [
+          'namamatapelajaran',
+          'namamapel',
+          'matapelajaran',
+          'mapel',
+          'subject'
+        ]);
+
+        if (!name) return;
+
+        const code = findField(row, [
+          'kodemapel',
+          'kode',
+          'kodematapelajaran'
+        ]) || `MAPEL-${index + 1}`;
+
+        const teacher = findField(row, [
+          'gurupengampu',
+          'guru',
+          'namaguru',
+          'pengampu'
+        ]) || 'Guru Pengampu';
+
+        const kkmStr = findField(row, [
+          'kkm',
+          'passinggrade',
+          'nilaiminimal',
+          'kriteria'
+        ]);
+        const kkm = Number(kkmStr) || 75;
+
+        subjects.push({
+          id: `subj_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
+          code: code,
+          name: name,
+          teacherName: teacher,
+          passingGrade: kkm
+        });
+      });
 
       if (subjects.length === 0) {
-        return { success: false, message: 'Tidak ditemukan data mata pelajaran yang valid pada file Excel.' };
+        return {
+          success: false,
+          message: 'Tidak ditemukan kolom data mata pelajaran yang valid pada berkas Excel.'
+        };
       }
+
       return {
         success: true,
         message: `Berhasil mengekstrak ${subjects.length} data mata pelajaran dari Excel.`,
@@ -207,58 +399,41 @@ export const parseUploadedExcel = async (
       };
     }
 
-    return { success: false, message: 'Tipe import tidak dikenali.' };
+    return { success: false, message: 'Jenis data tidak valid.' };
   } catch (err: any) {
-    console.error('Error parsing excel:', err);
-    return { success: false, message: `Gagal membaca file Excel: ${err.message || 'Format tidak didukung'}` };
+    console.error('Excel parse error:', err);
+    return {
+      success: false,
+      message: `Gagal membaca berkas Excel: ${err?.message || 'Format berkas rusak atau tidak sesuai'}`
+    };
   }
 };
 
 /**
- * Export Exam Submissions to Excel
+ * Export student exam results/submissions to an Excel file
  */
 export const exportExamResultsToExcel = (
-  submissions: ExamSubmission[],
+  submissions: any[],
   examTitle: string,
-  filterClass?: string
+  className?: string
 ) => {
   const wb = XLSX.utils.book_new();
-
-  const data = submissions.map((sub, idx) => ({
+  const rows = submissions.map((sub, idx) => ({
     'No': idx + 1,
     'Nama Siswa': sub.studentName,
     'Kelas': sub.studentClass,
     'Mata Pelajaran': sub.subjectName,
     'Judul Ujian': sub.examTitle,
-    'Nilai Angka': sub.earnedScore,
-    'Nilai Maksimum': sub.totalScore,
-    'Persentase (%)': `${sub.percentage}%`,
-    'Status Kelulusan': sub.passed ? 'TUNTAS' : 'REMEDIAL',
-    'Jumlah Pelanggaran (Lockdown)': sub.violationCount,
-    'Waktu Selesai': new Date(sub.submittedAt).toLocaleString('id-ID')
+    'Nilai Skor': sub.percentage,
+    'Skor Diperoleh': `${sub.earnedScore} / ${sub.totalScore}`,
+    'Status Kelulusan': sub.passed ? 'LULUS (TUNTAS)' : 'BELUM TUNTAS',
+    'Jumlah Pelanggaran Layar': sub.violationCount || 0,
+    'Waktu Selesai': sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('id-ID') : '-'
   }));
 
-  const ws = XLSX.utils.json_to_sheet(data);
-
-  // Column width auto
-  const colWidths = [
-    { wch: 5 },
-    { wch: 25 },
-    { wch: 12 },
-    { wch: 25 },
-    { wch: 35 },
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 15 },
-    { wch: 18 },
-    { wch: 22 },
-    { wch: 20 }
-  ];
-  ws['!cols'] = colWidths;
-
-  const sheetName = filterClass ? `Nilai_${filterClass}`.substring(0, 31) : 'Rekap_Nilai';
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-  const cleanTitle = examTitle.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
-  XLSX.writeFile(wb, `Rekap_Nilai_${cleanTitle}_${filterClass || 'Semua'}.xlsx`);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Rekap_Nilai');
+  const safeFilename = `Rekap_Nilai_${examTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}${className ? `_${className}` : ''}.xlsx`;
+  XLSX.writeFile(wb, safeFilename);
 };
+

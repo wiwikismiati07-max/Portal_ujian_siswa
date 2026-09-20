@@ -2,6 +2,7 @@ import React from 'react';
 import { User } from '../types';
 import { LogOut, KeyRound, Shield, GraduationCap, UserCheck, BookOpen, Database } from 'lucide-react';
 import { SupabaseStatus } from '../utils/supabaseSync';
+import { PWAInstallButton } from './pwa/PWAInstallButton';
 
 interface NavbarProps {
   user: User | null;
@@ -76,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
-                  PORTAL UJIAN SISWA
+                  PORTAL UJIAN SISWA SPANJU
                 </span>
                 <span className="hidden md:inline-flex items-center px-2 py-0.5 text-[11px] font-semibold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
                   CBT Pro v2.4
@@ -90,6 +91,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* User Status & Actions */}
           <div className="flex items-center gap-2">
+            {/* PWA Install Button */}
+            {!isExamLockActive && <PWAInstallButton variant="navbar" />}
+
             {/* Supabase Realtime Status Pill Button */}
             {onOpenSupabaseModal && !isExamLockActive && (
               <button

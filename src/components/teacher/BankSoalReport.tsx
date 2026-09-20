@@ -113,7 +113,7 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
       {/* PRINT HEADER KOP SURAT (Shown only on Print) */}
       <div className="print-only mb-6 border-b-2 border-black pb-4 text-center">
         <h2 className="text-xl font-bold uppercase tracking-wider">
-          PORTAL UJIAN SISWA • ASESMEN SUMATIF SATUAN PENDIDIKAN
+          PORTAL UJIAN SISWA SPANJU • ASESMEN SUMATIF SATUAN PENDIDIKAN
         </h2>
         <p className="text-sm font-medium">
           DOKUMEN KISI-KISI & NASKAH BANK SOAL GURU MATA PELAJARAN

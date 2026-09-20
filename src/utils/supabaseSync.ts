@@ -39,7 +39,7 @@ export const onSupabaseStatusChange = (cb: (status: SupabaseStatus, message?: st
   };
 };
 
-const setStatus = (newStatus: SupabaseStatus, msg: string) => {
+export const setStatus = (newStatus: SupabaseStatus, msg: string) => {
   currentStatus = newStatus;
   statusMessage = msg;
   statusListeners.forEach(cb => cb(newStatus, msg));
@@ -209,6 +209,36 @@ export const mapSubmissionFromDb = (row: any): ExamSubmission => ({
 });
 
 // ==========================================
+// CHUNKING HELPER FOR BULK OPERATIONS
+// ==========================================
+export const upsertInChunks = async (
+  tableName: string,
+  rows: any[],
+  chunkSize = 50,
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; error?: string }> => {
+  if (!rows || rows.length === 0) return { success: true };
+
+  try {
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const { error } = await supabase.from(tableName).upsert(chunk);
+      if (error) {
+        console.error(`Error upserting chunk ${i / chunkSize + 1} to ${tableName}:`, error);
+        return { success: false, error: error.message };
+      }
+      if (onProgress) {
+        onProgress(Math.min(i + chunkSize, rows.length), rows.length);
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error(`Exception during chunked upsert to ${tableName}:`, err);
+    return { success: false, error: err?.message || 'Network exception during upsert' };
+  }
+};
+
+// ==========================================
 // CORE INITIALIZATION & SYNC LOGIC
 // ==========================================
 
@@ -216,7 +246,7 @@ export const initSupabaseSync = async (): Promise<boolean> => {
   try {
     setStatus('connecting', 'Memeriksa koneksi database Supabase...');
 
-    // Test if cbt_exams or cbt_sync_store table is accessible
+    // Test if cbt_exams table exists
     const testResult = await supabase.from('cbt_exams').select('id').limit(1);
 
     if (testResult.error) {
@@ -254,62 +284,78 @@ export const initSupabaseSync = async (): Promise<boolean> => {
 // Pull all data from Supabase into local storage
 export const pullFromSupabase = async (): Promise<void> => {
   try {
-    // 1. Users
-    const { data: dbUsers } = await supabase.from('cbt_users').select('*');
-    if (dbUsers && dbUsers.length > 0) {
+    // 1. Users (fetch with pagination to handle 1000+ records)
+    const { data: dbUsers, error: usersError } = await supabase
+      .from('cbt_users')
+      .select('*')
+      .order('name', { ascending: true })
+      .limit(2000);
+
+    if (!usersError && dbUsers && dbUsers.length > 0) {
       const users = dbUsers.map(mapUserFromDb);
-      saveUsers(users);
-      // If current logged in user exists, update their data
+      saveUsers(users, false); // false = don't re-upload back to Supabase
       const current = getCurrentUser();
       if (current) {
         const matching = users.find(u => u.id === current.id);
         if (matching) setCurrentUser(matching);
       }
-    } else {
-      // Seed users if empty
+    } else if (!usersError && (!dbUsers || dbUsers.length === 0)) {
+      // Seed initial users if empty
       const localUsers = getAllUsers();
       const usersToSeed = localUsers.length > 0 ? localUsers : INITIAL_USERS;
-      await supabase.from('cbt_users').upsert(usersToSeed.map(mapUserToDb));
+      await upsertInChunks('cbt_users', usersToSeed.map(mapUserToDb));
     }
 
     // 2. Subjects
-    const { data: dbSubjects } = await supabase.from('cbt_subjects').select('*');
-    if (dbSubjects && dbSubjects.length > 0) {
-      saveSubjects(dbSubjects.map(mapSubjectFromDb));
-    } else {
+    const { data: dbSubjects, error: subjError } = await supabase
+      .from('cbt_subjects')
+      .select('*')
+      .limit(500);
+    if (!subjError && dbSubjects && dbSubjects.length > 0) {
+      saveSubjects(dbSubjects.map(mapSubjectFromDb), false);
+    } else if (!subjError && (!dbSubjects || dbSubjects.length === 0)) {
       const localSubj = getAllSubjects();
       const subjToSeed = localSubj.length > 0 ? localSubj : INITIAL_SUBJECTS;
-      await supabase.from('cbt_subjects').upsert(subjToSeed.map(mapSubjectToDb));
+      await upsertInChunks('cbt_subjects', subjToSeed.map(mapSubjectToDb));
     }
 
     // 3. Exams
-    const { data: dbExams } = await supabase.from('cbt_exams').select('*');
-    if (dbExams && dbExams.length > 0) {
-      saveExams(dbExams.map(mapExamFromDb));
-    } else {
+    const { data: dbExams, error: examsError } = await supabase
+      .from('cbt_exams')
+      .select('*')
+      .limit(500);
+    if (!examsError && dbExams && dbExams.length > 0) {
+      saveExams(dbExams.map(mapExamFromDb), false);
+    } else if (!examsError && (!dbExams || dbExams.length === 0)) {
       const localExams = getAllExams();
       const examsToSeed = localExams.length > 0 ? localExams : INITIAL_EXAMS;
-      await supabase.from('cbt_exams').upsert(examsToSeed.map(mapExamToDb));
+      await upsertInChunks('cbt_exams', examsToSeed.map(mapExamToDb));
     }
 
     // 4. Questions
-    const { data: dbQuestions } = await supabase.from('cbt_questions').select('*');
-    if (dbQuestions && dbQuestions.length > 0) {
-      saveQuestions(dbQuestions.map(mapQuestionFromDb));
-    } else {
+    const { data: dbQuestions, error: qError } = await supabase
+      .from('cbt_questions')
+      .select('*')
+      .limit(2000);
+    if (!qError && dbQuestions && dbQuestions.length > 0) {
+      saveQuestions(dbQuestions.map(mapQuestionFromDb), false);
+    } else if (!qError && (!dbQuestions || dbQuestions.length === 0)) {
       const localQ = getAllQuestions();
       const qToSeed = localQ.length > 0 ? localQ : INITIAL_QUESTIONS;
-      await supabase.from('cbt_questions').upsert(qToSeed.map(mapQuestionToDb));
+      await upsertInChunks('cbt_questions', qToSeed.map(mapQuestionToDb));
     }
 
     // 5. Submissions
-    const { data: dbSubmissions } = await supabase.from('cbt_submissions').select('*');
-    if (dbSubmissions && dbSubmissions.length > 0) {
-      saveSubmissions(dbSubmissions.map(mapSubmissionFromDb));
-    } else {
+    const { data: dbSubmissions, error: subError } = await supabase
+      .from('cbt_submissions')
+      .select('*')
+      .limit(2000);
+    if (!subError && dbSubmissions && dbSubmissions.length > 0) {
+      saveSubmissions(dbSubmissions.map(mapSubmissionFromDb), false);
+    } else if (!subError && (!dbSubmissions || dbSubmissions.length === 0)) {
       const localSub = getAllSubmissions();
       if (localSub.length > 0) {
-        await supabase.from('cbt_submissions').upsert(localSub.map(mapSubmissionToDb));
+        await upsertInChunks('cbt_submissions', localSub.map(mapSubmissionToDb));
       }
     }
 
@@ -327,7 +373,6 @@ export const setupRealtimeSubscription = () => {
 
   realtimeChannel = supabase
     .channel('cbt-multiuser-channel')
-    // Listen to Submissions changes (Student submits exam -> Teacher sees immediately)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'cbt_submissions' },
@@ -336,14 +381,13 @@ export const setupRealtimeSubscription = () => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const item = mapSubmissionFromDb(payload.new);
           const next = [item, ...subs.filter(s => s.id !== item.id)];
-          saveSubmissions(next);
+          saveSubmissions(next, false);
         } else if (payload.eventType === 'DELETE') {
-          saveSubmissions(subs.filter(s => s.id !== payload.old?.id));
+          saveSubmissions(subs.filter(s => s.id !== payload.old?.id), false);
         }
         notifyDataUpdated();
       }
     )
-    // Listen to Exams changes (Teacher adds/edits exam -> Students see immediately)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'cbt_exams' },
@@ -352,14 +396,13 @@ export const setupRealtimeSubscription = () => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const item = mapExamFromDb(payload.new);
           const next = [item, ...exams.filter(e => e.id !== item.id)];
-          saveExams(next);
+          saveExams(next, false);
         } else if (payload.eventType === 'DELETE') {
-          saveExams(exams.filter(e => e.id !== payload.old?.id));
+          saveExams(exams.filter(e => e.id !== payload.old?.id), false);
         }
         notifyDataUpdated();
       }
     )
-    // Listen to Questions changes
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'cbt_questions' },
@@ -368,14 +411,13 @@ export const setupRealtimeSubscription = () => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const item = mapQuestionFromDb(payload.new);
           const next = [item, ...questions.filter(q => q.id !== item.id)];
-          saveQuestions(next);
+          saveQuestions(next, false);
         } else if (payload.eventType === 'DELETE') {
-          saveQuestions(questions.filter(q => q.id !== payload.old?.id));
+          saveQuestions(questions.filter(q => q.id !== payload.old?.id), false);
         }
         notifyDataUpdated();
       }
     )
-    // Listen to Users changes (Password update, new student register)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'cbt_users' },
@@ -384,18 +426,17 @@ export const setupRealtimeSubscription = () => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const item = mapUserFromDb(payload.new);
           const next = [item, ...users.filter(u => u.id !== item.id)];
-          saveUsers(next);
+          saveUsers(next, false);
           const current = getCurrentUser();
           if (current && current.id === item.id) {
             setCurrentUser(item);
           }
         } else if (payload.eventType === 'DELETE') {
-          saveUsers(users.filter(u => u.id !== payload.old?.id));
+          saveUsers(users.filter(u => u.id !== payload.old?.id), false);
         }
         notifyDataUpdated();
       }
     )
-    // Broadcast fallback for real-time notifications even if table realtime isn't enabled
     .on('broadcast', { event: 'cbt_event' }, payload => {
       if (payload?.payload?.action) {
         pullFromSupabase();
@@ -420,165 +461,224 @@ export const broadcastCbtEvent = (action: string, data?: any) => {
 };
 
 // ==========================================
-// EXPLICIT TRANSACTION SYNC HELPERS
-// (Called immediately when any student/teacher performs a transaction)
+// EXPLICIT TRANSACTION DIRECT SYNC HELPERS
 // ==========================================
 
-export const syncSubmissionToSupabase = async (submission: ExamSubmission): Promise<void> => {
+export const syncSubmissionToSupabase = async (submission: ExamSubmission): Promise<boolean> => {
   try {
     const dbRow = mapSubmissionToDb(submission);
     const { error } = await supabase.from('cbt_submissions').upsert(dbRow);
     if (error) {
       console.warn('Supabase submission sync error:', error.message);
-    } else {
-      broadcastCbtEvent('new_submission', { examId: submission.examId, studentId: submission.studentId });
+      return false;
     }
+    broadcastCbtEvent('new_submission', { examId: submission.examId, studentId: submission.studentId });
+    return true;
   } catch (err) {
     console.warn('Network error syncing submission:', err);
+    return false;
   }
 };
 
-export const syncExamToSupabase = async (exam: Exam): Promise<void> => {
+export const syncExamToSupabase = async (exam: Exam): Promise<boolean> => {
   try {
     const dbRow = mapExamToDb(exam);
     const { error } = await supabase.from('cbt_exams').upsert(dbRow);
     if (error) {
       console.warn('Supabase exam sync error:', error.message);
-    } else {
-      broadcastCbtEvent('exam_updated', { examId: exam.id });
+      return false;
     }
+    broadcastCbtEvent('exam_updated', { examId: exam.id });
+    return true;
   } catch (err) {
     console.warn('Network error syncing exam:', err);
+    return false;
   }
 };
 
-export const deleteExamFromSupabase = async (examId: string): Promise<void> => {
+export const deleteExamFromSupabase = async (examId: string): Promise<boolean> => {
   try {
     await supabase.from('cbt_exams').delete().eq('id', examId);
     await supabase.from('cbt_questions').delete().eq('exam_id', examId);
     broadcastCbtEvent('exam_deleted', { examId });
+    return true;
   } catch (err) {
     console.warn('Network error deleting exam:', err);
+    return false;
   }
 };
 
-export const syncQuestionToSupabase = async (question: Question): Promise<void> => {
+export const syncQuestionToSupabase = async (question: Question): Promise<boolean> => {
   try {
     const dbRow = mapQuestionToDb(question);
     const { error } = await supabase.from('cbt_questions').upsert(dbRow);
     if (error) {
       console.warn('Supabase question sync error:', error.message);
-    } else {
-      broadcastCbtEvent('question_updated', { questionId: question.id });
+      return false;
     }
+    broadcastCbtEvent('question_updated', { questionId: question.id });
+    return true;
   } catch (err) {
     console.warn('Network error syncing question:', err);
+    return false;
   }
 };
 
-export const deleteQuestionFromSupabase = async (questionId: string): Promise<void> => {
+export const deleteQuestionFromSupabase = async (questionId: string): Promise<boolean> => {
   try {
     await supabase.from('cbt_questions').delete().eq('id', questionId);
     broadcastCbtEvent('question_deleted', { questionId });
+    return true;
   } catch (err) {
     console.warn('Network error deleting question:', err);
+    return false;
   }
 };
 
-export const syncUserToSupabase = async (user: User): Promise<void> => {
+export const syncUserToSupabase = async (user: User): Promise<boolean> => {
   try {
     const dbRow = mapUserToDb(user);
     const { error } = await supabase.from('cbt_users').upsert(dbRow);
     if (error) {
       console.warn('Supabase user sync error:', error.message);
-    } else {
-      broadcastCbtEvent('user_updated', { userId: user.id });
+      return false;
     }
+    broadcastCbtEvent('user_updated', { userId: user.id });
+    return true;
   } catch (err) {
     console.warn('Network error syncing user:', err);
+    return false;
   }
 };
 
-export const syncUsersBatchToSupabase = async (users: User[]): Promise<void> => {
+export const deleteUserFromSupabase = async (userId: string): Promise<boolean> => {
+  try {
+    await supabase.from('cbt_users').delete().eq('id', userId);
+    broadcastCbtEvent('user_deleted', { userId });
+    return true;
+  } catch (err) {
+    console.warn('Network error deleting user:', err);
+    return false;
+  }
+};
+
+export const syncUsersBatchToSupabase = async (
+  users: User[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; error?: string }> => {
   try {
     const rows = users.map(mapUserToDb);
-    const { error } = await supabase.from('cbt_users').upsert(rows);
-    if (error) {
-      console.warn('Supabase batch users sync error:', error.message);
-    } else {
+    const res = await upsertInChunks('cbt_users', rows, 50, onProgress);
+    if (res.success) {
       broadcastCbtEvent('users_batch_updated', { count: users.length });
     }
-  } catch (err) {
-    console.warn('Network error syncing batch users:', err);
+    return res;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal menyimpan batch pengguna' };
   }
 };
 
-export const syncSubjectToSupabase = async (subject: Subject): Promise<void> => {
+export const syncSubjectToSupabase = async (subject: Subject): Promise<boolean> => {
   try {
     const dbRow = mapSubjectToDb(subject);
     const { error } = await supabase.from('cbt_subjects').upsert(dbRow);
     if (error) {
       console.warn('Supabase subject sync error:', error.message);
-    } else {
-      broadcastCbtEvent('subject_updated', { subjectId: subject.id });
+      return false;
     }
+    broadcastCbtEvent('subject_updated', { subjectId: subject.id });
+    return true;
   } catch (err) {
     console.warn('Network error syncing subject:', err);
+    return false;
   }
 };
 
-export const syncSubjectsBatchToSupabase = async (subjects: Subject[]): Promise<void> => {
+export const deleteSubjectFromSupabase = async (subjectId: string): Promise<boolean> => {
+  try {
+    await supabase.from('cbt_subjects').delete().eq('id', subjectId);
+    broadcastCbtEvent('subject_deleted', { subjectId });
+    return true;
+  } catch (err) {
+    console.warn('Network error deleting subject:', err);
+    return false;
+  }
+};
+
+export const syncSubjectsBatchToSupabase = async (
+  subjects: Subject[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; error?: string }> => {
   try {
     const rows = subjects.map(mapSubjectToDb);
-    const { error } = await supabase.from('cbt_subjects').upsert(rows);
-    if (error) {
-      console.warn('Supabase batch subjects sync error:', error.message);
-    } else {
+    const res = await upsertInChunks('cbt_subjects', rows, 50, onProgress);
+    if (res.success) {
       broadcastCbtEvent('subjects_batch_updated', { count: subjects.length });
     }
-  } catch (err) {
-    console.warn('Network error syncing batch subjects:', err);
+    return res;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal menyimpan batch mata pelajaran' };
   }
 };
 
 // Overwrite all users with a specific role in Supabase and sync new ones
 export const overwriteUsersByRoleInSupabase = async (
   role: 'siswa' | 'guru',
-  newUsersWithRole: User[]
-): Promise<void> => {
+  newUsersWithRole: User[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> => {
   try {
-    // Delete existing users with this role in Supabase
-    await supabase.from('cbt_users').delete().eq('role', role);
-    // Insert new users
+    // 1. Delete existing users with this role in Supabase
+    const { error: delError } = await supabase.from('cbt_users').delete().eq('role', role);
+    if (delError) {
+      console.warn(`Supabase delete warning for role ${role}:`, delError.message);
+    }
+
+    // 2. Insert new users in safe batches of 50
     if (newUsersWithRole.length > 0) {
       const rows = newUsersWithRole.map(mapUserToDb);
-      await supabase.from('cbt_users').upsert(rows);
+      const res = await upsertInChunks('cbt_users', rows, 50, onProgress);
+      if (!res.success) {
+        return { success: false, count: 0, error: res.error };
+      }
     }
+
     broadcastCbtEvent('users_overwritten', { role, count: newUsersWithRole.length });
-  } catch (err) {
-    console.warn(`Network error overwriting ${role} in Supabase:`, err);
+    return { success: true, count: newUsersWithRole.length };
+  } catch (err: any) {
+    console.error(`Error overwriting ${role} in Supabase:`, err);
+    return { success: false, count: 0, error: err?.message || 'Gagal menindih data pengguna di Supabase' };
   }
 };
 
 // Overwrite all subjects in Supabase and sync new ones
-export const overwriteSubjectsInSupabase = async (newSubjects: Subject[]): Promise<void> => {
+export const overwriteSubjectsInSupabase = async (
+  newSubjects: Subject[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> => {
   try {
-    // Delete existing subjects in Supabase
     await supabase.from('cbt_subjects').delete().neq('id', '___non_existent___');
     if (newSubjects.length > 0) {
       const rows = newSubjects.map(mapSubjectToDb);
-      await supabase.from('cbt_subjects').upsert(rows);
+      const res = await upsertInChunks('cbt_subjects', rows, 50, onProgress);
+      if (!res.success) {
+        return { success: false, count: 0, error: res.error };
+      }
     }
     broadcastCbtEvent('subjects_overwritten', { count: newSubjects.length });
-  } catch (err) {
-    console.warn('Network error overwriting subjects in Supabase:', err);
+    return { success: true, count: newSubjects.length };
+  } catch (err: any) {
+    console.error('Error overwriting subjects in Supabase:', err);
+    return { success: false, count: 0, error: err?.message || 'Gagal menindih mata pelajaran di Supabase' };
   }
 };
 
-// Force full sync from local to Supabase (e.g. user clicked "Upload All Local to Supabase")
-export const uploadAllLocalToSupabase = async (): Promise<{ success: boolean; message: string }> => {
+// Force full sync from local to Supabase
+export const uploadAllLocalToSupabase = async (
+  onProgress?: (msg: string) => void
+): Promise<{ success: boolean; message: string }> => {
   try {
-    setStatus('connecting', 'Mengunggah seluruh data lokal ke database Supabase...');
+    setStatus('connecting', 'Mengunggah seluruh data ke database Supabase...');
 
     const users = getAllUsers();
     const subjects = getAllSubjects();
@@ -586,15 +686,24 @@ export const uploadAllLocalToSupabase = async (): Promise<{ success: boolean; me
     const questions = getAllQuestions();
     const submissions = getAllSubmissions();
 
-    if (users.length > 0) await supabase.from('cbt_users').upsert(users.map(mapUserToDb));
-    if (subjects.length > 0) await supabase.from('cbt_subjects').upsert(subjects.map(mapSubjectToDb));
-    if (exams.length > 0) await supabase.from('cbt_exams').upsert(exams.map(mapExamToDb));
-    if (questions.length > 0) await supabase.from('cbt_questions').upsert(questions.map(mapQuestionToDb));
-    if (submissions.length > 0) await supabase.from('cbt_submissions').upsert(submissions.map(mapSubmissionToDb));
+    if (onProgress) onProgress(`Menyimpan ${users.length} data pengguna...`);
+    if (users.length > 0) await upsertInChunks('cbt_users', users.map(mapUserToDb));
 
-    setStatus('connected', 'Semua data lokal berhasil disinkronkan ke Supabase!');
+    if (onProgress) onProgress(`Menyimpan ${subjects.length} data mata pelajaran...`);
+    if (subjects.length > 0) await upsertInChunks('cbt_subjects', subjects.map(mapSubjectToDb));
+
+    if (onProgress) onProgress(`Menyimpan ${exams.length} paket ujian...`);
+    if (exams.length > 0) await upsertInChunks('cbt_exams', exams.map(mapExamToDb));
+
+    if (onProgress) onProgress(`Menyimpan ${questions.length} butir soal...`);
+    if (questions.length > 0) await upsertInChunks('cbt_questions', questions.map(mapQuestionToDb));
+
+    if (onProgress) onProgress(`Menyimpan ${submissions.length} hasil ujian siswa...`);
+    if (submissions.length > 0) await upsertInChunks('cbt_submissions', submissions.map(mapSubmissionToDb));
+
+    setStatus('connected', 'Semua data berhasil disimpan & disinkronkan ke Supabase!');
     broadcastCbtEvent('full_sync_completed');
-    return { success: true, message: 'Semua data berhasil disinkronkan ke Supabase!' };
+    return { success: true, message: 'Semua data berhasil tersimpan di Supabase!' };
   } catch (err: any) {
     console.error('Error uploading to Supabase:', err);
     return { success: false, message: err.message || 'Gagal mengunggah data ke Supabase' };

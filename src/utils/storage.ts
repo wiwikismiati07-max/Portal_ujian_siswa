@@ -9,8 +9,10 @@ import {
 import {
   syncUserToSupabase,
   syncUsersBatchToSupabase,
+  deleteUserFromSupabase,
   syncSubjectToSupabase,
   syncSubjectsBatchToSupabase,
+  deleteSubjectFromSupabase,
   overwriteUsersByRoleInSupabase,
   overwriteSubjectsInSupabase,
   syncExamToSupabase,
@@ -30,7 +32,13 @@ const STORAGE_KEYS = {
   SUBMISSIONS: 'cbt_submissions_v2'
 };
 
-// Safe storage access helper
+// Safe storage access helper with memory cache fallback if localStorage fails
+let memoryUsersCache: User[] | null = null;
+let memorySubjectsCache: Subject[] | null = null;
+let memoryExamsCache: Exam[] | null = null;
+let memoryQuestionsCache: Question[] | null = null;
+let memorySubmissionsCache: ExamSubmission[] | null = null;
+
 export const getStored = <T>(key: string, defaultValue: T): T => {
   try {
     const raw = localStorage.getItem(key);
@@ -46,7 +54,7 @@ export const setStored = <T>(key: string, value: T): void => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
-    console.error(`Error writing ${key} to storage:`, err);
+    console.warn(`Local storage quota or write error on ${key} (using memory cache):`, err);
   }
 };
 
@@ -79,12 +87,20 @@ export const setCurrentUser = (user: User | null): void => {
 };
 
 export const getAllUsers = (): User[] => {
-  return getStored<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+  if (memoryUsersCache && memoryUsersCache.length > 0) {
+    return memoryUsersCache;
+  }
+  const stored = getStored<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+  memoryUsersCache = stored;
+  return stored;
 };
 
-export const saveUsers = (users: User[]): void => {
+export const saveUsers = (users: User[], syncToDb = true): void => {
+  memoryUsersCache = users;
   setStored(STORAGE_KEYS.USERS, users);
-  syncUsersBatchToSupabase(users).catch(() => {});
+  if (syncToDb) {
+    syncUsersBatchToSupabase(users).catch(() => {});
+  }
   notifyDataUpdated();
 };
 
@@ -108,7 +124,7 @@ export const updateUserCredentials = (
     return { success: false, message: 'Username sudah digunakan oleh akun lain' };
   }
 
-  const user = users[existingIdx];
+  const user = { ...users[existingIdx] };
   user.username = newUsername.trim();
   if (newPassword && newPassword.trim().length > 0) {
     user.password = newPassword.trim();
@@ -118,9 +134,7 @@ export const updateUserCredentials = (
   }
 
   users[existingIdx] = user;
-  setStored(STORAGE_KEYS.USERS, users);
-  syncUserToSupabase(user).catch(() => {});
-  notifyDataUpdated();
+  saveUsers(users, true);
 
   // If current logged in user is the one updated, update session too
   const current = getCurrentUser();
@@ -131,95 +145,157 @@ export const updateUserCredentials = (
   return { success: true, message: 'Kredensial berhasil diperbarui!', updatedUser: user };
 };
 
-// --- SUBJECTS ---
-export const getAllSubjects = (): Subject[] => {
-  return getStored<Subject[]>(STORAGE_KEYS.SUBJECTS, INITIAL_SUBJECTS);
-};
-
-export const saveSubjects = (subjects: Subject[]): void => {
-  setStored(STORAGE_KEYS.SUBJECTS, subjects);
-  syncSubjectsBatchToSupabase(subjects).catch(() => {});
+export const deleteUser = async (userId: string): Promise<void> => {
+  const users = getAllUsers().filter(u => u.id !== userId);
+  saveUsers(users, false);
+  await deleteUserFromSupabase(userId);
   notifyDataUpdated();
 };
 
-export const addSubject = (subject: Subject): void => {
-  const subjects = getAllSubjects();
-  subjects.push(subject);
-  saveSubjects(subjects);
-};
-
-// Overwrite all users of a specific role (e.g. replace all students or all teachers upon import)
-export const overwriteUsersByRole = (
+// Direct Overwrite Users with real-time Supabase save
+export const overwriteUsersByRoleDirect = async (
   role: 'siswa' | 'guru',
-  newUsers: User[]
-): void => {
+  newUsers: User[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> => {
   const allUsers = getAllUsers();
-  // Keep users of other roles (e.g. keep admin and teachers when replacing students)
   const keptUsers = allUsers.filter(u => u.role !== role);
   const updatedAll = [...keptUsers, ...newUsers];
 
+  memoryUsersCache = updatedAll;
   setStored(STORAGE_KEYS.USERS, updatedAll);
-  overwriteUsersByRoleInSupabase(role, newUsers).catch(() => {});
   notifyDataUpdated();
 
-  // If current logged in user was in this role and is replaced, refresh session if still present
+  // Overwrite directly in Supabase in chunks
+  const res = await overwriteUsersByRoleInSupabase(role, newUsers, onProgress);
+
+  // Refresh current session if needed
   const current = getCurrentUser();
   if (current && current.role === role) {
-    const matched = newUsers.find(u => u.username.toLowerCase() === current.username.toLowerCase() || u.id === current.id);
+    const matched = newUsers.find(
+      u => u.username.toLowerCase() === current.username.toLowerCase() || u.id === current.id
+    );
     if (matched) {
       setCurrentUser(matched);
     }
   }
+
+  notifyDataUpdated();
+  return res;
 };
 
-// Overwrite all subjects completely upon import
-export const overwriteAllSubjects = (newSubjects: Subject[]): void => {
-  setStored(STORAGE_KEYS.SUBJECTS, newSubjects);
-  overwriteSubjectsInSupabase(newSubjects).catch(() => {});
+// Legacy alias
+export const overwriteUsersByRole = (
+  role: 'siswa' | 'guru',
+  newUsers: User[]
+): void => {
+  overwriteUsersByRoleDirect(role, newUsers);
+};
+
+// --- SUBJECTS ---
+export const getAllSubjects = (): Subject[] => {
+  if (memorySubjectsCache && memorySubjectsCache.length > 0) {
+    return memorySubjectsCache;
+  }
+  const stored = getStored<Subject[]>(STORAGE_KEYS.SUBJECTS, INITIAL_SUBJECTS);
+  memorySubjectsCache = stored;
+  return stored;
+};
+
+export const saveSubjects = (subjects: Subject[], syncToDb = true): void => {
+  memorySubjectsCache = subjects;
+  setStored(STORAGE_KEYS.SUBJECTS, subjects);
+  if (syncToDb) {
+    syncSubjectsBatchToSupabase(subjects).catch(() => {});
+  }
   notifyDataUpdated();
+};
+
+export const addSubject = async (subject: Subject): Promise<void> => {
+  const subjects = getAllSubjects();
+  subjects.push(subject);
+  saveSubjects(subjects, true);
+};
+
+export const deleteSubject = async (subjectId: string): Promise<void> => {
+  const subjects = getAllSubjects().filter(s => s.id !== subjectId);
+  saveSubjects(subjects, false);
+  await deleteSubjectFromSupabase(subjectId);
+};
+
+export const overwriteSubjectsDirect = async (
+  newSubjects: Subject[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  memorySubjectsCache = newSubjects;
+  setStored(STORAGE_KEYS.SUBJECTS, newSubjects);
+  notifyDataUpdated();
+
+  const res = await overwriteSubjectsInSupabase(newSubjects, onProgress);
+  notifyDataUpdated();
+  return res;
+};
+
+export const overwriteAllSubjects = (newSubjects: Subject[]): void => {
+  overwriteSubjectsDirect(newSubjects);
 };
 
 // --- EXAMS ---
 export const getAllExams = (): Exam[] => {
-  return getStored<Exam[]>(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
+  if (memoryExamsCache && memoryExamsCache.length > 0) {
+    return memoryExamsCache;
+  }
+  const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
+  memoryExamsCache = stored;
+  return stored;
 };
 
-export const saveExams = (exams: Exam[]): void => {
+export const saveExams = (exams: Exam[], syncToDb = true): void => {
+  memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
   notifyDataUpdated();
 };
 
-export const addExam = (exam: Exam): void => {
+export const addExam = async (exam: Exam): Promise<void> => {
   const exams = getAllExams();
   exams.unshift(exam);
+  memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
-  syncExamToSupabase(exam).catch(() => {});
+  await syncExamToSupabase(exam);
   notifyDataUpdated();
 };
 
-export const updateExam = (updated: Exam): void => {
+export const updateExam = async (updated: Exam): Promise<void> => {
   const exams = getAllExams().map(e => (e.id === updated.id ? updated : e));
+  memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
-  syncExamToSupabase(updated).catch(() => {});
+  await syncExamToSupabase(updated);
   notifyDataUpdated();
 };
 
-export const deleteExam = (examId: string): void => {
+export const deleteExam = async (examId: string): Promise<void> => {
   const exams = getAllExams().filter(e => e.id !== examId);
+  memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
-  // Also delete its questions
   const questions = getAllQuestions().filter(q => q.examId !== examId);
+  memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  deleteExamFromSupabase(examId).catch(() => {});
+  await deleteExamFromSupabase(examId);
   notifyDataUpdated();
 };
 
 // --- QUESTIONS ---
 export const getAllQuestions = (): Question[] => {
-  return getStored<Question[]>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
+  if (memoryQuestionsCache && memoryQuestionsCache.length > 0) {
+    return memoryQuestionsCache;
+  }
+  const stored = getStored<Question[]>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
+  memoryQuestionsCache = stored;
+  return stored;
 };
 
-export const saveQuestions = (questions: Question[]): void => {
+export const saveQuestions = (questions: Question[], syncToDb = true): void => {
+  memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
   notifyDataUpdated();
 };
@@ -228,34 +304,43 @@ export const getQuestionsByExamId = (examId: string): Question[] => {
   return getAllQuestions().filter(q => q.examId === examId);
 };
 
-export const addQuestion = (question: Question): void => {
+export const addQuestion = async (question: Question): Promise<void> => {
   const questions = getAllQuestions();
   questions.push(question);
+  memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  syncQuestionToSupabase(question).catch(() => {});
+  await syncQuestionToSupabase(question);
   notifyDataUpdated();
 };
 
-export const updateQuestion = (updated: Question): void => {
+export const updateQuestion = async (updated: Question): Promise<void> => {
   const questions = getAllQuestions().map(q => (q.id === updated.id ? updated : q));
+  memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  syncQuestionToSupabase(updated).catch(() => {});
+  await syncQuestionToSupabase(updated);
   notifyDataUpdated();
 };
 
-export const deleteQuestion = (questionId: string): void => {
+export const deleteQuestion = async (questionId: string): Promise<void> => {
   const questions = getAllQuestions().filter(q => q.id !== questionId);
+  memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  deleteQuestionFromSupabase(questionId).catch(() => {});
+  await deleteQuestionFromSupabase(questionId);
   notifyDataUpdated();
 };
 
 // --- SUBMISSIONS & REKAP ---
 export const getAllSubmissions = (): ExamSubmission[] => {
-  return getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  if (memorySubmissionsCache && memorySubmissionsCache.length > 0) {
+    return memorySubmissionsCache;
+  }
+  const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  memorySubmissionsCache = stored;
+  return stored;
 };
 
-export const saveSubmissions = (submissions: ExamSubmission[]): void => {
+export const saveSubmissions = (submissions: ExamSubmission[], syncToDb = true): void => {
+  memorySubmissionsCache = submissions;
   setStored(STORAGE_KEYS.SUBMISSIONS, submissions);
   notifyDataUpdated();
 };
@@ -298,10 +383,8 @@ export const gradeSubmission = (
         const correctList = q.correctMulti || [];
         const studentList: number[] = Array.isArray(answer) ? answer : [];
         if (correctList.length > 0) {
-          // Calculate overlap
           const truePositives = studentList.filter(idx => correctList.includes(idx)).length;
           const falsePositives = studentList.filter(idx => !correctList.includes(idx)).length;
-          // Fractional credit
           const ratio = Math.max(0, (truePositives - falsePositives) / correctList.length);
           qEarned = Math.round(ratio * q.points);
           const isCorrect = ratio >= 0.99;
@@ -360,7 +443,6 @@ export const gradeSubmission = (
       }
 
       case 'case_study': {
-        // Automatic keyword & depth analysis
         const text = typeof answer === 'string' ? answer.trim() : '';
         if (text.length === 0) {
           qEarned = 0;
@@ -380,9 +462,8 @@ export const gradeSubmission = (
             }
           });
 
-          // Score based on word length + keyword relevance
           const wordCount = text.split(/\s+/).length;
-          let scoreRatio = 0.5; // baseline attempt
+          let scoreRatio = 0.5;
           if (wordCount >= 20) scoreRatio += 0.2;
           if (wordCount >= 40) scoreRatio += 0.1;
           if (keywords.length > 0) {
@@ -430,9 +511,11 @@ export const gradeSubmission = (
   };
 
   const allSubmissions = getAllSubmissions();
-  // Replace if student re-took or add new
-  const updated = [submission, ...allSubmissions.filter(s => !(s.examId === exam.id && s.studentId === student.id))];
-  saveSubmissions(updated);
+  const updated = [
+    submission,
+    ...allSubmissions.filter(s => !(s.examId === exam.id && s.studentId === student.id))
+  ];
+  saveSubmissions(updated, true);
   syncSubmissionToSupabase(submission).catch(() => {});
 
   return submission;
@@ -440,9 +523,16 @@ export const gradeSubmission = (
 
 // Reset system data to default initial state
 export const resetToInitialData = (): void => {
+  memoryUsersCache = INITIAL_USERS;
+  memorySubjectsCache = INITIAL_SUBJECTS;
+  memoryExamsCache = INITIAL_EXAMS;
+  memoryQuestionsCache = INITIAL_QUESTIONS;
+  memorySubmissionsCache = INITIAL_SUBMISSIONS;
+
   setStored(STORAGE_KEYS.USERS, INITIAL_USERS);
   setStored(STORAGE_KEYS.SUBJECTS, INITIAL_SUBJECTS);
   setStored(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
   setStored(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
   setStored(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  notifyDataUpdated();
 };
