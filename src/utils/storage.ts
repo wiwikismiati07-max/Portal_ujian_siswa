@@ -1,4 +1,4 @@
-import { User, Subject, Exam, Question, ExamSubmission, ViolationLog } from '../types';
+import { User, Subject, Exam, Question, ExamSubmission, ViolationLog, AppLink } from '../types';
 import {
   INITIAL_USERS,
   INITIAL_SUBJECTS,
@@ -24,13 +24,72 @@ import {
   notifyDataUpdated
 } from './supabaseSync';
 
+export const INITIAL_APP_LINKS: AppLink[] = [
+  {
+    id: 'link_portal_utama',
+    title: 'Portal Utama SPANJU CBT',
+    url: 'internal:portal',
+    category: 'Aplikasi Utama',
+    iconName: 'GraduationCap',
+    color: 'indigo',
+    description: 'Halaman Utama Portal SPANJU CBT & Akses Multi-Role',
+    isInternal: true,
+    badge: 'Utama'
+  },
+  {
+    id: 'link_siswa_jadwal',
+    title: 'Fitur Siswa: Mata Pelajaran & Jadwal Ujian',
+    url: 'internal:siswa_jadwal',
+    category: 'Fitur Siswa',
+    iconName: 'School',
+    color: 'emerald',
+    description: 'Daftar Mata Pelajaran, Jadwal Ujian Aktif & Pengerjaan Soal AKM',
+    isInternal: true,
+    badge: 'Siswa'
+  },
+  {
+    id: 'link_guru_bank_soal',
+    title: 'Fitur Guru: Bank Soal & Kunci Jawaban',
+    url: 'internal:guru_bank_soal',
+    category: 'Fitur Guru',
+    iconName: 'BookOpen',
+    color: 'amber',
+    description: 'Input Data Soal AKM, Kunci Jawaban, Bobot & Manajemen Ujian',
+    isInternal: true,
+    badge: 'Bank Soal'
+  },
+  {
+    id: 'link_guru_rekap_nilai',
+    title: 'Fitur Guru: Rekapitulasi Hasil Nilai Ujian',
+    url: 'internal:guru_rekap_nilai',
+    category: 'Fitur Guru',
+    iconName: 'FileSpreadsheet',
+    color: 'rose',
+    description: 'Rekap Nilai Siswa, Filter Per Kelas, Ekspor Excel & Cetak Hasil',
+    isInternal: true,
+    badge: 'Nilai'
+  },
+  {
+    id: 'link_admin_system',
+    title: 'Fitur Admin: Kelola Akun & Jadwal',
+    url: 'internal:admin_management',
+    category: 'Fitur Admin',
+    iconName: 'ShieldCheck',
+    color: 'blue',
+    description: 'Manajemen Akun Siswa, Guru, Mata Pelajaran & Pengaturan CBT',
+    isInternal: true,
+    badge: 'Admin'
+  }
+];
+
 const STORAGE_KEYS = {
   USERS: 'cbt_users_v2',
   CURRENT_USER: 'cbt_current_user_v2',
   SUBJECTS: 'cbt_subjects_v2',
   EXAMS: 'cbt_exams_v2',
   QUESTIONS: 'cbt_questions_v2',
-  SUBMISSIONS: 'cbt_submissions_v2'
+  SUBMISSIONS: 'cbt_submissions_v2',
+  APP_LINKS: 'cbt_app_links_v4'
 };
 
 // Safe storage access helper with memory cache fallback if localStorage fails
@@ -663,5 +722,94 @@ export const resetToInitialData = (): void => {
   setStored(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
   setStored(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
   setStored(STORAGE_KEYS.SUBMISSIONS, INITIAL_SUBMISSIONS);
+  setStored(STORAGE_KEYS.APP_LINKS, INITIAL_APP_LINKS);
   notifyDataUpdated();
+};
+
+// ================= APP LINKS MANAGEMENT =================
+let memoryAppLinksCache: AppLink[] | null = null;
+
+export const getAllAppLinks = (): AppLink[] => {
+  if (memoryAppLinksCache) return memoryAppLinksCache;
+  const stored = getStored<AppLink[]>(STORAGE_KEYS.APP_LINKS, []);
+  if (stored.length === 0) {
+    setStored(STORAGE_KEYS.APP_LINKS, INITIAL_APP_LINKS);
+    memoryAppLinksCache = INITIAL_APP_LINKS;
+    return INITIAL_APP_LINKS;
+  }
+  memoryAppLinksCache = stored;
+  return stored;
+};
+
+export const saveAllAppLinks = (links: AppLink[]): void => {
+  memoryAppLinksCache = links;
+  setStored(STORAGE_KEYS.APP_LINKS, links);
+  window.dispatchEvent(new CustomEvent('cbt_app_links_update'));
+};
+
+export const addAppLink = (linkData: Omit<AppLink, 'id'>): AppLink => {
+  const current = getAllAppLinks();
+  const newLink: AppLink = {
+    ...linkData,
+    id: `link_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  };
+  const updated = [newLink, ...current];
+  saveAllAppLinks(updated);
+  return newLink;
+};
+
+export const updateAppLink = (updatedLink: AppLink): void => {
+  const current = getAllAppLinks();
+  const updated = current.map(l => l.id === updatedLink.id ? updatedLink : l);
+  saveAllAppLinks(updated);
+};
+
+export const deleteAppLink = (id: string): void => {
+  const current = getAllAppLinks();
+  const updated = current.filter(l => l.id !== id);
+  saveAllAppLinks(updated);
+};
+
+export const resetAppLinksToDefault = (): AppLink[] => {
+  saveAllAppLinks(INITIAL_APP_LINKS);
+  return INITIAL_APP_LINKS;
+};
+
+export const exportAppLinksJSON = (): void => {
+  const links = getAllAppLinks();
+  const jsonStr = JSON.stringify(links, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup_link_dashboard_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+export const importAppLinksJSON = (jsonString: string): AppLink[] => {
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Format file backup tidak valid. Harus berupa array JSON.');
+    }
+    const validated: AppLink[] = parsed.map((item: any, idx: number) => ({
+      id: item.id || `imported_link_${Date.now()}_${idx}`,
+      title: item.title || 'Aplikasi Tanpa Judul',
+      url: item.url || 'https://google.com',
+      category: item.category || 'Umum',
+      iconName: item.iconName || 'Globe',
+      color: item.color || 'indigo',
+      description: item.description || '',
+      isInternal: item.isInternal ?? (item.url?.startsWith('internal:') || false),
+      badge: item.badge
+    }));
+    saveAllAppLinks(validated);
+    return validated;
+  } catch (err: any) {
+    console.error('Failed to import app links:', err);
+    throw new Error(err.message || 'Gagal membaca file JSON backup.');
+  }
 };

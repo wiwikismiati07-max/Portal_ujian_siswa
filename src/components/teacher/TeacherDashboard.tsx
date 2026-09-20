@@ -46,10 +46,17 @@ import {
 
 interface TeacherDashboardProps {
   teacher: User;
+  initialTab?: 'rekap' | 'bank_soal' | 'paket_ujian' | 'excel';
 }
 
-export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher }) => {
-  const [activeTab, setActiveTab] = useState<'rekap' | 'bank_soal' | 'paket_ujian' | 'excel'>('rekap');
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, initialTab = 'rekap' }) => {
+  const [activeTab, setActiveTab] = useState<'rekap' | 'bank_soal' | 'paket_ujian' | 'excel'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [exams, setExams] = useState<Exam[]>(getAllExams());
   const [questions, setQuestions] = useState<Question[]>(getAllQuestions());
   const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());

@@ -82,6 +82,18 @@ export interface ViolationLog {
   violationNumber: number; // e.g. 1, 2, 3
 }
 
+export interface AppLink {
+  id: string;
+  title: string;
+  url: string;
+  category?: string;
+  iconName?: string;
+  color?: 'indigo' | 'emerald' | 'amber' | 'blue' | 'rose' | 'purple' | 'cyan' | 'teal';
+  description?: string;
+  isInternal?: boolean;
+  badge?: string;
+}
+
 export interface ExamSubmission {
   id: string;
   examId: string;
