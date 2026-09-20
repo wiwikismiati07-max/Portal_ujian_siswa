@@ -1,48 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { User, Exam, Question, ExamSubmission } from '../../types';
-import { gradeSubmission } from '../../utils/storage';
-import confetti from 'canvas-confetti';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Clock,
   AlertTriangle,
-  CheckCircle,
-  HelpCircle,
+  Send,
+  Flag,
   ChevronLeft,
   ChevronRight,
-  Send,
-  Lock,
   Maximize2,
-  FileText,
-  RotateCcw,
+  Award,
+  CheckCircle,
+  BookOpen,
   CheckSquare,
   Check,
-  Flag,
-  Award,
-  BookOpen
+  RotateCcw,
+  Shield,
+  Lock,
+  ZoomIn,
+  ZoomOut,
+  X,
+  Eye,
+  Volume2
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { Exam, Question, User, ExamSubmission } from '../../types';
+import { gradeSubmission } from '../../utils/examGrader';
 
 interface ExamWorksheetProps {
-  student: User;
   exam: Exam;
   questions: Question[];
+  student: User;
   onFinishExam: (submission: ExamSubmission) => void;
   onExitToDashboard: () => void;
 }
 
 export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
-  student,
   exam,
   questions,
+  student,
   onFinishExam,
   onExitToDashboard
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Navigation & Answers state
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
   const [startedAt] = useState<string>(new Date().toISOString());
 
-  // Anti-cheat / Lockdown state
+  // CBT Safe Exam Lockdown state
+  const [isLockdownStarted, setIsLockdownStarted] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationReason, setViolationReason] = useState('');
@@ -50,24 +56,72 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<ExamSubmission | null>(null);
 
+  // In-exam Image Lightbox (safely view images without opening new tabs)
+  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastViolationTimeRef = useRef<number>(0);
   const currentQ = questions[currentIndex];
 
-  // Request fullscreen on start
+  // Synthesize warning beep via Web Audio API
+  const playWarningBeep = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.28);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  }, []);
+
+  // Request fullscreen and initiate lockdown
+  const handleStartLockdown = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        await (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+      }
+      setIsFullscreen(true);
+    } catch {
+      setIsFullscreen(true);
+    }
+    setIsLockdownStarted(true);
+
+    try {
+      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+        await (navigator as any).wakeLock.request('screen').catch(() => {});
+      }
+    } catch {}
+  };
+
   const enterFullscreen = () => {
     try {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
       }
       setIsFullscreen(true);
     } catch {
-      // Ignored if blocked by iframe sandbox
+      setIsFullscreen(true);
     }
   };
 
   // Timer countdown
   useEffect(() => {
-    if (submittedResult) return;
+    if (!isLockdownStarted || submittedResult) return;
 
     const timer = setInterval(() => {
       setTimeLeftSeconds(prev => {
@@ -81,74 +135,114 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [submittedResult]);
+  }, [isLockdownStarted, submittedResult]);
 
   // Anti-cheat event listeners (Lockdown mode)
   useEffect(() => {
-    if (submittedResult) return;
+    if (!isLockdownStarted || submittedResult) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        triggerViolation('Anda terdeteksi berpindah tab browser atau meminimalkan jendela ujian.');
+        triggerViolation('Anda terdeteksi berpindah tab browser, meminimalkan layar, atau membuka jendela lain.');
       }
     };
 
     const handleWindowBlur = () => {
-      triggerViolation('Fokus layar ujian hilang! Dilarang membuka aplikasi lain, kalkulator, atau jendela lain.');
+      triggerViolation('Fokus layar ujian hilang! Dilarang membuka aplikasi kalkulator, browser lain, atau jendela sekunder.');
     };
 
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setIsFullscreen(false);
-        // Soft prompt to return to fullscreen
-      } else {
-        setIsFullscreen(true);
+      const fs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(fs);
+      if (!fs && isLockdownStarted) {
+        triggerViolation('Layar ujian keluar dari mode layar penuh (Fullscreen). Segera kunci kembali layar.');
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent common navigation shortcuts
+      const key = e.key.toLowerCase();
+      // Prevent navigation shortcuts, developer tools, new tabs, copy/paste
       if (
-        (e.ctrlKey && ['t', 'n', 'w', 'j', 'u', 'r'].includes(e.key.toLowerCase())) ||
-        e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && ['i', 'c', 'j'].includes(e.key.toLowerCase())) ||
-        e.key === 'Escape'
+        e.altKey ||
+        (e.ctrlKey && ['t', 'n', 'w', 'j', 'u', 'r', 'h', 'p', 's', 'c', 'v', 'x', 'a', 'f'].includes(key)) ||
+        (e.metaKey && ['t', 'n', 'w', 'j', 'u', 'r', 'h', 'p', 's', 'c', 'v', 'x', 'a', 'f'].includes(key)) ||
+        e.key.startsWith('F') ||
+        e.key === 'Escape' ||
+        e.key === 'PrintScreen'
       ) {
         e.preventDefault();
-        triggerViolation('Penggunaan tombol pintasan sistem dilarang selama ujian terkunci.');
+        e.stopPropagation();
+        triggerViolation(`Penggunaan tombol pintasan '${e.key}' diblokir selama ujian terkunci.`);
+        return false;
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault(); // Disable inspect / right-click
+      e.preventDefault();
+      triggerViolation('Klik kanan dinonaktifkan untuk menjaga keamanan lembar soal.');
+    };
+
+    const handleCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      triggerViolation('Operasi Salin (Copy) & Tempel (Paste) dilarang selama ujian.');
+    };
+
+    const handleSelectStart = (e: Event) => {
+      e.preventDefault();
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Ujian sedang berlangsung! Jawaban Anda akan terkirim jika meninggalkan halaman ini.';
+      return e.returnValue;
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopyPaste);
+    document.addEventListener('cut', handleCopyPaste);
+    document.addEventListener('paste', handleCopyPaste);
+    document.addEventListener('selectstart', handleSelectStart);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopyPaste);
+      document.removeEventListener('cut', handleCopyPaste);
+      document.removeEventListener('paste', handleCopyPaste);
+      document.removeEventListener('selectstart', handleSelectStart);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [submittedResult]);
+  }, [isLockdownStarted, submittedResult]);
 
   const triggerViolation = (reason: string) => {
+    const now = Date.now();
+    if (now - lastViolationTimeRef.current < 1500) return;
+    lastViolationTimeRef.current = now;
+
+    playWarningBeep();
+    setViolationReason(reason);
+    setShowViolationModal(true);
+
     setViolationCount(prev => {
       const updated = prev + 1;
-      setViolationReason(reason);
-      setShowViolationModal(true);
-
       // Auto-submit if violation exceeds 5
       if (updated >= 5) {
         setTimeout(() => {
-          handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (5 kali). Ujian otomatis dikumpulkan.');
-        }, 1200);
+          handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (5 kali). Ujian otomatis dikumpulkan oleh sistem pengawas.');
+        }, 1500);
       }
       return updated;
     });
@@ -214,7 +308,77 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const answeredCount = questions.filter(isQuestionAnswered).length;
   const unansweredCount = questions.length - answeredCount;
 
-  // Render Post-Exam Result Screen
+  // 1. PRE-FLIGHT LOCKDOWN GATE SCREEN (Before entering exam)
+  if (!isLockdownStarted && !submittedResult) {
+    return (
+      <div className="min-h-[calc(100vh-4.5rem)] py-8 px-4 sm:px-6 max-w-3xl mx-auto flex flex-col justify-center animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden p-6 sm:p-10 text-center relative">
+          
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-5 shadow-xs">
+            <Shield className="w-10 h-10 text-indigo-600" />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 rounded-full text-xs font-extrabold border border-amber-200 mb-3">
+            <Lock className="w-3.5 h-3.5" /> SISTEM CBT TERKUNCI (SAFE EXAM BROWSER)
+          </div>
+
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            {exam.title}
+          </h2>
+          <p className="text-sm text-slate-500 max-w-lg mx-auto mt-2">
+            Mata Pelajaran: <span className="font-semibold text-slate-700">{exam.subjectName}</span> • Durasi: <span className="font-semibold text-slate-700">{exam.durationMinutes} Menit</span> • Total: <span className="font-semibold text-slate-700">{questions.length} Butir Soal</span>
+          </p>
+
+          {/* Student details */}
+          <div className="my-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs max-w-lg mx-auto space-y-2">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Nama Siswa:</span>
+              <span className="font-bold text-slate-800">{student.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">NIS / Kelas:</span>
+              <span className="font-bold text-slate-800">{student.nipOrNis || '-'} / {student.classGroup}</span>
+            </div>
+          </div>
+
+          {/* Security Rules Box */}
+          <div className="p-5 bg-amber-50/70 rounded-2xl border border-amber-200 text-left text-xs text-amber-950 max-w-lg mx-auto mb-8 space-y-2.5">
+            <div className="font-bold flex items-center gap-2 text-amber-900 text-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              Peraturan Integritas & Keamanan Ujian:
+            </div>
+            <ul className="list-disc list-inside space-y-1.5 text-amber-900">
+              <li>Layar ujian akan otomatis dikunci dalam mode <span className="font-bold">Layar Penuh (Fullscreen)</span>.</li>
+              <li><span className="font-bold text-rose-700">Dilarang membuka tab browser lain, aplikasi kalkulator, atau jendela lain.</span></li>
+              <li>Tombol pintasan (Shortcut), klik kanan, dan salin-tempel dinonaktifkan.</li>
+              <li>Sistem akan mendeteksi perpindahan fokus layar & membunyikan alarm peringatan.</li>
+              <li>Pelanggaran sebanyak <span className="font-bold text-rose-700">5 kali</span> akan mengakibatkan lembar ujian otomatis terkumpul paksa.</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onExitToDashboard}
+              className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+            >
+              Kembali ke Menu
+            </button>
+            <button
+              type="button"
+              onClick={handleStartLockdown}
+              className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+            >
+              <Lock className="w-4 h-4" />
+              <span>Kunci Layar & Mulai Mengerjakan Ujian</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. POST-EXAM RESULT SCREEN
   if (submittedResult) {
     return (
       <div className="min-h-[calc(100vh-4.5rem)] py-8 px-4 sm:px-6 max-w-3xl mx-auto flex flex-col justify-center">
@@ -232,7 +396,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             Lembar Jawaban Berhasil Dikumpulkan
           </h2>
           <p className="text-sm text-slate-500 max-w-md mx-auto mt-2">
-            Terima kasih telah mengerjakan ujian dengan tertib. Berikut hasil penilaian otomatis lembar kerja Anda:
+            Terima kasih telah mengerjakan ujian dengan tertib dan jujur. Berikut hasil penilaian lembar kerja Anda:
           </p>
 
           {/* Score Card */}
@@ -246,7 +410,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
               <span className="text-xs font-semibold text-slate-500 block mb-1">Persentase Nilai</span>
-              <span className={`text-3xl font-extrabold ${submittedResult.passed ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <span className={`text-3xl font-extrabold ${submittedResult.percentage >= (exam.passingScore || 75) ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {submittedResult.percentage}%
               </span>
             </div>
@@ -276,7 +440,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             <div className="flex items-center justify-between">
               <span className="font-semibold text-slate-700">Catatan Pelanggaran Layar:</span>
               <span className={`font-bold ${submittedResult.violationCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {submittedResult.violationCount === 0 ? '0 (Bersih / Disiplin)' : `${submittedResult.violationCount} kali tercatat`}
+                {submittedResult.violationCount === 0 ? '0 (Sempurna / Disiplin)' : `${submittedResult.violationCount} kali tercatat`}
               </span>
             </div>
           </div>
@@ -305,7 +469,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
           <span className="font-bold flex items-center gap-1.5 text-amber-300">
             <Lock className="w-3.5 h-3.5" />
-            LOCKDOWN MODE AKTIF
+            LOCKDOWN AKTIF
           </span>
           <span className="hidden sm:inline text-slate-400">|</span>
           <span className="hidden sm:inline text-slate-300 font-medium truncate max-w-md">
@@ -334,9 +498,9 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             <button
               type="button"
               onClick={enterFullscreen}
-              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
             >
-              <Maximize2 className="w-3 h-3" /> Fullscreen
+              <Maximize2 className="w-3 h-3" /> Kunci Fullscreen
             </button>
           )}
         </div>
@@ -394,20 +558,21 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               </div>
             )}
 
-            {/* Prompt with Arabic & Image Support */}
+            {/* Prompt Image with Safe In-App Lightbox */}
             {currentQ.imageUrl && (
               <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-3 max-w-xl mx-auto shadow-2xs">
-                <img
-                  src={currentQ.imageUrl}
-                  alt="Gambar Butir Soal"
-                  className="max-h-72 w-auto object-contain rounded-xl hover:scale-102 transition-transform duration-200 cursor-pointer"
-                  onClick={() => {
-                    if (currentQ.imageUrl) window.open(currentQ.imageUrl, '_blank');
-                  }}
-                  title="Klik untuk melihat ukuran penuh"
-                />
+                <div className="relative group cursor-pointer" onClick={() => { setZoomedImageUrl(currentQ.imageUrl || null); setImageScale(1); }}>
+                  <img
+                    src={currentQ.imageUrl}
+                    alt="Gambar Butir Soal"
+                    className="max-h-72 w-auto object-contain rounded-xl transition-transform duration-200"
+                  />
+                  <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-xs font-bold gap-1.5">
+                    <Eye className="w-4 h-4" /> Perbesar Gambar
+                  </div>
+                </div>
                 <span className="text-[11px] text-slate-400 mt-2 italic">
-                  * Klik gambar untuk memperbesar pada tab baru
+                  * Klik gambar untuk memperbesar secara aman di dalam lembar ujian
                 </span>
               </div>
             )}
@@ -457,7 +622,14 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                       </div>
 
                       {optImg && (
-                        <div className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setZoomedImageUrl(optImg);
+                            setImageScale(1);
+                          }}
+                          className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start group relative"
+                        >
                           <img
                             src={optImg}
                             alt={`Opsi ${letter}`}
@@ -525,7 +697,14 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                       </div>
 
                       {optImg && (
-                        <div className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setZoomedImageUrl(optImg);
+                            setImageScale(1);
+                          }}
+                          className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start"
+                        >
                           <img
                             src={optImg}
                             alt={`Opsi ${letter}`}
@@ -605,8 +784,6 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                   {currentQ.matchingPairs.map((pair, idx) => {
                     const currentMatchAnswers = answers[currentQ.id] || {};
                     const selectedRight = currentMatchAnswers[pair.id] || '';
-
-                    // Get unique right options from the question
                     const rightOptions = currentQ.matchingPairs?.map(p => p.right) || [];
 
                     return (
@@ -807,6 +984,62 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
       </div>
 
+      {/* IN-APP LIGHTBOX IMAGE VIEWER (Keeps student safely on the exam sheet) */}
+      {zoomedImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="relative max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col items-center p-4">
+            
+            {/* Lightbox Controls Header */}
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800 text-white text-xs">
+              <span className="font-semibold flex items-center gap-1.5 text-slate-300">
+                <Eye className="w-4 h-4 text-indigo-400" /> Penampil Gambar Soal
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImageScale(s => Math.max(0.5, s - 0.25))}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors"
+                  title="Perkecil"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="font-mono text-[11px] text-slate-400 px-1">{Math.round(imageScale * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setImageScale(s => Math.min(2.5, s + 0.25))}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors"
+                  title="Perbesar"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setZoomedImageUrl(null); setImageScale(1); }}
+                  className="p-1.5 bg-rose-600/80 hover:bg-rose-600 rounded-lg text-white ml-2 transition-colors"
+                  title="Tutup"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Canvas */}
+            <div className="w-full max-h-[70vh] overflow-auto flex items-center justify-center p-4">
+              <img
+                src={zoomedImageUrl}
+                alt="Zoomed Detail"
+                style={{ transform: `scale(${imageScale})` }}
+                className="max-h-[60vh] w-auto object-contain transition-transform duration-150 rounded-lg"
+              />
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-2">
+              Gunakan tombol pembesar untuk melihat detail gambar tanpa harus membuka tab baru.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* CONFIRM FINISH MODAL */}
       {showFinishConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -870,28 +1103,35 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               <AlertTriangle className="w-8 h-8" />
             </div>
 
-            <span className="inline-block px-3 py-1 bg-rose-100 text-rose-800 rounded-full text-xs font-extrabold tracking-wider uppercase mb-2">
-              Peringatan Integritas Ujian #{violationCount}
-            </span>
+            <div className="flex items-center justify-center gap-1.5 mb-2">
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-rose-100 text-rose-800 rounded-full text-xs font-extrabold tracking-wider uppercase">
+                <Volume2 className="w-3.5 h-3.5" /> Peringatan Integritas Ujian #{violationCount} / 5
+              </span>
+            </div>
 
             <h3 className="text-xl font-extrabold text-slate-900">
               Aktivitas Tidak Diizinkan Terdeteksi!
             </h3>
 
-            <p className="text-xs sm:text-sm text-slate-600 my-3 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 my-3 leading-relaxed font-medium">
               {violationReason}
             </p>
 
-            <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 font-medium text-left mb-6">
-              ⚠️ Lembar kerja dilockdown untuk mencegah penggunaan browser lain, kalkulator, atau aplikasi eksternal. Pelanggaran ini telah dicatat ke dalam log pengawas guru. Ujian akan otomatis dibatalkan/dikumpulkan paksa jika mencapai 5 pelanggaran.
+            <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 font-medium text-left mb-6 space-y-1">
+              <p>⚠️ Lembar kerja dilockdown untuk memastikan pengerjaan mandiri tanpa membuka aplikasi lain (browser, kalkulator, atau split-screen).</p>
+              <p>Pelanggaran ini tercatat di pengawas. Jika mencapai <span className="font-bold text-rose-700">5 pelanggaran</span>, ujian Anda otomatis dikumpulkan paksa.</p>
             </div>
 
             <button
               type="button"
-              onClick={() => setShowViolationModal(false)}
-              className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors cursor-pointer"
+              onClick={() => {
+                setShowViolationModal(false);
+                enterFullscreen();
+              }}
+              className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
-              Saya Mengerti & Kembali ke Lembar Ujian
+              <Shield className="w-4 h-4" />
+              <span>Saya Mengerti & Kunci Kembali Lembar Ujian</span>
             </button>
           </div>
         </div>
