@@ -69,7 +69,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard
 };
 
-// Color theme helper
+// Color theme helper (Soft Light Pastel Palette)
 const COLOR_STYLES: Record<
   string,
   {
@@ -83,76 +83,76 @@ const COLOR_STYLES: Record<
   }
 > = {
   indigo: {
-    bg: 'from-indigo-600 via-indigo-700 to-slate-900',
-    border: 'border-indigo-500/50',
-    text: 'text-indigo-300',
-    shadow3d: 'shadow-[0_6px_0_0_#3730a3] hover:shadow-[0_8px_0_0_#3730a3]',
-    activeBorder: 'border-indigo-400 ring-2 ring-indigo-400/50',
-    activeGlow: 'bg-indigo-500 shadow-indigo-500/50',
-    badgeBg: 'bg-indigo-500/20 text-indigo-200 border-indigo-400/30'
+    bg: 'from-indigo-50/90 via-indigo-100/70 to-white',
+    border: 'border-indigo-200/90',
+    text: 'text-indigo-900',
+    shadow3d: 'shadow-[0_4px_0_0_#c7d2fe] hover:shadow-[0_6px_0_0_#818cf8]',
+    activeBorder: 'border-indigo-500 ring-2 ring-indigo-400/40',
+    activeGlow: 'bg-indigo-500 shadow-indigo-500/30',
+    badgeBg: 'bg-indigo-100/90 text-indigo-800 border-indigo-300/80'
   },
   emerald: {
-    bg: 'from-emerald-600 via-emerald-700 to-slate-900',
-    border: 'border-emerald-500/50',
-    text: 'text-emerald-300',
-    shadow3d: 'shadow-[0_6px_0_0_#065f46] hover:shadow-[0_8px_0_0_#065f46]',
-    activeBorder: 'border-emerald-400 ring-2 ring-emerald-400/50',
-    activeGlow: 'bg-emerald-500 shadow-emerald-500/50',
-    badgeBg: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30'
+    bg: 'from-emerald-50/90 via-emerald-100/70 to-white',
+    border: 'border-emerald-200/90',
+    text: 'text-emerald-900',
+    shadow3d: 'shadow-[0_4px_0_0_#a7f3d0] hover:shadow-[0_6px_0_0_#34d399]',
+    activeBorder: 'border-emerald-500 ring-2 ring-emerald-400/40',
+    activeGlow: 'bg-emerald-500 shadow-emerald-500/30',
+    badgeBg: 'bg-emerald-100/90 text-emerald-800 border-emerald-300/80'
   },
   amber: {
-    bg: 'from-amber-600 via-amber-700 to-slate-900',
-    border: 'border-amber-500/50',
-    text: 'text-amber-300',
-    shadow3d: 'shadow-[0_6px_0_0_#92400e] hover:shadow-[0_8px_0_0_#92400e]',
-    activeBorder: 'border-amber-400 ring-2 ring-amber-400/50',
-    activeGlow: 'bg-amber-500 shadow-amber-500/50',
-    badgeBg: 'bg-amber-500/20 text-amber-200 border-amber-400/30'
+    bg: 'from-amber-50/90 via-amber-100/70 to-white',
+    border: 'border-amber-200/90',
+    text: 'text-amber-900',
+    shadow3d: 'shadow-[0_4px_0_0_#fde68a] hover:shadow-[0_6px_0_0_#fbbf24]',
+    activeBorder: 'border-amber-500 ring-2 ring-amber-400/40',
+    activeGlow: 'bg-amber-500 shadow-amber-500/30',
+    badgeBg: 'bg-amber-100/90 text-amber-800 border-amber-300/80'
   },
   blue: {
-    bg: 'from-blue-600 via-blue-700 to-slate-900',
-    border: 'border-blue-500/50',
-    text: 'text-blue-300',
-    shadow3d: 'shadow-[0_6px_0_0_#1e40af] hover:shadow-[0_8px_0_0_#1e40af]',
-    activeBorder: 'border-blue-400 ring-2 ring-blue-400/50',
-    activeGlow: 'bg-blue-500 shadow-blue-500/50',
-    badgeBg: 'bg-blue-500/20 text-blue-200 border-blue-400/30'
+    bg: 'from-sky-50/90 via-sky-100/70 to-white',
+    border: 'border-sky-200/90',
+    text: 'text-sky-900',
+    shadow3d: 'shadow-[0_4px_0_0_#bae6fd] hover:shadow-[0_6px_0_0_#38bdf8]',
+    activeBorder: 'border-sky-500 ring-2 ring-sky-400/40',
+    activeGlow: 'bg-sky-500 shadow-sky-500/30',
+    badgeBg: 'bg-sky-100/90 text-sky-800 border-sky-300/80'
   },
   rose: {
-    bg: 'from-rose-600 via-rose-700 to-slate-900',
-    border: 'border-rose-500/50',
-    text: 'text-rose-300',
-    shadow3d: 'shadow-[0_6px_0_0_#9f1239] hover:shadow-[0_8px_0_0_#9f1239]',
-    activeBorder: 'border-rose-400 ring-2 ring-rose-400/50',
-    activeGlow: 'bg-rose-500 shadow-rose-500/50',
-    badgeBg: 'bg-rose-500/20 text-rose-200 border-rose-400/30'
+    bg: 'from-rose-50/90 via-rose-100/70 to-white',
+    border: 'border-rose-200/90',
+    text: 'text-rose-900',
+    shadow3d: 'shadow-[0_4px_0_0_#fecdd3] hover:shadow-[0_6px_0_0_#fb7185]',
+    activeBorder: 'border-rose-500 ring-2 ring-rose-400/40',
+    activeGlow: 'bg-rose-500 shadow-rose-500/30',
+    badgeBg: 'bg-rose-100/90 text-rose-800 border-rose-300/80'
   },
   purple: {
-    bg: 'from-purple-600 via-purple-700 to-slate-900',
-    border: 'border-purple-500/50',
-    text: 'text-purple-300',
-    shadow3d: 'shadow-[0_6px_0_0_#6b21a8] hover:shadow-[0_8px_0_0_#6b21a8]',
-    activeBorder: 'border-purple-400 ring-2 ring-purple-400/50',
-    activeGlow: 'bg-purple-500 shadow-purple-500/50',
-    badgeBg: 'bg-purple-500/20 text-purple-200 border-purple-400/30'
+    bg: 'from-purple-50/90 via-purple-100/70 to-white',
+    border: 'border-purple-200/90',
+    text: 'text-purple-900',
+    shadow3d: 'shadow-[0_4px_0_0_#e9d5ff] hover:shadow-[0_6px_0_0_#c084fc]',
+    activeBorder: 'border-purple-500 ring-2 ring-purple-400/40',
+    activeGlow: 'bg-purple-500 shadow-purple-500/30',
+    badgeBg: 'bg-purple-100/90 text-purple-800 border-purple-300/80'
   },
   teal: {
-    bg: 'from-teal-600 via-teal-700 to-slate-900',
-    border: 'border-teal-500/50',
-    text: 'text-teal-300',
-    shadow3d: 'shadow-[0_6px_0_0_#115e59] hover:shadow-[0_8px_0_0_#115e59]',
-    activeBorder: 'border-teal-400 ring-2 ring-teal-400/50',
-    activeGlow: 'bg-teal-500 shadow-teal-500/50',
-    badgeBg: 'bg-teal-500/20 text-teal-200 border-teal-400/30'
+    bg: 'from-teal-50/90 via-teal-100/70 to-white',
+    border: 'border-teal-200/90',
+    text: 'text-teal-900',
+    shadow3d: 'shadow-[0_4px_0_0_#99f6e4] hover:shadow-[0_6px_0_0_#2dd4bf]',
+    activeBorder: 'border-teal-500 ring-2 ring-teal-400/40',
+    activeGlow: 'bg-teal-500 shadow-teal-500/30',
+    badgeBg: 'bg-teal-100/90 text-teal-800 border-teal-300/80'
   },
   cyan: {
-    bg: 'from-cyan-600 via-cyan-700 to-slate-900',
-    border: 'border-cyan-500/50',
-    text: 'text-cyan-300',
-    shadow3d: 'shadow-[0_6px_0_0_#155e75] hover:shadow-[0_8px_0_0_#155e75]',
-    activeBorder: 'border-cyan-400 ring-2 ring-cyan-400/50',
-    activeGlow: 'bg-cyan-500 shadow-cyan-500/50',
-    badgeBg: 'bg-cyan-500/20 text-cyan-200 border-cyan-400/30'
+    bg: 'from-cyan-50/90 via-cyan-100/70 to-white',
+    border: 'border-cyan-200/90',
+    text: 'text-cyan-900',
+    shadow3d: 'shadow-[0_4px_0_0_#a5f3fc] hover:shadow-[0_6px_0_0_#22d3ee]',
+    activeBorder: 'border-cyan-500 ring-2 ring-cyan-400/40',
+    activeGlow: 'bg-cyan-500 shadow-cyan-500/30',
+    badgeBg: 'bg-cyan-100/90 text-cyan-800 border-cyan-300/80'
   }
 };
 
@@ -358,7 +358,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100/90 text-slate-800 flex flex-col font-sans overflow-x-hidden selection:bg-indigo-500 selection:text-white">
       {/* Hidden File Input for Backup Upload */}
       <input
         type="file"
@@ -371,8 +371,8 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 animate-in fade-in slide-in-from-top-3 duration-300">
-          <div className="flex items-center gap-2.5 px-4 py-3 bg-indigo-900/90 text-white border border-indigo-500/50 rounded-2xl shadow-2xl backdrop-blur-xl text-xs font-bold">
-            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-white text-slate-800 border border-slate-200 rounded-2xl shadow-xl backdrop-blur-xl text-xs font-bold">
+            <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
             <span>{toastMessage}</span>
           </div>
         </div>
@@ -381,35 +381,35 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
       {/* Main 3D Dual-Panel Layout */}
       <div className="flex-1 flex flex-col lg:flex-row h-screen overflow-hidden relative">
         
-        {/* Ambient 3D Glowing Backdrop */}
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+        {/* Ambient Glowing Soft Backdrop */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-200/30 rounded-full blur-[120px] pointer-events-none"></div>
 
         {/* LEFT SIDEBAR: 3D APP LAUNCHER PANEL */}
         <aside
           className={`${
             isSidebarOpen ? 'w-full lg:w-96 xl:w-[410px]' : 'w-0 lg:w-16'
-          } shrink-0 bg-slate-900/90 backdrop-blur-2xl border-r border-slate-800/80 flex flex-col transition-all duration-300 z-30 relative shadow-2xl overflow-hidden`}
+          } shrink-0 bg-white/95 backdrop-blur-2xl border-r border-slate-200/90 flex flex-col transition-all duration-300 z-30 relative shadow-xl overflow-hidden`}
         >
           {/* Header Dashboard Title & Controls */}
-          <div className="p-4 border-b border-slate-800/80 bg-slate-900/80 flex items-center justify-between gap-3">
+          <div className="p-4 border-b border-slate-200/90 bg-slate-50/80 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-0.5 shadow-lg shadow-indigo-500/30 flex items-center justify-center shrink-0">
-                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-                  <Layers3 className="w-5 h-5 text-indigo-400" />
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/20 flex items-center justify-center shrink-0">
+                <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center">
+                  <Layers3 className="w-5 h-5 text-indigo-600" />
                 </div>
               </div>
               {isSidebarOpen && (
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h2 className="text-sm font-black tracking-tight text-white uppercase truncate">
+                    <h2 className="text-sm font-black tracking-tight text-slate-900 uppercase truncate">
                       DASHBOARD PORTAL
                     </h2>
-                    <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-md shrink-0">
+                    <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md shrink-0">
                       3D
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 truncate">
+                  <p className="text-[11px] text-slate-500 truncate">
                     Launcher & Management Link SPANJU
                   </p>
                 </div>
@@ -420,7 +420,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
               type="button"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               title={isSidebarOpen ? 'Kecilkan Sidebar' : 'Buka Sidebar'}
-              className="p-2 bg-slate-800/80 hover:bg-slate-700 active:bg-slate-900 text-slate-300 hover:text-white rounded-xl border border-slate-700/60 transition-all cursor-pointer shrink-0"
+              className="p-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl border border-slate-200 transition-all cursor-pointer shrink-0"
             >
               {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
@@ -429,7 +429,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
           {isSidebarOpen && (
             <>
               {/* Search & Backup Action Toolbar */}
-              <div className="p-3.5 space-y-3 border-b border-slate-800/80 bg-slate-950/40">
+              <div className="p-3.5 space-y-3 border-b border-slate-200/90 bg-slate-50/50">
                 {/* Search Box */}
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -438,13 +438,13 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                     placeholder="Cari nama aplikasi atau link..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 bg-slate-900/90 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all shadow-inner"
+                    className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all shadow-2xs"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -460,8 +460,8 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                       onClick={() => setSelectedCategory(cat)}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                         selectedCategory === cat
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                          : 'bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-700/50'
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
                       }`}
                     >
                       {cat}
@@ -475,7 +475,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                     type="button"
                     onClick={handleOpenAddModal}
                     title="Tambah Link Aplikasi Baru"
-                    className="py-2 px-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:from-indigo-800 active:to-indigo-900 text-white font-extrabold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-lg shadow-indigo-600/25 border-b-2 border-indigo-900 transition-all cursor-pointer col-span-2 active:translate-y-0.5"
+                    className="py-2 px-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:from-indigo-800 active:to-indigo-900 text-white font-extrabold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-md shadow-indigo-600/20 border-b-2 border-indigo-900 transition-all cursor-pointer col-span-2 active:translate-y-0.5"
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[3]" />
                     <span>+ Tambah Link</span>
@@ -485,9 +485,9 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                     type="button"
                     onClick={handleExportBackup}
                     title="Download Backup JSON"
-                    className="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-slate-200 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-700/80 transition-all cursor-pointer active:translate-y-0.5"
+                    className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
                   >
-                    <Download className="w-3.5 h-3.5 text-indigo-400" />
+                    <Download className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Backup</span>
                   </button>
 
@@ -495,9 +495,9 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     title="Upload Restore JSON"
-                    className="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-slate-200 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-700/80 transition-all cursor-pointer active:translate-y-0.5"
+                    className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
                   >
-                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                    <Upload className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Upload</span>
                   </button>
                 </div>
@@ -506,7 +506,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
               {/* Scrollable List of 3D Buttons */}
               <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 scrollbar-thin">
                 {filteredLinks.length === 0 ? (
-                  <div className="py-12 text-center text-slate-500 space-y-2">
+                  <div className="py-12 text-center text-slate-400 space-y-2">
                     <Search className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
                     <p className="text-xs font-semibold">Tidak ada aplikasi yang cocok.</p>
                   </div>
@@ -523,18 +523,18 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                         className={`group relative rounded-2xl p-3.5 transition-all duration-200 cursor-pointer border backdrop-blur-md bg-gradient-to-r ${style.bg} ${
                           isSelected
                             ? `${style.activeBorder} ${style.shadow3d} translate-y-0 scale-[1.01]`
-                            : 'border-slate-800/80 hover:border-slate-700 shadow-[0_4px_0_0_#1e293b] hover:shadow-[0_6px_0_0_#334155] hover:-translate-y-0.5 opacity-90 hover:opacity-100'
+                            : 'border-slate-200 hover:border-slate-300 shadow-[0_2px_0_0_#e2e8f0] hover:shadow-[0_4px_0_0_#cbd5e1] hover:-translate-y-0.5 opacity-95 hover:opacity-100'
                         } active:translate-y-1 active:shadow-none`}
                       >
                         {/* 3D Glossy Light Refraction Effect */}
-                        <div className="absolute top-0 left-0 right-0 h-1/2 bg-white/5 rounded-t-2xl pointer-events-none"></div>
+                        <div className="absolute top-0 left-0 right-0 h-1/2 bg-white/40 rounded-t-2xl pointer-events-none"></div>
 
                         <div className="relative z-10 flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3 min-w-0">
                             {/* 3D Icon Badge Container */}
                             <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-lg border border-white/20 bg-slate-900/80 ${
-                                isSelected ? 'ring-2 ring-white/30' : ''
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs border border-slate-200/80 bg-white ${
+                                isSelected ? 'ring-2 ring-indigo-400/30' : ''
                               }`}
                             >
                               <IconComp className={`w-5 h-5 ${style.text}`} />
@@ -542,7 +542,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <h3 className="text-xs font-black text-white tracking-tight leading-snug truncate">
+                                <h3 className="text-xs font-black text-slate-900 tracking-tight leading-snug truncate">
                                   {link.title}
                                 </h3>
                                 {link.badge && (
@@ -554,20 +554,20 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                                 )}
                               </div>
 
-                              <p className="text-[11px] text-slate-300/80 line-clamp-1 mt-0.5 font-medium">
+                              <p className="text-[11px] text-slate-600 line-clamp-1 mt-0.5 font-medium">
                                 {link.description || link.url}
                               </p>
 
                               <div className="flex items-center gap-2 mt-2">
-                                <span className="text-[10px] font-bold text-slate-400 bg-slate-950/60 px-2 py-0.5 rounded-md border border-slate-800/80 flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200/90 flex items-center gap-1 shadow-2xs">
                                   {link.isInternal ? (
                                     <>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
                                       Internal SPANJU
                                     </>
                                   ) : (
                                     <>
-                                      <Globe className="w-3 h-3 text-cyan-400" />
+                                      <Globe className="w-3 h-3 text-cyan-600" />
                                       {new URL(link.url.startsWith('http') ? link.url : `https://${link.url}`).hostname.replace('www.', '')}
                                     </>
                                   )}
@@ -582,7 +582,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                               type="button"
                               onClick={(e) => handleOpenEditModal(link, e)}
                               title="Edit Link Aplikasi"
-                              className="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -590,18 +590,18 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                               type="button"
                               onClick={(e) => handleDeleteLinkItem(link.id, e)}
                               title="Hapus Link Aplikasi"
-                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 rounded-lg transition-colors cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
 
-                        {/* Active Glowing LED Light Indicator */}
+                        {/* Active Glowing Indicator */}
                         {isSelected && (
                           <div className="absolute top-2 right-2 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80 animate-ping"></span>
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50 animate-ping"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50"></span>
                           </div>
                         )}
                       </div>
@@ -611,26 +611,26 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
               </div>
 
               {/* Sidebar Footer Info */}
-              <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 flex items-center justify-between text-[11px] text-slate-400 font-medium">
+              <div className="p-3 border-t border-slate-200/90 bg-slate-50/80 flex items-center justify-between text-[11px] text-slate-500 font-medium">
                 <button
                   type="button"
                   onClick={handleResetDefault}
-                  className="flex items-center gap-1 text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 text-slate-500 hover:text-amber-700 transition-colors cursor-pointer font-bold"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Reset Standar</span>
                 </button>
-                <span>{links.length} Aplikasi Tersimpan</span>
+                <span className="font-semibold">{links.length} Aplikasi Tersimpan</span>
               </div>
             </>
           )}
         </aside>
 
         {/* RIGHT MAIN VIEWPORT: APPLICATION FRAME */}
-        <main className="flex-1 flex flex-col bg-slate-900 overflow-hidden relative">
+        <main className="flex-1 flex flex-col bg-slate-50 overflow-hidden relative">
           
           {/* Simulated Browser Top Navigation Bar */}
-          <div className="h-13 bg-slate-950 border-b border-slate-800/90 px-3 sm:px-5 flex items-center justify-between gap-3 shadow-md shrink-0 z-20">
+          <div className="h-13 bg-white border-b border-slate-200/90 px-3 sm:px-5 flex items-center justify-between gap-3 shadow-2xs shrink-0 z-20">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               
               {/* Toggle Sidebar Button */}
@@ -638,25 +638,25 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 type="button"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 title={isSidebarOpen ? 'Sembunyikan Menu Sidebar' : 'Buka Menu Sidebar'}
-                className="p-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-bold"
+                className="p-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl border border-slate-200 cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-bold transition-all"
               >
-                <Menu className="w-4 h-4 text-indigo-400" />
+                <Menu className="w-4 h-4 text-indigo-600" />
                 <span className="hidden sm:inline">{isSidebarOpen ? 'Sembunyikan Menu' : 'Menu Dashboard'}</span>
               </button>
 
               {/* Active App Badge */}
-              <div className="flex items-center gap-2 min-w-0 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 flex-1 max-w-xl">
-                <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="text-xs font-bold text-slate-200 truncate font-mono">
+              <div className="flex items-center gap-2 min-w-0 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 flex-1 max-w-xl shadow-2xs">
+                <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-bold text-slate-700 truncate font-mono">
                   {activeLink.url}
                 </span>
                 <button
                   type="button"
                   onClick={handleCopyUrl}
                   title="Salin URL Aplikasi"
-                  className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer ml-auto"
+                  className="p-1 text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer ml-auto"
                 >
-                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
@@ -667,7 +667,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 type="button"
                 onClick={() => setIframeKey(prev => prev + 1)}
                 title="Muat Ulang / Refresh Aplikasi"
-                className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-800 transition-colors cursor-pointer"
+                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
@@ -678,7 +678,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Buka di Tab Baru Browser"
-                  className="p-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white rounded-xl border border-indigo-500/30 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold px-3"
+                  className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl border border-indigo-200 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold px-3"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Tab Baru</span>
@@ -689,7 +689,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 type="button"
                 onClick={() => setIsIframeFullscreen(!isIframeFullscreen)}
                 title={isIframeFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
-                className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-800 transition-colors cursor-pointer"
+                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-200 transition-colors cursor-pointer"
               >
                 {isIframeFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
@@ -697,7 +697,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
           </div>
 
           {/* Application Content Canvas Area */}
-          <div className="flex-1 relative overflow-auto bg-slate-900">
+          <div className="flex-1 relative overflow-auto bg-slate-50">
             {activeLink.isInternal || activeLink.url.startsWith('internal:') ? (
               /* Internal CBT SPANJU Application Container */
               <div className="w-full h-full min-h-full bg-slate-50 text-slate-800 overflow-y-auto">
@@ -705,7 +705,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
               </div>
             ) : (
               /* External Web Link Embedded View / Frame Workspace */
-              <div className="w-full h-full flex flex-col relative bg-slate-950">
+              <div className="w-full h-full flex flex-col relative bg-slate-100">
                 <iframe
                   key={iframeKey}
                   src={activeLink.url.startsWith('http') ? activeLink.url : `https://${activeLink.url}`}
@@ -715,11 +715,11 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 />
 
                 {/* Info Bar for External Apps */}
-                <div className="bg-slate-900/90 border-t border-slate-800 px-4 py-2 text-[11px] text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
+                <div className="bg-white border-t border-slate-200 px-4 py-2 text-[11px] text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-2">
-                    <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                     <span>
-                      Membuka: <strong className="text-white">{activeLink.title}</strong> ({activeLink.url})
+                      Membuka: <strong className="text-slate-900">{activeLink.title}</strong> ({activeLink.url})
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -728,7 +728,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                       href={activeLink.url.startsWith('http') ? activeLink.url : `https://${activeLink.url}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
                     >
                       <span>Buka Langsung</span>
                       <ExternalLink className="w-3 h-3" />
@@ -743,19 +743,19 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
       {/* MODAL: ADD / EDIT LINK APLIKASI */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-100 relative overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-800 relative overflow-hidden">
             
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white">
+                  <h3 className="text-base font-black text-slate-900">
                     {editingLink ? 'Edit Link Aplikasi' : 'Tambah Link Aplikasi Baru'}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     Masukkan judul menu dan URL tautan web yang ingin disimpan
                   </p>
                 </div>
@@ -763,7 +763,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -771,8 +771,8 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
             <form onSubmit={handleSaveLinkForm} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  Judul Menu Aplikasi <span className="text-rose-400">*</span>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Judul Menu Aplikasi <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -780,13 +780,13 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                   placeholder="Contoh: E-Rapor Digital, Google Classroom..."
                   value={formTitle}
                   onChange={e => setFormTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  URL / Tautan Website <span className="text-rose-400">*</span>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  URL / Tautan Website <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -794,7 +794,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                   placeholder="https://..."
                   value={formUrl}
                   onChange={e => setFormUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
                   *Gunakan prefix <code>internal:portal</code> untuk membuka fitur internal CBT SPANJU.
@@ -803,13 +803,13 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Kategori Menu
                   </label>
                   <select
                     value={formCategory}
                     onChange={e => setFormCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-none focus:border-indigo-500"
                   >
                     <option value="Aplikasi Utama">Aplikasi Utama</option>
                     <option value="Ujian & AKM">Ujian & AKM</option>
@@ -825,35 +825,35 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Warna Tema 3D
                   </label>
                   <select
                     value={formColor}
                     onChange={e => setFormColor(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-none focus:border-indigo-500"
                   >
-                    <option value="indigo">Indigo Blue</option>
-                    <option value="emerald">Emerald Green</option>
-                    <option value="amber">Amber Gold</option>
-                    <option value="blue">Royal Blue</option>
-                    <option value="rose">Rose Red</option>
-                    <option value="purple">Purple Velvet</option>
-                    <option value="teal">Teal Cyan</option>
-                    <option value="cyan">Cyan Aqua</option>
+                    <option value="indigo">Soft Indigo Blue</option>
+                    <option value="emerald">Soft Emerald Green</option>
+                    <option value="amber">Soft Amber Gold</option>
+                    <option value="blue">Soft Sky Blue</option>
+                    <option value="rose">Soft Rose Red</option>
+                    <option value="purple">Soft Purple Lavender</option>
+                    <option value="teal">Soft Teal Mint</option>
+                    <option value="cyan">Soft Cyan Aqua</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Ikon Aplikasi
                   </label>
                   <select
                     value={formIcon}
                     onChange={e => setFormIcon(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-none focus:border-indigo-500"
                   >
                     <option value="GraduationCap">Graduation Cap</option>
                     <option value="FileSpreadsheet">File Spreadsheet</option>
@@ -870,7 +870,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Pita Badge Singkat (Opsional)
                   </label>
                   <input
@@ -878,13 +878,13 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                     placeholder="Contoh: NEW, PMM, CBT"
                     value={formBadge}
                     onChange={e => setFormBadge(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Keterangan Singkat
                 </label>
                 <textarea
@@ -892,7 +892,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                   placeholder="Deskripsi singkat fungsi aplikasi ini..."
                   value={formDescription}
                   onChange={e => setFormDescription(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500"
                 ></textarea>
               </div>
 
@@ -900,13 +900,13 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   <span>Simpan Link Aplikasi</span>

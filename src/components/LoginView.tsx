@@ -258,15 +258,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
         
         {/* LATAR 1 / LAYER 1: Left Branding & Highlights Carousel (5 cols) */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-950 p-6 sm:p-8 lg:p-9 text-white flex flex-col justify-between relative overflow-hidden select-none rounded-3xl shadow-xl border border-indigo-800/40 ring-1 ring-white/10">
+        <div className="lg:col-span-5 bg-gradient-to-br from-indigo-100/90 via-indigo-50 to-white p-6 sm:p-8 lg:p-9 text-slate-800 flex flex-col justify-between relative overflow-hidden select-none rounded-3xl shadow-lg border border-indigo-200/90 ring-1 ring-indigo-100">
           {/* Subtle ambient lighting */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 bg-indigo-200/40 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-200/40 rounded-full blur-3xl pointer-events-none"></div>
 
           {/* Carousel Header & Slide Content */}
           <div className="relative z-10 space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200 border border-white/15 shadow-2xs">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/80 backdrop-blur-md rounded-full text-xs font-bold text-indigo-900 border border-indigo-200 shadow-2xs">
                 {React.createElement(slides[activeSlide].icon, { className: `w-3.5 h-3.5 ${slides[activeSlide].iconColor}` })}
                 <span>{slides[activeSlide].badge}</span>
               </div>
@@ -276,7 +276,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={handlePrevSlide}
-                  className="p-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-lg transition-all cursor-pointer backdrop-blur-xs border border-white/10"
+                  className="p-1.5 bg-white/80 hover:bg-white text-slate-700 rounded-lg transition-all cursor-pointer backdrop-blur-xs border border-indigo-200 shadow-2xs"
                   title="Geser Kiri (Sebelumnya)"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -284,7 +284,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={handleNextSlide}
-                  className="p-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white rounded-lg transition-all cursor-pointer backdrop-blur-xs border border-white/10"
+                  className="p-1.5 bg-white/80 hover:bg-white text-slate-700 rounded-lg transition-all cursor-pointer backdrop-blur-xs border border-indigo-200 shadow-2xs"
                   title="Geser Kanan (Berikutnya)"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -293,7 +293,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-white rounded-2xl shadow-lg border border-white/30">
+              <div className="p-2.5 bg-white rounded-2xl shadow-md border border-slate-200">
                 <img
                   src="https://iili.io/KDFk4fI.png"
                   alt="Logo"
@@ -304,10 +304,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
             {/* Dynamic Animated Active Slide View */}
             <div key={activeSlide} className="animate-in fade-in slide-in-from-right duration-300">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white mb-2 leading-snug">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 mb-2 leading-snug">
                 {slides[activeSlide].title}
               </h1>
-              <p className="text-xs sm:text-sm text-indigo-100/85 leading-relaxed min-h-[48px]">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed min-h-[48px]">
                 {slides[activeSlide].subtitle}
               </p>
 
@@ -316,14 +316,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 {slides[activeSlide].highlights.map((hl, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 text-xs text-indigo-100 font-medium bg-white/5 backdrop-blur-xs p-3 rounded-2xl border border-white/10 hover:bg-white/10 transition-all shadow-xs"
+                    className="flex items-center gap-3 text-xs text-slate-800 font-medium bg-white/80 backdrop-blur-xs p-3 rounded-2xl border border-indigo-100 hover:bg-white transition-all shadow-2xs"
                   >
                     <div className={`p-1.5 rounded-xl shrink-0 ${hl.bg}`}>
                       <hl.icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="font-bold block text-white">{hl.label}</span>
-                      <span className="text-[11px] text-indigo-200/70 truncate block">{hl.desc}</span>
+                      <span className="font-bold block text-slate-900">{hl.label}</span>
+                      <span className="text-[11px] text-slate-500 truncate block">{hl.desc}</span>
                     </div>
                   </div>
                 ))}
@@ -332,7 +332,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </div>
 
           {/* Carousel Footer Dots & Version */}
-          <div className="pt-4 mt-5 border-t border-white/10 flex items-center justify-between relative z-10 text-[11px] text-indigo-200/70">
+          <div className="pt-4 mt-5 border-t border-indigo-200/80 flex items-center justify-between relative z-10 text-[11px] text-slate-500">
             {/* Slide Navigation Dots */}
             <div className="flex items-center gap-1.5">
               {slides.map((_, idx) => (
@@ -341,14 +341,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   type="button"
                   onClick={() => setActiveSlide(idx)}
                   className={`h-2 rounded-full transition-all cursor-pointer ${
-                    activeSlide === idx ? 'w-6 bg-amber-400' : 'w-2 bg-white/30 hover:bg-white/60'
+                    activeSlide === idx ? 'w-6 bg-indigo-600' : 'w-2 bg-indigo-200 hover:bg-indigo-400'
                   }`}
                   title={`Ke Slide ${idx + 1}`}
                 />
               ))}
             </div>
 
-            <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-[10px]">CBT Pro v2.4</span>
+            <span className="font-mono bg-white/80 border border-indigo-200 px-2 py-0.5 rounded text-[10px] text-indigo-900 font-bold">CBT Pro v2.4</span>
           </div>
         </div>
 

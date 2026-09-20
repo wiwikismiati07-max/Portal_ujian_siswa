@@ -56,20 +56,12 @@ interface TeacherDashboardProps {
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, initialTab = 'paket_ujian' }) => {
   const [activeTab, setActiveTab] = useState<'rekap' | 'bank_soal' | 'paket_ujian'>(initialTab);
-  const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
-  const [searchSubjectQuery, setSearchSubjectQuery] = useState('');
-
-  useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
-  }, [initialTab]);
 
   const [exams, setExams] = useState<Exam[]>(getAllExams());
   const [questions, setQuestions] = useState<Question[]>(getAllQuestions());
   const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());
   const [submissions, setSubmissions] = useState<ExamSubmission[]>(getAllSubmissions());
-  
+
   // Multi-User Teacher Accounts
   const [allTeachers, setAllTeachers] = useState<User[]>(() => {
     const list = getAllUsers().filter(u => u.role === 'guru');
@@ -77,6 +69,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   });
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teacher.id);
   const activeTeacher = allTeachers.find(t => t.id === selectedTeacherId) || teacher;
+
+  const allSubjectNamesList = Array.from(
+    new Set([
+      ...(activeTeacher.subjectName ? [activeTeacher.subjectName] : []),
+      ...subjects.map(s => s.name),
+      ...exams.map(e => e.subjectName)
+    ])
+  );
+
+  // Auto-select subject by default so clicking menu 1 time goes directly to data input worksheet
+  const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(() => {
+    return activeTeacher.subjectName || allSubjectNamesList[0] || 'Ilmu Pengetahuan Alam (IPA)';
+  });
+
+  const [searchSubjectQuery, setSearchSubjectQuery] = useState('');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+    if (!selectedSubjectName) {
+      const defaultSubj = activeTeacher.subjectName || allSubjectNamesList[0] || 'Ilmu Pengetahuan Alam (IPA)';
+      setSelectedSubjectName(defaultSubj);
+    }
+  }, [initialTab, activeTeacher]);
 
   // Confirm Modal state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -182,14 +199,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     }
     setIsCreateExamOpen(true);
   };
-
-  // Collect all unique available subject names
-  const allSubjectNamesSet = new Set<string>();
-  subjects.forEach(s => allSubjectNamesSet.add(s.name));
-  exams.forEach(e => {
-    if (e.subjectName) allSubjectNamesSet.add(e.subjectName);
-  });
-  const allSubjectNamesList = Array.from(allSubjectNamesSet);
 
   // Filter dataset for current selected subject (if any)
   const displayExams = selectedSubjectName
@@ -575,25 +584,35 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                 className="p-2.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
               >
                 <ChevronLeft className="w-5 h-5" />
-                <span>Kembali ke Semua Mapel</span>
+                <span className="hidden sm:inline">Pilih Mapel Lain</span>
               </button>
               <div>
                 <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">
-                  Workspace Mata Pelajaran
+                  Workspace Lembar Input Data
                 </span>
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
-                  {selectedSubjectName}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <select
+                    value={selectedSubjectName || ''}
+                    onChange={(e) => setSelectedSubjectName(e.target.value)}
+                    className="bg-transparent text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight outline-none cursor-pointer border-b-2 border-dashed border-emerald-500 hover:border-emerald-700 py-0.5"
+                  >
+                    {allSubjectNamesList.map(sName => (
+                      <option key={sName} value={sName}>
+                        {sName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSelectedSubjectName(null)}
-              className="text-xs text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer"
-            >
-              Ganti Mata Pelajaran Lain
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-bold">Mata Pelajaran:</span>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-extrabold rounded-full border border-emerald-200">
+                {selectedSubjectName}
+              </span>
+            </div>
           </div>
 
           {/* Navigation Tabs for Selected Subject (No Print) */}
