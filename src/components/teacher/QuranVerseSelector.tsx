@@ -18,11 +18,13 @@ import {
   Hash,
   FileText,
   ChevronRight,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 
 interface QuranVerseSelectorProps {
   onInsertText: (text: string) => void;
+  onClose?: () => void;
 }
 
 // Helper to convert number to Arabic numeral: 1 -> ١, 255 -> ٢٥٥
@@ -35,7 +37,7 @@ const toArabicNumber = (num: number): string => {
     .join('');
 };
 
-export const QuranVerseSelector: React.FC<QuranVerseSelectorProps> = ({ onInsertText }) => {
+export const QuranVerseSelector: React.FC<QuranVerseSelectorProps> = ({ onInsertText, onClose }) => {
   // Navigation & Selection state
   const [selectedJuz, setSelectedJuz] = useState<number | 'all'>('all');
   const [selectedSurahNumber, setSelectedSurahNumber] = useState<number>(1);
@@ -315,7 +317,7 @@ export const QuranVerseSelector: React.FC<QuranVerseSelectorProps> = ({ onInsert
       </div>
 
       {/* Verses List Area */}
-      <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+      <div className="max-h-[210px] sm:max-h-[250px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
         {isLoading ? (
           <div className="py-12 text-center text-slate-500 space-y-2">
             <Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-600" />
@@ -394,6 +396,23 @@ export const QuranVerseSelector: React.FC<QuranVerseSelectorProps> = ({ onInsert
               </div>
             );
           })
+        )}
+      </div>
+
+      {/* Footer bar with Close & Status */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 text-xs">
+        <span className="text-[11px] text-slate-500 font-medium">
+          Menampilkan {verses.length} ayat dari QS. {currentSurah.nameLatin}
+        </span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1 bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Tutup Keyboard</span>
+          </button>
         )}
       </div>
     </div>

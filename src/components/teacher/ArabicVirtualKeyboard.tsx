@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Keyboard,
   X,
@@ -37,6 +37,18 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] = useState<'letters' | 'harakat' | 'phrases' | 'quran'>('letters');
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -84,10 +96,10 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
   ];
 
   return (
-    <div className={`fixed bottom-3 right-3 left-3 sm:left-auto sm:right-6 ${activeCategory === 'quran' ? 'sm:w-[740px] md:w-[820px] max-w-[96vw]' : 'sm:w-[680px]'} z-50 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in slide-in-from-bottom-5 duration-200`}>
+    <div className={`fixed bottom-2 right-2 left-2 sm:bottom-4 sm:right-4 sm:left-auto ${activeCategory === 'quran' ? 'sm:w-[740px] md:w-[820px] max-w-[96vw]' : 'sm:w-[680px]'} max-h-[88vh] flex flex-col z-50 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-300 overflow-hidden animate-in slide-in-from-bottom-5 duration-200`}>
       
       {/* Keyboard Header / Toolbar */}
-      <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 text-white flex items-center justify-between">
+      <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 text-white flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-emerald-500/30 flex items-center justify-center text-emerald-300">
             <Keyboard className="w-4 h-4" />
@@ -129,19 +141,20 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-300 hover:text-white rounded-md hover:bg-white/10 transition-colors cursor-pointer"
-            title="Tutup Keyboard"
+            className="px-2.5 py-1 text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors cursor-pointer text-xs font-bold flex items-center gap-1.5 shadow-xs"
+            title="Tutup Keyboard (Esc)"
           >
             <X className="w-4 h-4" />
+            <span>Tutup</span>
           </button>
         </div>
       </div>
 
-      {!isMinimized && (
-        <div className="p-3 bg-slate-50 space-y-2.5">
+      {!isMinimized ? (
+        <div className="p-3 bg-slate-50 space-y-2.5 flex-1 overflow-y-auto min-h-0">
           
           {/* Category Tabs */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2 flex-wrap gap-2">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2 flex-wrap gap-2 shrink-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
@@ -191,7 +204,7 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={onBackspace}
@@ -208,6 +221,15 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
                 title="Kosongkan Teks Kolom"
               >
                 Reset
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                title="Tutup Keyboard Arab (Esc)"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Tutup</span>
               </button>
             </div>
           </div>
@@ -354,9 +376,32 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
 
           {/* TAB 4: AL-QUR'AN 30 JUZ */}
           {activeCategory === 'quran' && (
-            <QuranVerseSelector onInsertText={onInsertChar} />
+            <QuranVerseSelector onInsertText={onInsertChar} onClose={onClose} />
           )}
 
+        </div>
+      ) : (
+        <div className="p-2.5 bg-slate-100 flex items-center justify-between text-xs text-slate-700 border-t border-slate-200">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="font-semibold text-slate-700">Keyboard Arab Diminimalkan</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMinimized(false)}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs cursor-pointer shadow-2xs transition-colors"
+            >
+              Buka Kembali
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-md text-xs cursor-pointer transition-colors"
+            >
+              Tutup
+            </button>
+          </div>
         </div>
       )}
 
