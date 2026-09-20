@@ -53,17 +53,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   const BadgeIcon = badge ? badge.icon : null;
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-xs transition-all no-print">
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-18">
+    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-xs transition-all no-print overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-18 gap-1.5 sm:gap-3">
           
           {/* Brand & Logo */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            <div className="relative shrink-0 flex items-center justify-center p-1 bg-white rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-2 sm:gap-3.5 min-w-0 flex-1 sm:flex-initial">
+            <div className="relative shrink-0 flex items-center justify-center p-0.5 sm:p-1 bg-white rounded-xl border border-slate-200 shadow-xs">
               <img
                 src="https://iili.io/KDFk4fI.png"
                 alt="Logo Portal Ujian Siswa"
-                className="h-8 sm:h-10 w-auto object-contain max-w-[110px] sm:max-w-[140px]"
+                className="h-7 sm:h-10 w-auto object-contain max-w-[80px] xs:max-w-[110px] sm:max-w-[140px]"
                 loading="eager"
                 onError={(e) => {
                   const target = e.currentTarget;
@@ -72,17 +72,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (fallback) fallback.classList.remove('hidden');
                 }}
               />
-              <div className="logo-fallback hidden flex items-center justify-center w-8 sm:w-10 h-8 sm:h-10 bg-indigo-600 rounded-lg text-white font-extrabold text-sm sm:text-base">
+              <div className="logo-fallback hidden flex items-center justify-center w-7 sm:w-10 h-7 sm:h-10 bg-indigo-600 rounded-lg text-white font-extrabold text-xs sm:text-base">
                 PU
               </div>
             </div>
 
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <span className="text-sm sm:text-lg lg:text-xl font-extrabold tracking-tight text-slate-900 truncate">
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <span className="text-xs xs:text-sm sm:text-lg lg:text-xl font-extrabold tracking-tight text-slate-900 truncate">
                   PORTAL UJIAN SISWA
                 </span>
-                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-extrabold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200 shrink-0">
+                <span className="inline-flex items-center px-1 sm:px-2 py-0.5 text-[9px] sm:text-[11px] font-extrabold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200 shrink-0">
                   SPANJU
                 </span>
               </div>
@@ -93,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* User Status & Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
             {/* PWA Install Button */}
             {!isExamLockActive && <PWAInstallButton variant="navbar" />}
 
@@ -103,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={onOpenSupabaseModal}
                 title="Status Sinkronisasi Cloud Supabase"
-                className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
+                className={`inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
                   supabaseStatus === 'connected'
                     ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200 hover:bg-emerald-100/90'
                     : supabaseStatus === 'needs_table_setup'
@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'bg-slate-100/90 text-slate-700 border-slate-200 hover:bg-slate-200'
                 }`}
               >
-                <Database className={`w-3.5 h-3.5 shrink-0 ${
+                <Database className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${
                   supabaseStatus === 'connected'
                     ? 'text-emerald-600'
                     : supabaseStatus === 'needs_table_setup'
@@ -119,7 +119,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-500'
                 }`} />
                 <span className="hidden md:inline">Cloud</span>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${
                   supabaseStatus === 'connected'
                     ? 'bg-emerald-500 ring-2 ring-emerald-300'
                     : supabaseStatus === 'needs_table_setup'

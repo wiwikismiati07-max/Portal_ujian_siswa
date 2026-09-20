@@ -168,13 +168,13 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     <div className="space-y-6">
       
       {/* Top Segmented Filter Tabs */}
-      <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 no-print">
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 no-print min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full pb-1 scrollbar-thin">
           {/* Semua */}
           <button
             type="button"
             onClick={() => { setIntegrityFilter('all'); setScoreFilter('all'); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               integrityFilter === 'all' && scoreFilter === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100/80 text-slate-700 hover:bg-slate-200/70'
@@ -193,7 +193,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <button
             type="button"
             onClick={() => { setScoreFilter(scoreFilter === 'zero' ? 'all' : 'zero'); setIntegrityFilter('all'); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               scoreFilter === 'zero'
                 ? 'bg-rose-600 text-white shadow-xs'
                 : 'bg-rose-50 text-rose-800 hover:bg-rose-100/80 border border-rose-200/70'
@@ -212,7 +212,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <button
             type="button"
             onClick={() => { setIntegrityFilter(integrityFilter === 'clean' ? 'all' : 'clean'); setScoreFilter('all'); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               integrityFilter === 'clean'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100/80 border border-emerald-200/60'
@@ -231,7 +231,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <button
             type="button"
             onClick={() => { setIntegrityFilter(integrityFilter === 'violated' ? 'all' : 'violated'); setScoreFilter('all'); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
               integrityFilter === 'violated'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'bg-amber-50 text-amber-900 hover:bg-amber-100/80 border border-amber-200/60'
@@ -250,7 +250,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             <button
               type="button"
               onClick={() => { setIntegrityFilter(integrityFilter === 'critical' ? 'all' : 'critical'); setScoreFilter('all'); }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                 integrityFilter === 'critical'
                   ? 'bg-rose-700 text-white shadow-xs'
                   : 'bg-rose-50 text-rose-800 hover:bg-rose-100/80 border border-rose-200/60'
@@ -268,7 +268,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         </div>
 
         {/* Quick action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
           <button
             type="button"
             onClick={handleExportExcel}
@@ -276,7 +276,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             title="Unduh format spreadsheet .xlsx"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span className="hidden sm:inline">Ekspor Excel</span>
+            <span>Ekspor Excel</span>
           </button>
 
           <button
@@ -286,24 +286,24 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             title="Cetak format cetak resmi / PDF"
           >
             <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Cetak Rekap</span>
+            <span>Cetak Rekap</span>
           </button>
         </div>
       </div>
 
       {/* Top Filter Bar (Exam, Class, Score, Search) */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 no-print min-w-0">
         
         {/* Dropdowns */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 min-w-0 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
               Paket Ujian:
             </label>
             <select
               value={selectedExamId}
               onChange={(e) => setSelectedExamId(e.target.value)}
-              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 max-w-xs"
+              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 w-full sm:max-w-xs truncate"
             >
               <option value="all">-- Semua Paket Ujian --</option>
               {exams.map(e => (
@@ -314,14 +314,14 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
               Kelas:
             </label>
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 w-full sm:w-auto"
             >
               <option value="all">Semua Kelas</option>
               {availableClasses.map(c => (
@@ -330,14 +330,14 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+            <label className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide shrink-0">
               Nilai:
             </label>
             <select
               value={scoreFilter}
               onChange={(e) => setScoreFilter(e.target.value as any)}
-              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 w-full sm:w-auto"
             >
               <option value="all">Semua Nilai</option>
               <option value="zero">🔴 Nilai 0 / Belum Selesai</option>
