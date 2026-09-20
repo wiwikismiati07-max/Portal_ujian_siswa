@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, UserRole, Subject } from '../../types';
+import { User, UserRole, Subject, Exam, ExamSubmission } from '../../types';
 import {
   getAllUsers,
   saveUsers,
   getAllSubjects,
+  getAllExams,
+  getAllSubmissions,
   resetToInitialData,
   updateUserCredentials,
   deleteUser,
@@ -14,6 +16,7 @@ import {
 } from '../../utils/storage';
 import { cleanAndDeduplicateUsers } from '../../utils/userDeduplication';
 import { ExcelManager } from '../teacher/ExcelManager';
+import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
 import { SUPABASE_SETUP_SQL } from '../../utils/supabaseClient';
 import { ConfirmModal } from '../ConfirmModal';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
@@ -39,7 +42,8 @@ import {
   Filter,
   X,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  BarChart3
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -47,7 +51,11 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
+  const [activeTab, setActiveTab] = useState<'users' | 'rekap'>('users');
   const [users, setUsers] = useState<User[]>(getAllUsers());
+  const [exams, setExams] = useState<Exam[]>(getAllExams());
+  const [submissions, setSubmissions] = useState<ExamSubmission[]>(getAllSubmissions());
+  const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -95,6 +103,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   useEffect(() => {
     const handleUpdate = () => {
       setUsers(getAllUsers());
+      setExams(getAllExams());
+      setSubmissions(getAllSubmissions());
+      setSubjects(getAllSubjects());
     };
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
@@ -418,7 +429,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         </div>
       </div>
 
-      {/* Duplicate Notice Banner */}
+      {/* Primary Navigation Tabs */}
+      <div className="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-2xl w-full sm:w-fit no-print overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('users')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'users'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Users className="w-4 h-4 text-rose-800" />
+          <span>Kelola Pengguna & Akun ({users.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('rekap')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'rekap'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-indigo-600" />
+          <span>Rekap Nilai & Audit Integritas ({submissions.length})</span>
+        </button>
+      </div>
+
+      {/* TAB 2: REKAPITULASI NILAI & INTEGRITAS */}
+      {activeTab === 'rekap' && (
+        <ClassScoreRecap
+          submissions={submissions}
+          exams={exams}
+          subjects={subjects}
+        />
+      )}
+
+      {/* TAB 1: USER MANAGEMENT */}
+      {activeTab === 'users' && (
+        <>
+          {/* Duplicate Notice Banner */}
       {duplicateReport.duplicateCount > 0 && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in fade-in">
           <div className="flex items-start gap-3">
@@ -788,6 +840,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* ADD / EDIT USER MODAL */}

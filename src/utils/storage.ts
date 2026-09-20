@@ -1,4 +1,4 @@
-import { User, Subject, Exam, Question, ExamSubmission } from '../types';
+import { User, Subject, Exam, Question, ExamSubmission, ViolationLog } from '../types';
 import {
   INITIAL_USERS,
   INITIAL_SUBJECTS,
@@ -462,6 +462,22 @@ export const saveSubmissions = (submissions: ExamSubmission[], syncToDb = true):
   notifyDataUpdated();
 };
 
+export const saveSingleSubmission = (submission: ExamSubmission): void => {
+  const current = getAllSubmissions();
+  const existingIndex = current.findIndex(
+    s => s.id === submission.id || (s.examId === submission.examId && s.studentId === submission.studentId)
+  );
+  let updated: ExamSubmission[];
+  if (existingIndex >= 0) {
+    updated = [...current];
+    updated[existingIndex] = submission;
+  } else {
+    updated = [submission, ...current];
+  }
+  saveSubmissions(updated, true);
+  syncSubmissionToSupabase(submission).catch(() => {});
+};
+
 // Calculate automated grading for student submission
 export const gradeSubmission = (
   exam: Exam,
@@ -469,7 +485,8 @@ export const gradeSubmission = (
   student: User,
   studentAnswers: Record<string, any>,
   violationCount: number,
-  startedAt: string
+  startedAt: string,
+  violationLogs: ViolationLog[] = []
 ): ExamSubmission => {
   let earnedScore = 0;
   let totalPossible = 0;
@@ -616,25 +633,20 @@ export const gradeSubmission = (
     studentId: student.id,
     studentName: student.name,
     studentClass: student.classGroup || 'Umum',
+    studentNipOrNis: student.nipOrNis || undefined,
     answers: studentAnswers,
     earnedScore,
     totalScore: totalPossible,
     percentage,
     passed,
     violationCount,
-    startedAt,
+    violationLogs: [...violationLogs],
+    startedAt: startedAt || new Date().toISOString(),
     submittedAt: new Date().toISOString(),
     evaluatedAnswers
   };
 
-  const allSubmissions = getAllSubmissions();
-  const updated = [
-    submission,
-    ...allSubmissions.filter(s => !(s.examId === exam.id && s.studentId === student.id))
-  ];
-  saveSubmissions(updated, true);
-  syncSubmissionToSupabase(submission).catch(() => {});
-
+  saveSingleSubmission(submission);
   return submission;
 };
 

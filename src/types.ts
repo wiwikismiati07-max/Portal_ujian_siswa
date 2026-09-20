@@ -74,6 +74,14 @@ export interface Exam {
   createdAt: string;
 }
 
+export interface ViolationLog {
+  id: string;
+  timestamp: string; // ISO string
+  formattedTime: string; // e.g. "08:15:32"
+  reason: string; // e.g. "Beralih tab browser / meminimalkan layar"
+  violationNumber: number; // e.g. 1, 2, 3
+}
+
 export interface ExamSubmission {
   id: string;
   examId: string;
@@ -82,12 +90,14 @@ export interface ExamSubmission {
   studentId: string;
   studentName: string;
   studentClass: string;
+  studentNipOrNis?: string;
   answers: Record<string, any>; // questionId -> student answer
   earnedScore: number;
   totalScore: number;
   percentage: number;
   passed: boolean;
   violationCount: number;
+  violationLogs?: ViolationLog[];
   startedAt: string;
   submittedAt: string;
   evaluatedAnswers?: Record<

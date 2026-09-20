@@ -1,4 +1,4 @@
-import { Exam, Question, User, ExamSubmission } from '../types';
+import { Exam, Question, User, ExamSubmission, ViolationLog } from '../types';
 
 export function gradeSubmission(
   exam: Exam,
@@ -6,7 +6,8 @@ export function gradeSubmission(
   student: User,
   answers: Record<string, any>,
   violationCount: number,
-  startedAt: string
+  startedAt: string,
+  violationLogs: ViolationLog[] = []
 ): ExamSubmission {
   let earnedScore = 0;
   const evaluatedAnswers: ExamSubmission['evaluatedAnswers'] = {};
@@ -109,13 +110,15 @@ export function gradeSubmission(
     studentId: student.id,
     studentName: student.name,
     studentClass: student.classGroup || '',
+    studentNipOrNis: student.nipOrNis || undefined,
     answers,
     earnedScore,
     totalScore: totalMaxScore,
     percentage,
     passed,
     violationCount,
-    startedAt,
+    violationLogs: [...violationLogs],
+    startedAt: startedAt || new Date().toISOString(),
     submittedAt: new Date().toISOString(),
     evaluatedAnswers
   };

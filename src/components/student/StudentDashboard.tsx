@@ -10,6 +10,7 @@ import {
   Play,
   Award,
   ShieldAlert,
+  ShieldCheck,
   Calendar,
   Layers,
   FileCheck,
@@ -190,18 +191,35 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
                   {/* Action or Score display */}
                   {isCompleted && submission ? (
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-slate-500 block">Nilai Anda:</span>
-                        <span className="text-lg font-extrabold text-indigo-700">
-                          {submission.earnedScore} / {submission.totalScore} ({submission.percentage}%)
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-slate-500 block">Nilai Anda:</span>
+                          <span className="text-lg font-extrabold text-indigo-700">
+                            {submission.earnedScore} / {submission.totalScore} ({submission.percentage}%)
+                          </span>
+                        </div>
+                        <span className={`px-3 py-1 rounded-lg font-bold ${
+                          submission.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {submission.passed ? 'TUNTAS' : 'REMEDIAL'}
                         </span>
                       </div>
-                      <span className={`px-3 py-1 rounded-lg font-bold ${
-                        submission.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {submission.passed ? 'TUNTAS' : 'REMEDIAL'}
-                      </span>
+                      
+                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">Integritas Pengerjaan:</span>
+                        {(submission.violationCount || 0) === 0 ? (
+                          <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Tertib (0 Pelanggaran)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-bold text-amber-700">
+                            <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Terdeteksi {submission.violationCount}x Beralih Layar</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <button

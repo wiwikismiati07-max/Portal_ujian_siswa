@@ -418,18 +418,53 @@ export const exportExamResultsToExcel = (
   className?: string
 ) => {
   const wb = XLSX.utils.book_new();
-  const rows = submissions.map((sub, idx) => ({
-    'No': idx + 1,
-    'Nama Siswa': sub.studentName,
-    'Kelas': sub.studentClass,
-    'Mata Pelajaran': sub.subjectName,
-    'Judul Ujian': sub.examTitle,
-    'Nilai Skor': sub.percentage,
-    'Skor Diperoleh': `${sub.earnedScore} / ${sub.totalScore}`,
-    'Status Kelulusan': sub.passed ? 'LULUS (TUNTAS)' : 'BELUM TUNTAS',
-    'Jumlah Pelanggaran Layar': sub.violationCount || 0,
-    'Waktu Selesai': sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('id-ID') : '-'
-  }));
+  const rows = submissions.map((sub, idx) => {
+    // Format duration
+    let durationText = '-';
+    if (sub.startedAt && sub.submittedAt) {
+      const diffMs = Math.max(0, new Date(sub.submittedAt).getTime() - new Date(sub.startedAt).getTime());
+      const mins = Math.floor(diffMs / 60000);
+      const secs = Math.floor((diffMs % 60000) / 1000);
+      durationText = `${mins} menit ${secs} detik`;
+    }
+
+    // Format violation log trail
+    let violationAuditTrail = 'Tertib (0 Pelanggaran)';
+    if (sub.violationLogs && Array.isArray(sub.violationLogs) && sub.violationLogs.length > 0) {
+      violationAuditTrail = sub.violationLogs
+        .map((v: any, vIdx: number) => {
+          const time = v.formattedTime || (v.timestamp ? new Date(v.timestamp).toLocaleTimeString('id-ID') : '-');
+          const num = v.violationNumber || vIdx + 1;
+          return `[#${num} ${time}] ${v.reason}`;
+        })
+        .join(' | ');
+    } else if ((sub.violationCount || 0) > 0) {
+      violationAuditTrail = `Terdeteksi ${sub.violationCount}x beralih layar / tab`;
+    }
+
+    return {
+      'No': idx + 1,
+      'Nama Siswa': sub.studentName,
+      'NIS / NIP': sub.studentNipOrNis || '-',
+      'Kelas': sub.studentClass,
+      'Mata Pelajaran': sub.subjectName,
+      'Judul Ujian': sub.examTitle,
+      'Nilai Skor': sub.percentage,
+      'Skor Diperoleh': `${sub.earnedScore} / ${sub.totalScore}`,
+      'Status Kelulusan': sub.passed ? 'LULUS (TUNTAS)' : 'BELUM TUNTAS',
+      'Status Integritas Lockdown':
+        (sub.violationCount || 0) === 0
+          ? 'TERTIB (0 Pelanggaran)'
+          : (sub.violationCount || 0) >= 3
+          ? `KRITIS (${sub.violationCount}x Auto-Submit)`
+          : `MELANGGAR (${sub.violationCount}x Beralih Layar)`,
+      'Jumlah Pelanggaran': sub.violationCount || 0,
+      'Waktu Masuk / Login': sub.startedAt ? new Date(sub.startedAt).toLocaleString('id-ID') : '-',
+      'Waktu Selesai (Submit)': sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('id-ID') : '-',
+      'Durasi Pengerjaan': durationText,
+      'Rekam Jejak & Deskripsi Pelanggaran': violationAuditTrail
+    };
+  });
 
   const ws = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, 'Rekap_Nilai');

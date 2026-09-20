@@ -14,16 +14,22 @@ import {
   Check,
   RotateCcw,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
+  AlertOctagon,
   Lock,
   ZoomIn,
   ZoomOut,
   X,
   Eye,
-  Volume2
+  Volume2,
+  Calendar,
+  FileText
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Exam, Question, User, ExamSubmission } from '../../types';
+import { Exam, Question, User, ExamSubmission, ViolationLog } from '../../types';
 import { gradeSubmission } from '../../utils/examGrader';
+import { saveSingleSubmission } from '../../utils/storage';
 
 interface ExamWorksheetProps {
   exam: Exam;
@@ -45,11 +51,12 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
-  const [startedAt] = useState<string>(new Date().toISOString());
+  const [startedAt] = useState<string>(() => new Date().toISOString());
 
   // CBT Safe Exam Lockdown state (Automatic lock on mount)
   const [isLockdownStarted, setIsLockdownStarted] = useState(true);
   const [violationCount, setViolationCount] = useState(0);
+  const [violationLogs, setViolationLogs] = useState<ViolationLog[]>([]);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationReason, setViolationReason] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -62,8 +69,19 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lastViolationTimeRef = useRef<number>(0);
+  const violationCountRef = useRef<number>(0);
+  const violationLogsRef = useRef<ViolationLog[]>([]);
   const audioCtxRef = useRef<any>(null);
   const currentQ = questions[currentIndex];
+
+  // Keep refs in sync
+  useEffect(() => {
+    violationCountRef.current = violationCount;
+  }, [violationCount]);
+
+  useEffect(() => {
+    violationLogsRef.current = violationLogs;
+  }, [violationLogs]);
 
   // Initialize and unlock audio context on mobile & desktop user interaction
   const initOrResumeAudio = useCallback(() => {
@@ -288,23 +306,51 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     setViolationReason(reason);
     setShowViolationModal(true);
 
-    setViolationCount(prev => {
-      const updated = prev + 1;
-      // Auto-submit if violation reaches 3 (strict limit)
-      if (updated >= 3) {
-        setTimeout(() => {
-          handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (3 kali beralih jendela/aplikasi). Ujian otomatis dihentikan dan dikumpulkan ke pengawas.');
-        }, 1200);
-      }
-      return updated;
+    violationCountRef.current += 1;
+    const currentCount = violationCountRef.current;
+    const nowIso = new Date().toISOString();
+    const formattedTime = new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
+
+    const newLog: ViolationLog = {
+      id: `viol_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: nowIso,
+      formattedTime,
+      reason,
+      violationNumber: currentCount
+    };
+
+    violationLogsRef.current = [...violationLogsRef.current, newLog];
+    setViolationLogs(violationLogsRef.current);
+    setViolationCount(currentCount);
+
+    // Auto-submit if violation reaches 3 (strict limit)
+    if (currentCount >= 3) {
+      setTimeout(() => {
+        handleForceSubmit('Batas toleransi pelanggaran lockdown terlampaui (3 kali beralih jendela/aplikasi). Ujian otomatis dihentikan dan dikumpulkan ke pengawas.');
+      }, 1200);
+    }
   };
 
   const handleForceSubmit = (msg?: string) => {
     if (submittedResult) return;
     setShowViolationModal(false);
     setShowFinishConfirm(false);
-    const result = gradeSubmission(exam, questions, student, answers, violationCount, startedAt);
+
+    const result = gradeSubmission(
+      exam,
+      questions,
+      student,
+      answers,
+      violationCountRef.current,
+      startedAt,
+      violationLogsRef.current
+    );
+
+    saveSingleSubmission(result);
     setSubmittedResult(result);
     onFinishExam(result);
   };
@@ -373,12 +419,21 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
   // POST-EXAM RESULT SCREEN (Displayed ONLY after exam is submitted)
   if (submittedResult) {
+    const startObj = new Date(submittedResult.startedAt);
+    const submitObj = new Date(submittedResult.submittedAt);
+    const diffMs = Math.max(0, submitObj.getTime() - startObj.getTime());
+    const durationMins = Math.floor(diffMs / 60000);
+    const durationSecs = Math.floor((diffMs % 60000) / 1000);
+
+    const logs = submittedResult.violationLogs || [];
+    const isClean = submittedResult.violationCount === 0;
+
     return (
       <div className="fixed inset-0 z-[99999] w-screen h-screen overflow-y-auto bg-slate-900 py-8 px-4 sm:px-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
-        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden text-center p-6 sm:p-10 max-w-3xl w-full">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden text-center p-6 sm:p-8 max-w-3xl w-full my-auto">
           
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-5">
-            <Award className="w-10 h-10" />
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4">
+            <Award className="w-8 h-8" />
           </div>
 
           <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 mb-2">
@@ -388,29 +443,29 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Lembar Jawaban Berhasil Dikumpulkan
           </h2>
-          <p className="text-sm text-slate-500 max-w-md mx-auto mt-2">
-            Terima kasih telah mengerjakan ujian dengan tertib dan jujur. Kunci layar kini telah dibuka kembali.
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1">
+            Terima kasih telah mengerjakan ujian. Rekam jejak pengerjaan dan integritas telah tercatat di sistem pengawas.
           </p>
 
           {/* Score Card */}
-          <div className="my-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl mx-auto">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="text-xs font-semibold text-slate-500 block mb-1">Skor Diperoleh</span>
-              <span className="text-3xl font-extrabold text-indigo-600">
-                {submittedResult.earnedScore} <span className="text-sm font-medium text-slate-400">/ {submittedResult.totalScore}</span>
+          <div className="my-6 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto">
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span className="text-[11px] font-semibold text-slate-500 block mb-0.5">Skor Diperoleh</span>
+              <span className="text-2xl font-extrabold text-indigo-600">
+                {submittedResult.earnedScore} <span className="text-xs font-medium text-slate-400">/ {submittedResult.totalScore}</span>
               </span>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="text-xs font-semibold text-slate-500 block mb-1">Persentase Nilai</span>
-              <span className={`text-3xl font-extrabold ${submittedResult.percentage >= (exam.passingScore || 75) ? 'text-emerald-600' : 'text-amber-600'}`}>
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span className="text-[11px] font-semibold text-slate-500 block mb-0.5">Persentase Nilai</span>
+              <span className={`text-2xl font-extrabold ${submittedResult.percentage >= (exam.passingScore || 75) ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {submittedResult.percentage}%
               </span>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <span className="text-xs font-semibold text-slate-500 block mb-1">Keterangan</span>
-              <span className={`inline-block mt-1 px-3 py-1 rounded-xl text-xs font-bold ${
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span className="text-[11px] font-semibold text-slate-500 block mb-0.5">Status Kelulusan</span>
+              <span className={`inline-block mt-0.5 px-3 py-1 rounded-xl text-xs font-bold ${
                 submittedResult.passed
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-rose-100 text-rose-800'
@@ -420,21 +475,102 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             </div>
           </div>
 
-          {/* Integrity Note */}
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs text-slate-600 max-w-xl mx-auto mb-8 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700">Nama Siswa:</span>
-              <span className="font-medium">{student.name} ({student.classGroup})</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700">Mata Pelajaran:</span>
-              <span className="font-medium">{exam.subjectName}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700">Catatan Pelanggaran Layar:</span>
-              <span className={`font-bold ${submittedResult.violationCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {submittedResult.violationCount === 0 ? '0 (Sempurna / Disiplin)' : `${submittedResult.violationCount} kali tercatat`}
+          {/* Session Timing & Track Record Details */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left text-xs text-slate-600 max-w-xl mx-auto mb-4 space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Sesi & Waktu Pengerjaan:
               </span>
+              <span className="text-slate-500 font-mono text-[11px]">
+                {startObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+              <div>
+                <span className="text-slate-400 block">Waktu Masuk / Login:</span>
+                <span className="font-bold text-slate-800 font-mono">
+                  {startObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Waktu Selesai (Submit):</span>
+                <span className="font-bold text-slate-800 font-mono">
+                  {submitObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-slate-400 block">Durasi Pengerjaan:</span>
+                <span className="font-bold text-indigo-700 font-mono">
+                  {durationMins} m {durationSecs} d
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Integrity Audit Trail */}
+          <div className={`p-4 rounded-2xl border text-left text-xs max-w-xl mx-auto mb-6 ${
+            isClean
+              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+              : submittedResult.violationCount >= 3
+              ? 'bg-rose-50 border-rose-300 text-rose-950'
+              : 'bg-amber-50/70 border-amber-300 text-amber-950'
+          }`}>
+            <div className="flex items-start gap-2.5">
+              {isClean ? (
+                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : submittedResult.violationCount >= 3 ? (
+                <AlertOctagon className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              ) : (
+                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs">
+                    {isClean
+                      ? 'Rekam Jejak Integritas: Sangat Disiplin & Tertib'
+                      : `Rekam Jejak Pelanggaran: ${submittedResult.violationCount} Kali Terdeteksi`}
+                  </h4>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    isClean
+                      ? 'bg-emerald-200/80 text-emerald-900'
+                      : 'bg-rose-200 text-rose-900'
+                  }`}>
+                    {isClean ? '0 Pelanggaran' : `${submittedResult.violationCount}x Pelanggaran`}
+                  </span>
+                </div>
+
+                {isClean ? (
+                  <p className="text-[11px] mt-1 opacity-90 leading-relaxed">
+                    Siswa menyelesaikan seluruh soal dalam mode layar penuh terkunci tanpa beralih jendela/tab.
+                  </p>
+                ) : (
+                  <div className="mt-2.5 space-y-1.5">
+                    <p className="text-[11px] font-medium opacity-90">
+                      Rincian catatan pelanggaran yang terekam pada lembar jawaban:
+                    </p>
+                    <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200/80 space-y-1.5">
+                      {logs.length > 0 ? (
+                        logs.map((v, i) => (
+                          <div key={v.id || i} className="flex items-start gap-2 text-[11px] text-slate-800">
+                            <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-mono font-bold text-[10px] shrink-0">
+                              #{v.violationNumber || i + 1}
+                            </span>
+                            <span className="font-mono text-slate-500 text-[10px] shrink-0">
+                              [{v.formattedTime || (v.timestamp ? new Date(v.timestamp).toLocaleTimeString('id-ID') : '-')}]
+                            </span>
+                            <span className="flex-1 font-medium">{v.reason}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-[11px] text-slate-700">
+                          Terdeteksi {submittedResult.violationCount} kali meminimalkan layar atau berpindah aplikasi.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -479,264 +615,221 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             <button
               type="button"
               onClick={enterFullscreen}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
-              <Maximize2 className="w-5 h-5" />
-              <span>KUNCI LAYAR CBT & KERJAKAN SOAL SEKARANG</span>
+              <Maximize2 className="w-4 h-4" />
+              <span>KUNCI LAYAR & MULAI KERJAKAN SOAL</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Lockdown Status Banner */}
-      <div className="bg-slate-900 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-3 shadow-md z-30 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span className="font-bold flex items-center gap-1.5 text-amber-300">
-            <Lock className="w-3.5 h-3.5" />
-            LOCKDOWN AKTIF
-          </span>
-          <span className="hidden sm:inline text-slate-400">|</span>
-          <span className="hidden sm:inline text-slate-300 font-medium truncate max-w-md">
-            {exam.title}
-          </span>
-        </div>
+      {/* HEADER BAR */}
+      <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          
+          {/* Exam Title & Subject */}
+          <div className="flex items-center gap-2 sm:gap-3 overflow-hidden">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="truncate">
+              <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                {exam.title}
+              </h1>
+              <span className="text-[11px] text-slate-500 font-medium block truncate">
+                {exam.subjectName} • {student.name} ({student.classGroup || 'Umum'})
+              </span>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 text-slate-300">
-            <span className="text-slate-400">Pelanggaran:</span>
-            <span className={`font-bold px-1.5 py-0.5 rounded text-[11px] ${
-              violationCount > 0 ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-300'
-            }`}>
-              {violationCount} / 3
+          {/* Center Timer Display */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl shadow-xs shrink-0">
+            <Clock className={`w-4 h-4 ${timeLeftSeconds < 300 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`} />
+            <span className={`font-mono text-xs sm:text-sm font-extrabold ${timeLeftSeconds < 300 ? 'text-rose-300' : 'text-white'}`}>
+              {formatTime(timeLeftSeconds)}
             </span>
           </div>
 
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-mono font-bold text-sm ${
-            timeLeftSeconds < 300 ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-amber-300'
-          }`}>
-            <Clock className="w-4 h-4" />
-            <span>{formatTime(timeLeftSeconds)}</span>
-          </div>
-
-          {!isFullscreen && (
-            <button
-              type="button"
-              onClick={enterFullscreen}
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              <Maximize2 className="w-3 h-3" /> Kunci Fullscreen
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Examination Layout */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left / Center: Active Question Sheet (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          
-          {/* Question Header */}
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="px-3 py-1 bg-indigo-600 text-white font-bold text-sm rounded-lg shadow-xs">
-                Soal Nomor {currentIndex + 1}
-              </span>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-200/80 text-slate-700 uppercase tracking-wide">
-                {currentQ.type.replace('_', ' ')}
-              </span>
+          {/* Right Status (Lockdown Active / Violation Counter) */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
+              <Shield className="w-3.5 h-3.5" />
+              <span>Lockdown Aktif</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500">
-                Bobot: <span className="text-indigo-600">{currentQ.points} Poin</span>
-              </span>
-              <button
-                type="button"
-                onClick={toggleFlagCurrent}
-                className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                  flagged[currentQ.id]
-                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <Flag className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Ragu-ragu</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Question Body with specific question-type layouts */}
-          <div className="p-6 sm:p-8 flex-1 overflow-y-auto">
-            
-            {/* Case study stimulus banner if applicable */}
-            {currentQ.caseContext && (
-              <div className="mb-6 p-4 bg-amber-50/80 rounded-2xl border border-amber-200">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">
-                  <BookOpen className="w-4 h-4 text-amber-700" />
-                  Wacana / Skenario Studi Kasus
-                </div>
-                <p className="text-xs sm:text-sm text-amber-950 font-serif leading-relaxed whitespace-pre-line">
-                  {currentQ.caseContext}
-                </p>
+            {violationCount > 0 && (
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-extrabold animate-pulse">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Pelanggaran: {violationCount}/3</span>
               </div>
             )}
+          </div>
 
-            {/* Prompt Image with Safe In-App Lightbox */}
-            {currentQ.imageUrl && (
-              <div className="mb-6 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-3 max-w-xl mx-auto shadow-2xs">
-                <div className="relative group cursor-pointer" onClick={() => { setZoomedImageUrl(currentQ.imageUrl || null); setImageScale(1); }}>
-                  <img
-                    src={currentQ.imageUrl}
-                    alt="Gambar Butir Soal"
-                    className="max-h-72 w-auto object-contain rounded-xl transition-transform duration-200"
-                  />
-                  <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white text-xs font-bold gap-1.5">
-                    <Eye className="w-4 h-4" /> Perbesar Gambar
-                  </div>
-                </div>
-                <span className="text-[11px] text-slate-400 mt-2 italic">
-                  * Klik gambar untuk memperbesar secara aman di dalam lembar ujian
+        </div>
+      </header>
+
+      {/* MAIN CONTAINER */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        
+        {/* LEFT COLUMN: QUESTION CONTENT (8 cols) */}
+        <div className="lg:col-span-8 flex flex-col gap-4">
+          
+          {/* Question Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex-1 flex flex-col">
+            
+            {/* Question Card Header */}
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-indigo-600 text-white text-xs font-extrabold rounded-lg">
+                  Soal #{currentIndex + 1}
+                </span>
+                <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
+                  {currentQ.type === 'single_choice' && 'Pilihan Ganda (1 Jawaban)'}
+                  {currentQ.type === 'multiple_choice' && 'Pilihan Majemuk (Banyak Jawaban)'}
+                  {currentQ.type === 'true_false' && 'Benar / Salah'}
+                  {currentQ.type === 'matching' && 'Menjodohkan (Matching)'}
+                  {currentQ.type === 'case_study' && 'Studi Kasus / Uraian'}
                 </span>
               </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">
+                  Bobot: {currentQ.points} Poin
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleFlagCurrent}
+                  className={`p-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                    flagged[currentQ.id]
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                  title="Tandai ragu-ragu"
+                >
+                  <Flag className={`w-3.5 h-3.5 ${flagged[currentQ.id] ? 'fill-amber-600' : ''}`} />
+                  <span className="hidden sm:inline">Ragu-ragu</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Stimulus / Case Context if present */}
+            {currentQ.caseContext && (
+              <div className="mb-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl text-xs sm:text-sm text-slate-800 leading-relaxed font-normal">
+                <span className="font-bold text-indigo-700 block mb-1">Stimulus / Teks Bacaan:</span>
+                {currentQ.caseContext}
+              </div>
             )}
 
-            <div
-              className={`text-base sm:text-lg font-semibold text-slate-900 leading-relaxed mb-6 ${
-                /[\u0600-\u06FF]/.test(currentQ.prompt) ? 'font-arabic text-xl leading-loose' : ''
-              }`}
-              dir={/[\u0600-\u06FF]/.test(currentQ.prompt) ? 'rtl' : 'ltr'}
-            >
+            {/* Question Prompt */}
+            <div className="text-sm sm:text-base text-slate-900 leading-relaxed font-medium mb-5">
               {currentQ.prompt}
             </div>
 
-            {/* TYPE 1: PILIHAN GANDA TUNGGAL */}
+            {/* Question Image if present */}
+            {currentQ.imageUrl && (
+              <div className="mb-5 relative group max-w-lg">
+                <img
+                  src={currentQ.imageUrl}
+                  alt="Ilustrasi Soal"
+                  className="rounded-xl border border-slate-200 max-h-60 w-auto object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                  onClick={() => {
+                    setZoomedImageUrl(currentQ.imageUrl || null);
+                    setImageScale(1);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoomedImageUrl(currentQ.imageUrl || null);
+                    setImageScale(1);
+                  }}
+                  className="absolute bottom-2 right-2 px-2.5 py-1 bg-slate-900/80 text-white text-[10px] font-bold rounded-lg backdrop-blur-xs flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity"
+                >
+                  <ZoomIn className="w-3 h-3" /> Perbesar Gambar
+                </button>
+              </div>
+            )}
+
+            {/* QUESTION TYPES INPUTS */}
+            
+            {/* TYPE 1: PILIHAN GANDA TUNGGAL (Single Choice) */}
             {currentQ.type === 'single_choice' && currentQ.options && (
-              <div className="space-y-3">
-                {currentQ.options.map((option, idx) => {
-                  const letter = String.fromCharCode(65 + idx);
-                  const isSelected = answers[currentQ.id] === idx;
-                  const optImg = currentQ.optionImages?.[idx];
-                  const isOptArabic = /[\u0600-\u06FF]/.test(option);
+              <div className="space-y-2.5">
+                {currentQ.options.map((opt, optIdx) => {
+                  const isSelected = answers[currentQ.id] === optIdx;
+                  const letter = String.fromCharCode(65 + optIdx);
 
                   return (
                     <button
-                      key={idx}
+                      key={optIdx}
                       type="button"
-                      onClick={() => setAnswerForCurrent(idx)}
-                      className={`w-full text-left p-4 rounded-xl border text-sm transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-3 cursor-pointer ${
+                      onClick={() => setAnswerForCurrent(optIdx)}
+                      className={`w-full p-3.5 sm:p-4 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
-                          ? 'bg-indigo-50/80 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
-                          : 'bg-white border-slate-200 hover:bg-slate-50/80 text-slate-800'
+                          ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500 text-indigo-950 font-semibold shadow-xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800'
                       }`}
                     >
-                      <div className="flex items-start gap-3.5 flex-1">
-                        <span
-                          className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center font-bold text-xs transition-colors ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {letter}
-                        </span>
-                        <span className={`leading-relaxed mt-0.5 ${isOptArabic ? 'font-arabic text-base' : ''}`} dir={isOptArabic ? 'rtl' : 'ltr'}>
-                          {option}
-                        </span>
-                      </div>
-
-                      {optImg && (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setZoomedImageUrl(optImg);
-                            setImageScale(1);
-                          }}
-                          className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start group relative"
-                        >
-                          <img
-                            src={optImg}
-                            alt={`Opsi ${letter}`}
-                            className="h-20 sm:h-24 w-auto max-w-[180px] object-contain rounded-lg"
-                          />
-                        </div>
-                      )}
+                      <span className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      }`}>
+                        {letter}
+                      </span>
+                      <span className="text-xs sm:text-sm leading-relaxed flex-1">
+                        {opt}
+                      </span>
                     </button>
                   );
                 })}
               </div>
             )}
 
-            {/* TYPE 2: PILIHAN GANDA KOMPLEKS (Multi-select) */}
+            {/* TYPE 2: PILIHAN GANDA KOMPLEKS (Multiple Choice - Checkbox) */}
             {currentQ.type === 'multiple_choice' && currentQ.options && (
-              <div className="space-y-3">
-                <div className="text-xs text-indigo-700 font-semibold bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100 mb-3 flex items-center gap-2">
-                  <CheckSquare className="w-4 h-4" />
-                  <span>Pilihan Ganda Kompleks: Anda dapat mencentang lebih dari satu pilihan yang benar.</span>
+              <div className="space-y-2.5">
+                <div className="text-xs text-slate-500 mb-2">
+                  (Pilih semua jawaban yang benar):
                 </div>
-                {currentQ.options.map((option, idx) => {
-                  const letter = String.fromCharCode(65 + idx);
-                  const selectedArr: number[] = Array.isArray(answers[currentQ.id]) ? answers[currentQ.id] : [];
-                  const isSelected = selectedArr.includes(idx);
-                  const optImg = currentQ.optionImages?.[idx];
-                  const isOptArabic = /[\u0600-\u06FF]/.test(option);
+                {currentQ.options.map((opt, optIdx) => {
+                  const currentSelected: number[] = Array.isArray(answers[currentQ.id]) ? answers[currentQ.id] : [];
+                  const isSelected = currentSelected.includes(optIdx);
+                  const letter = String.fromCharCode(65 + optIdx);
 
-                  const toggleMulti = () => {
-                    let nextArr: number[];
+                  const handleToggle = () => {
                     if (isSelected) {
-                      nextArr = selectedArr.filter(i => i !== idx);
+                      setAnswerForCurrent(currentSelected.filter(i => i !== optIdx));
                     } else {
-                      nextArr = [...selectedArr, idx].sort();
+                      setAnswerForCurrent([...currentSelected, optIdx]);
                     }
-                    setAnswerForCurrent(nextArr);
                   };
 
                   return (
                     <button
-                      key={idx}
+                      key={optIdx}
                       type="button"
-                      onClick={toggleMulti}
-                      className={`w-full text-left p-4 rounded-xl border text-sm transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-3 cursor-pointer ${
+                      onClick={handleToggle}
+                      className={`w-full p-3.5 sm:p-4 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
-                          ? 'bg-indigo-50/80 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500/20 shadow-xs'
-                          : 'bg-white border-slate-200 hover:bg-slate-50/80 text-slate-800'
+                          ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500 text-indigo-950 font-semibold shadow-xs'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800'
                       }`}
                     >
-                      <div className="flex items-start gap-3.5 flex-1">
-                        <span
-                          className={`w-6 h-6 rounded-md shrink-0 flex items-center justify-center transition-colors mt-0.5 ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : 'border-2 border-slate-300 bg-white'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-4 h-4" />}
-                        </span>
-                        <div className="flex-1">
-                          <span className="font-bold text-xs text-slate-400 mr-2">[{letter}]</span>
-                          <span className={`leading-relaxed ${isOptArabic ? 'font-arabic text-base' : ''}`} dir={isOptArabic ? 'rtl' : 'ltr'}>
-                            {option}
-                          </span>
-                        </div>
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
+                        isSelected
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          : 'bg-white border-slate-300'
+                      }`}>
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>
-
-                      {optImg && (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setZoomedImageUrl(optImg);
-                            setImageScale(1);
-                          }}
-                          className="sm:ml-4 shrink-0 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-1.5 self-center sm:self-start"
-                        >
-                          <img
-                            src={optImg}
-                            alt={`Opsi ${letter}`}
-                            className="h-20 sm:h-24 w-auto max-w-[180px] object-contain rounded-lg"
-                          />
-                        </div>
-                      )}
+                      <span className="text-xs font-bold text-slate-400 mt-0.5">
+                        {letter}.
+                      </span>
+                      <span className="text-xs sm:text-sm leading-relaxed flex-1">
+                        {opt}
+                      </span>
                     </button>
                   );
                 })}
@@ -862,118 +955,78 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                   </span>
                 </div>
                 <textarea
-                  rows={6}
                   value={answers[currentQ.id] || ''}
                   onChange={(e) => setAnswerForCurrent(e.target.value)}
-                  placeholder="Ketikkan argumen, analisis situasi, dan langkah solusi Anda di sini..."
-                  className="cbt-allow-typing w-full p-4 text-sm bg-white border border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none leading-relaxed"
+                  placeholder="Ketikkan jawaban studi kasus Anda di sini..."
+                  rows={6}
+                  className="w-full text-xs sm:text-sm p-4 bg-slate-50 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all outline-none leading-relaxed resize-y"
                 />
               </div>
             )}
 
-          </div>
-
-          {/* Bottom Question Controls */}
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-            <button
-              type="button"
-              disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex(prev => prev - 1)}
-              className="px-4 py-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Sebelumnya</span>
-            </button>
-
-            {currentIndex < questions.length - 1 ? (
+            {/* QUESTION CARD BOTTOM NAVIGATION */}
+            <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setCurrentIndex(prev => prev + 1)}
-                className="px-5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
+                disabled={currentIndex === 0}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
               >
-                <span>Selanjutnya</span>
-                <ChevronRight className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4" />
+                <span>Sebelumnya</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowFinishConfirm(true)}
-                className="px-5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-                <span>Selesai & Kumpulkan Ujian</span>
-              </button>
-            )}
+
+              {currentIndex < questions.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentIndex(i => Math.min(questions.length - 1, i + 1))}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <span>Berikutnya</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowFinishConfirm(true)}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <span>Selesai & Kumpulkan</span>
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
           </div>
 
         </div>
 
-        {/* Right: Question Navigation Matrix & Student Info (4 cols) */}
+        {/* RIGHT COLUMN: QUESTION NAVIGATION MATRIX (4 cols) */}
         <div className="lg:col-span-4 flex flex-col gap-4">
           
-          {/* Student & Exam Info Card */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center font-bold text-sm">
-                {student.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                  {student.name}
-                </h4>
-                <p className="text-xs text-slate-500">
-                  NIS: {student.nipOrNis || '-'} • Kelas {student.classGroup}
-                </p>
-              </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Nomor Soal ({questions.length})
+              </h3>
+              <span className="text-[11px] font-bold text-emerald-600">
+                Terjawab: {answeredCount} / {questions.length}
+              </span>
             </div>
 
-            <div className="mt-3 text-xs space-y-1 text-slate-600">
-              <div className="flex justify-between">
-                <span>Total Soal:</span>
-                <span className="font-bold text-slate-900">{questions.length} Butir</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Sudah Dijawab:</span>
-                <span className="font-bold text-emerald-600">{answeredCount} Soal</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Belum Dijawab:</span>
-                <span className="font-bold text-rose-600">{unansweredCount} Soal</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation Matrix */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Nomor Soal
-                </span>
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span className="flex items-center gap-1 text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> Dijawab
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Ragu
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-200"></span> Kosong
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-5 gap-2.5">
+            {/* Matrix of Question Numbers */}
+            <div className="max-h-72 overflow-y-auto pr-1">
+              <div className="grid grid-cols-5 gap-2">
                 {questions.map((q, idx) => {
                   const isCurrent = idx === currentIndex;
-                  const isAnswered = isQuestionAnswered(q);
-                  const isFlagged = flagged[q.id];
+                  const isAns = isQuestionAnswered(q);
+                  const isFlag = flagged[q.id];
 
-                  let btnBg = 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200';
-                  if (isFlagged) {
+                  let btnBg = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+                  if (isFlag) {
                     btnBg = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-                  } else if (isAnswered) {
-                    btnBg = 'bg-indigo-600 text-white border-indigo-700 font-bold';
+                  } else if (isAns) {
+                    btnBg = 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs';
                   }
 
                   return (
@@ -1144,7 +1197,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
             <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-900 font-medium text-left mb-6 space-y-1">
               <p>⚠️ Lembar kerja dilockdown untuk memastikan pengerjaan mandiri tanpa membuka aplikasi lain (browser, kalkulator, catatan, atau split-screen).</p>
-              <p>Pelanggaran ini tercatat di pengawas. Jika mencapai <span className="font-bold text-rose-700">3 kali pelanggaran</span>, ujian otomatis dihentikan dan dikumpulkan paksa ke server pengawas.</p>
+              <p>Pelanggaran ini tercatat di pengawas beserta jam dan waktu kejadian. Jika mencapai <span className="font-bold text-rose-700">3 kali pelanggaran</span>, ujian otomatis dihentikan dan dikumpulkan paksa ke server pengawas.</p>
             </div>
 
             <button
