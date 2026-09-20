@@ -228,6 +228,7 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
   const handleSelectLink = (link: AppLink) => {
     setActiveLinkId(link.id);
+    setIsSidebarOpen(false);
     if (link.isInternal || link.url.startsWith('internal:')) {
       if (onSelectInternalRoute) {
         onSelectInternalRoute(link.url);
@@ -632,13 +633,15 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
           <div className="h-13 bg-slate-950 border-b border-slate-800/90 px-3 sm:px-5 flex items-center justify-between gap-3 shadow-md shrink-0 z-20">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               
-              {/* Toggle Sidebar Button for Mobile */}
+              {/* Toggle Sidebar Button */}
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-800 cursor-pointer lg:hidden shrink-0"
+                title={isSidebarOpen ? 'Sembunyikan Menu Sidebar' : 'Buka Menu Sidebar'}
+                className="p-2 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-bold"
               >
-                <Menu className="w-4 h-4" />
+                <Menu className="w-4 h-4 text-indigo-400" />
+                <span className="hidden sm:inline">{isSidebarOpen ? 'Sembunyikan Menu' : 'Menu Dashboard'}</span>
               </button>
 
               {/* Active App Badge */}
