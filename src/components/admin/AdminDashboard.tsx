@@ -852,8 +852,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
 
       {/* ADD / EDIT USER MODAL */}
       {isAddUserOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100">
+        <div className="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 flex items-center justify-center min-h-screen">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 my-auto max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900 mb-1">
               {editingUser ? 'Perbarui Akun & Kredensial' : 'Tambah Akun Pengguna Baru'}
             </h3>

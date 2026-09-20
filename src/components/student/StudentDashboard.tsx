@@ -45,10 +45,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);
 
-  // Filter exams that are active and targeted to this student's class
+  // Filter exams that are active, targeted to this student's class, and whose uploadDate has arrived
   const studentClass = student.classGroup || '';
   const availableExams = exams.filter(e => {
     if (e.status !== 'active') return false;
+
+    // Check upload date / schedule release date
+    if (e.uploadDate) {
+      const uploadTime = new Date(e.uploadDate).getTime();
+      if (!isNaN(uploadTime) && Date.now() < uploadTime) {
+        return false; // Hide exam from students until upload date/time is reached
+      }
+    }
+
     return isStudentEligibleForExam(e.targetClasses, studentClass);
   });
 

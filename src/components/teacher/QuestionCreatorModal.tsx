@@ -284,8 +284,8 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl border border-slate-100 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 flex items-start sm:items-center justify-center min-h-screen">
+      <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] my-auto shadow-2xl border border-slate-100 flex flex-col overflow-hidden">
         
         {/* Header */}
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">

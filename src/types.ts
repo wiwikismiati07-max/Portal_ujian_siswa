@@ -72,6 +72,7 @@ export interface Exam {
   status: 'active' | 'draft' | 'closed';
   instructions?: string;
   createdAt: string;
+  uploadDate?: string; // Tanggal & Waktu Upload / Rilis Ujian
 }
 
 export interface ViolationLog {
