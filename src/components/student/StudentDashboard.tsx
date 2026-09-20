@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Exam, ExamSubmission } from '../../types';
-import { getAllExams, getAllSubmissions, getQuestionsByExamId } from '../../utils/storage';
+import { User, Exam, ExamSubmission, Subject } from '../../types';
+import { getAllExams, getAllSubmissions, getQuestionsByExamId, getAllSubjects } from '../../utils/storage';
 import { isStudentEligibleForExam } from '../../utils/classHelper';
 import {
   BookOpen,
@@ -15,7 +15,11 @@ import {
   Layers,
   FileCheck,
   ChevronRight,
-  Sparkles
+  ChevronLeft,
+  Sparkles,
+  Search,
+  GraduationCap,
+  ArrowRight
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -26,12 +30,16 @@ interface StudentDashboardProps {
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onStartExam }) => {
   const [exams, setExams] = useState<Exam[]>(getAllExams());
   const [submissions, setSubmissions] = useState<ExamSubmission[]>(getAllSubmissions());
+  const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());
+  const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
   const [selectedExamForModal, setSelectedExamForModal] = useState<Exam | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const handleUpdate = () => {
       setExams(getAllExams());
       setSubmissions(getAllSubmissions());
+      setSubjects(getAllSubjects());
     };
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
@@ -43,6 +51,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     if (e.status !== 'active') return false;
     return isStudentEligibleForExam(e.targetClasses, studentClass);
   });
+
+  // Collect all unique subjects available
+  const allSubjectNamesSet = new Set<string>();
+  subjects.forEach(s => allSubjectNamesSet.add(s.name));
+  availableExams.forEach(e => {
+    if (e.subjectName) allSubjectNamesSet.add(e.subjectName);
+  });
+  const allSubjectNamesList = Array.from(allSubjectNamesSet);
 
   // Check submissions by this student
   const mySubmissions = submissions.filter(s => s.studentId === student.id);
@@ -75,12 +91,40 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     return 'Selamat Malam';
   };
 
+  // Filtered exams based on selected subject or search query
+  const displayedExams = availableExams.filter(e => {
+    if (selectedSubjectName && e.subjectName !== selectedSubjectName) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        e.title.toLowerCase().includes(q) ||
+        e.subjectName.toLowerCase().includes(q) ||
+        (e.instructions || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  // Assign distinct gradient color themes to subject cards
+  const getSubjectTheme = (index: number) => {
+    const themes = [
+      { bg: 'from-indigo-600 to-indigo-800', border: 'border-indigo-200', text: 'text-indigo-700', badge: 'bg-indigo-50 text-indigo-700' },
+      { bg: 'from-emerald-600 to-teal-800', border: 'border-emerald-200', text: 'text-emerald-700', badge: 'bg-emerald-50 text-emerald-700' },
+      { bg: 'from-amber-500 to-orange-700', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-amber-50 text-amber-700' },
+      { bg: 'from-purple-600 to-pink-800', border: 'border-purple-200', text: 'text-purple-700', badge: 'bg-purple-50 text-purple-700' },
+      { bg: 'from-blue-600 to-cyan-800', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-50 text-blue-700' },
+      { bg: 'from-rose-600 to-red-800', border: 'border-rose-200', text: 'text-rose-700', badge: 'bg-rose-50 text-rose-700' }
+    ];
+    return themes[index % themes.length];
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
       
       {/* Welcome Banner */}
       <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 rounded-3xl p-6 sm:p-8 lg:p-10 text-white shadow-xl shadow-indigo-950/20 relative overflow-hidden border border-indigo-700/30">
-        {/* Subtle ambient lighting */}
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -88,7 +132,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200 border border-white/15 shadow-2xs">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Ruang Belajar & Ujian Siswa</span>
+              <span>Ruang Belajar & Ujian Siswa SPANJU</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
@@ -103,7 +147,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                 Kelas: <strong className="text-white font-bold">{studentClass}</strong>
               </span>
               <span className="text-indigo-200/80 hidden sm:inline">
-                • Sistem Asesmen Berbasis Komputer SPANJU
+                • Sistem Asesmen Berbasis Komputer
               </span>
             </div>
           </div>
@@ -144,155 +188,265 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
         </div>
       </div>
 
-      {/* Available Exams Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-indigo-600" />
-              <span>Daftar Paket Ujian Aktif</span>
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Ujian yang terdaftar khusus untuk rombongan belajar kelas <strong className="text-slate-800">{studentClass}</strong>
-            </p>
+      {/* MAIN NAVIGATION CONTENT */}
+      {!selectedSubjectName ? (
+        /* STEP 1: DISPLAY ALL AVAILABLE SUBJECTS (SEMUA MATA PELAJARAN) */
+        <div className="space-y-5 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <BookOpen className="w-6 h-6 text-indigo-600" />
+                <span>Semua Mata Pelajaran</span>
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Silakan pilih mata pelajaran untuk melihat Daftar Paket Soal Active untuk kelas <strong className="text-slate-800">{studentClass}</strong>
+              </p>
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative w-full sm:w-64">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Cari mata pelajaran..."
+                className="w-full pl-9 pr-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-medium"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+          </div>
+
+          {/* Subjects Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {allSubjectNamesList
+              .filter(name => !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((subjectName, idx) => {
+                const subjectObj = subjects.find(s => s.name === subjectName);
+                const activeExamCount = availableExams.filter(e => e.subjectName === subjectName).length;
+                const theme = getSubjectTheme(idx);
+
+                return (
+                  <div
+                    key={subjectName}
+                    onClick={() => setSelectedSubjectName(subjectName)}
+                    className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-lg hover:border-indigo-300 transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group card-hover-effect relative overflow-hidden"
+                  >
+                    {/* Top Accent Gradient Bar */}
+                    <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${theme.bg}`}></div>
+
+                    <div className="space-y-4 pt-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.bg} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0`}>
+                          <GraduationCap className="w-6 h-6" />
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${activeExamCount > 0 ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
+                          {activeExamCount > 0 ? `✨ ${activeExamCount} Paket Ujian Active` : 'Belum Ada Ujian'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                          {subjectObj?.code || `MAPEL-${idx + 1}`}
+                        </span>
+                        <h3 className="text-lg font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight leading-snug mt-0.5">
+                          {subjectName}
+                        </h3>
+                        {subjectObj?.teacherName && (
+                          <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+                            <span>Pengampu:</span>
+                            <strong className="text-slate-700">{subjectObj.teacherName}</strong>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                        <span>Buka Paket Soal</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </span>
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
-
-        {availableExams.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-xs">
-            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400">
-              <BookOpen className="w-8 h-8" />
+      ) : (
+        /* STEP 2: DISPLAY ACTIVE EXAM PACKAGES FOR THE SELECTED SUBJECT */
+        <div className="space-y-5 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedSubjectName(null)}
+                className="p-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                <span>Kembali ke Semua Mapel</span>
+              </button>
+              <div>
+                <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">
+                  Daftar Paket Soal Active
+                </span>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                  Mata Pelajaran: {selectedSubjectName}
+                </h2>
+              </div>
             </div>
-            <h3 className="text-base font-extrabold text-slate-700">Belum Ada Ujian Aktif</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Saat ini guru pengampu belum menjadwalkan paket ujian baru untuk kelas Anda. Silakan periksa kembali nanti.
-            </p>
+
+            <button
+              type="button"
+              onClick={() => setSelectedSubjectName(null)}
+              className="text-xs text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer"
+            >
+              Lihat Semua Mapel Lain
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {availableExams.map(exam => {
-              const questions = getQuestionsByExamId(exam.id);
-              const isCompleted = myCompletedExamIds.has(exam.id);
-              const submission = mySubmissions.find(s => s.examId === exam.id);
 
-              return (
-                <div
-                  key={exam.id}
-                  className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between card-hover-effect"
-                >
-                  <div className="space-y-3">
-                    {/* Header Tags */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-100/80 truncate max-w-[180px]">
-                        {exam.subjectName}
-                      </span>
-                      {isCompleted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-extrabold border border-emerald-200 shrink-0">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Selesai</span>
+          {displayedExams.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-xs">
+              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              <h3 className="text-base font-extrabold text-slate-700">Belum Ada Paket Soal Active</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Saat ini belum ada jadwal ujian aktif khusus untuk mata pelajaran <strong>{selectedSubjectName}</strong> di kelas Anda.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedSubjectName(null)}
+                className="mt-4 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-indigo-700 transition-colors cursor-pointer"
+              >
+                Kembali ke Daftar Mata Pelajaran
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {displayedExams.map(exam => {
+                const questions = getQuestionsByExamId(exam.id);
+                const isCompleted = myCompletedExamIds.has(exam.id);
+                const submission = mySubmissions.find(s => s.examId === exam.id);
+
+                return (
+                  <div
+                    key={exam.id}
+                    className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all duration-200 p-5 sm:p-6 flex flex-col justify-between card-hover-effect"
+                  >
+                    <div className="space-y-3">
+                      {/* Header Tags */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-100/80 truncate max-w-[180px]">
+                          {exam.subjectName}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-xl text-xs font-extrabold border border-amber-200 shrink-0">
-                          <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Tersedia</span>
-                        </span>
-                      )}
-                    </div>
+                        {isCompleted ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-extrabold border border-emerald-200 shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Selesai</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-xl text-xs font-extrabold border border-amber-200 shrink-0">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Tersedia</span>
+                          </span>
+                        )}
+                      </div>
 
-                    <div>
-                      <h3 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-snug">
-                        {exam.title}
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                        {exam.instructions || 'Bacalah setiap butir soal dengan cermat dan teliti sebelum menjawab.'}
-                      </p>
-                    </div>
+                      <div>
+                        <h3 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-snug">
+                          {exam.title}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                          {exam.instructions || 'Bacalah setiap butir soal dengan cermat dan teliti sebelum menjawab.'}
+                        </p>
+                      </div>
 
-                    {/* Detailed Schedule Info */}
-                    <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/80 space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2 text-indigo-950 font-semibold">
-                        <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-[11px]">
-                          <strong>Hari & Tanggal:</strong> {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Senin, 22 September 2026'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-indigo-950 font-semibold">
-                        <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-[11px]">
-                          <strong>Waktu Ujian:</strong> 08:00 - 09:30 WIB ({exam.durationMinutes} Menit)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Metadata specs */}
-                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 text-xs text-slate-600">
-                      <div className="bg-slate-50/70 p-2 rounded-xl text-center">
-                        <span className="text-slate-400 block text-[10px] font-bold">Durasi</span>
-                        <span className="font-extrabold text-slate-800 text-xs">{exam.durationMinutes} Menit</span>
-                      </div>
-                      <div className="bg-slate-50/70 p-2 rounded-xl text-center">
-                        <span className="text-slate-400 block text-[10px] font-bold">Soal</span>
-                        <span className="font-extrabold text-slate-800 text-xs">{questions.length} Butir</span>
-                      </div>
-                      <div className="bg-slate-50/70 p-2 rounded-xl text-center">
-                        <span className="text-slate-400 block text-[10px] font-bold">KKM</span>
-                        <span className="font-extrabold text-indigo-700 text-xs">{exam.passingScore}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action or Score display */}
-                  <div className="pt-4">
-                    {isCompleted && submission ? (
-                      <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2.5 text-xs">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="text-slate-400 block text-[11px] font-bold">Hasil Perolehan Nilai:</span>
-                            <span className="text-lg font-black text-indigo-700">
-                              {submission.earnedScore} <span className="text-slate-400 font-medium text-xs">/ {submission.totalScore}</span> ({submission.percentage}%)
-                            </span>
-                          </div>
-                          <span className={`px-3 py-1 rounded-xl font-extrabold text-xs border ${
-                            submission.passed
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
-                          }`}>
-                            {submission.passed ? 'TUNTAS' : 'REMEDIAL'}
+                      {/* Detailed Schedule Info */}
+                      <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/80 space-y-1.5 text-xs">
+                        <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="text-[11px]">
+                            <strong>Hari & Tanggal:</strong> {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Senin, 22 September 2026'}
                           </span>
                         </div>
-                        
-                        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500 font-medium">Status Kejujuran:</span>
-                          {(submission.violationCount || 0) === 0 ? (
-                            <span className="inline-flex items-center gap-1 font-extrabold text-emerald-700">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Tertib (0x)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 font-extrabold text-amber-700">
-                              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                              <span>{submission.violationCount}x Pelanggaran</span>
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                          <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="text-[11px]">
+                            <strong>Waktu Ujian:</strong> 08:00 - 09:30 WIB ({exam.durationMinutes} Menit)
+                          </span>
                         </div>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedExamForModal(exam)}
-                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Play className="w-4 h-4 fill-white" />
-                        <span>Mulai Kerjakan Ujian</span>
-                      </button>
-                    )}
+
+                      {/* Metadata specs */}
+                      <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 text-xs text-slate-600">
+                        <div className="bg-slate-50/70 p-2 rounded-xl text-center">
+                          <span className="text-slate-400 block text-[10px] font-bold">Durasi</span>
+                          <span className="font-extrabold text-slate-800 text-xs">{exam.durationMinutes} Menit</span>
+                        </div>
+                        <div className="bg-slate-50/70 p-2 rounded-xl text-center">
+                          <span className="text-slate-400 block text-[10px] font-bold">Soal</span>
+                          <span className="font-extrabold text-slate-800 text-xs">{questions.length} Butir</span>
+                        </div>
+                        <div className="bg-slate-50/70 p-2 rounded-xl text-center">
+                          <span className="text-slate-400 block text-[10px] font-bold">KKM</span>
+                          <span className="font-extrabold text-indigo-700 text-xs">{exam.passingScore}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action or Score display */}
+                    <div className="pt-4">
+                      {isCompleted && submission ? (
+                        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-slate-400 block text-[11px] font-bold">Hasil Perolehan Nilai:</span>
+                              <span className="text-lg font-black text-indigo-700">
+                                {submission.earnedScore} <span className="text-slate-400 font-medium text-xs">/ {submission.totalScore}</span> ({submission.percentage}%)
+                              </span>
+                            </div>
+                            <span className={`px-3 py-1 rounded-xl font-extrabold text-xs border ${
+                              submission.passed
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                              {submission.passed ? 'TUNTAS' : 'REMEDIAL'}
+                            </span>
+                          </div>
+                          
+                          <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-500 font-medium">Status Kejujuran:</span>
+                            {(submission.violationCount || 0) === 0 ? (
+                              <span className="inline-flex items-center gap-1 font-extrabold text-emerald-700">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Tertib (0x)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-extrabold text-amber-700">
+                                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                                <span>{submission.violationCount}x Pelanggaran</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedExamForModal(exam)}
+                          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Play className="w-4 h-4 fill-white" />
+                          <span>Mulai Kerjakan Ujian</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Exam Pre-flight Confirmation Modal */}
       {selectedExamForModal && (
