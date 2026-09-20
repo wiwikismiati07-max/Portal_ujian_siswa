@@ -335,27 +335,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       )}
 
       {/* Teacher Welcome & Overview Card (No Print) */}
-      <div className="bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 rounded-3xl p-4 sm:p-8 lg:p-10 text-white shadow-xl shadow-teal-950/20 no-print relative overflow-hidden border border-teal-800/30">
+      <div className="bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 rounded-2xl p-4 sm:p-5 lg:p-6 text-white shadow-lg shadow-teal-950/20 no-print relative overflow-hidden border border-teal-800/30">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6">
-          <div className="space-y-3 min-w-0">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+          <div className="space-y-2 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-bold text-teal-200 border border-white/15 shadow-2xs">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/10 backdrop-blur-md rounded-full text-[11px] font-bold text-teal-200 border border-white/15 shadow-2xs">
+                <Sparkles className="w-3 h-3 text-amber-300" />
                 <span>Dashboard Guru Pengampu</span>
               </div>
 
               {/* Multi User Teacher Account Selector */}
               {allTeachers.length > 1 && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 backdrop-blur-md rounded-full text-xs font-bold text-emerald-200 border border-emerald-400/30 max-w-full min-w-0">
-                  <Users className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 backdrop-blur-md rounded-full text-[11px] font-bold text-emerald-200 border border-emerald-400/30 max-w-full min-w-0">
+                  <Users className="w-3 h-3 text-emerald-300 shrink-0" />
                   <span className="shrink-0">Switch:</span>
                   <select
                     value={selectedTeacherId}
                     onChange={(e) => setSelectedTeacherId(e.target.value)}
-                    className="bg-transparent text-white font-extrabold text-xs outline-none cursor-pointer border-b border-dashed border-emerald-300/60 truncate max-w-[130px] sm:max-w-[180px]"
+                    className="bg-transparent text-white font-extrabold text-[11px] outline-none cursor-pointer border-b border-dashed border-emerald-300/60 truncate max-w-[130px] sm:max-w-[180px]"
                   >
                     {allTeachers.map((t) => (
                       <option key={t.id} value={t.id} className="bg-slate-900 text-white">
@@ -367,42 +367,42 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               )}
             </div>
 
-            <h1 className="text-xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white break-words">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight text-white break-words">
               Selamat Datang, {activeTeacher.name}
             </h1>
 
             {/* Teacher Specs Pills */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-teal-100 font-medium min-w-0">
-              <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold min-w-0 max-w-full">
-                <Users className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-teal-100 font-medium min-w-0">
+              <span className="px-2 py-0.5 bg-white/10 backdrop-blur-xs rounded-lg border border-white/15 flex items-center gap-1 font-semibold min-w-0 max-w-full">
+                <Users className="w-3 h-3 text-teal-300 shrink-0" />
                 <span className="truncate">Pengampu: <strong className="text-white font-extrabold">{activeTeacher.name}</strong></span>
               </span>
-              <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold min-w-0 max-w-full">
-                <BookOpen className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              <span className="px-2 py-0.5 bg-white/10 backdrop-blur-xs rounded-lg border border-white/15 flex items-center gap-1 font-semibold min-w-0 max-w-full">
+                <BookOpen className="w-3 h-3 text-amber-300 shrink-0" />
                 <span className="truncate">Mapel Aktif: <strong className="text-amber-200 font-extrabold">{selectedSubjectName || 'Semua Mapel'}</strong></span>
               </span>
-              <span className="px-2.5 py-1 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 flex items-center gap-1.5 font-semibold min-w-0 max-w-full">
-                <GraduationCap className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+              <span className="px-2 py-0.5 bg-white/10 backdrop-blur-xs rounded-lg border border-white/15 flex items-center gap-1 font-semibold min-w-0 max-w-full">
+                <GraduationCap className="w-3 h-3 text-emerald-300 shrink-0" />
                 <span className="truncate">Rombel: <strong className="text-emerald-200 font-extrabold">{activeTeacher.classGroup || '7A - 9H'}</strong></span>
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto shrink-0">
-            <div className="bg-white/10 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-white/15 text-center min-w-0 shadow-2xs">
-              <span className="text-[10px] sm:text-[11px] text-teal-200 font-bold block">Paket Ujian</span>
-              <span className="text-lg sm:text-xl font-black text-white">{displayExams.length}</span>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full lg:w-auto shrink-0">
+            <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 sm:py-2 rounded-xl border border-white/15 text-center min-w-0 shadow-2xs">
+              <span className="text-[10px] text-teal-200 font-bold block">Paket Ujian</span>
+              <span className="text-base sm:text-lg font-black text-white">{displayExams.length}</span>
             </div>
-            <div className="bg-white/10 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border border-white/15 text-center min-w-0 shadow-2xs">
-              <span className="text-[10px] sm:text-[11px] text-teal-200 font-bold block">Bank Soal</span>
-              <span className="text-lg sm:text-xl font-black text-amber-300">{displayQuestions.length}</span>
+            <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 sm:py-2 rounded-xl border border-white/15 text-center min-w-0 shadow-2xs">
+              <span className="text-[10px] text-teal-200 font-bold block">Bank Soal</span>
+              <span className="text-base sm:text-lg font-black text-amber-300">{displayQuestions.length}</span>
             </div>
             <button
               type="button"
               onClick={() => setIsCreateExamOpen(true)}
-              className="col-span-2 sm:col-span-1 px-4 sm:px-5 py-3 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+              className="col-span-2 sm:col-span-1 px-3.5 sm:px-4 py-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+              <Plus className="w-3.5 h-3.5 text-slate-950 stroke-[3]" />
               <span>Buat Paket Ujian Baru</span>
             </button>
           </div>
