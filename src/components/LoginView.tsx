@@ -229,14 +229,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center p-3 sm:p-6 lg:p-10">
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden">
+    <div className="min-h-[calc(100vh-4.5rem)] flex items-center justify-center p-3 sm:p-6 lg:p-8">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
         
-        {/* Left Branding & Highlights Carousel (5 cols) */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-950 p-6 sm:p-8 lg:p-10 text-white flex flex-col justify-between relative overflow-hidden select-none">
+        {/* LATAR 1 / LAYER 1: Left Branding & Highlights Carousel (5 cols) */}
+        <div className="lg:col-span-5 bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-950 p-6 sm:p-8 lg:p-9 text-white flex flex-col justify-between relative overflow-hidden select-none rounded-3xl shadow-xl border border-indigo-800/40 ring-1 ring-white/10">
           {/* Subtle ambient lighting */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-500/15 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
           {/* Carousel Header & Slide Content */}
           <div className="relative z-10 space-y-4">
@@ -282,16 +282,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white mb-2 leading-snug">
                 {slides[activeSlide].title}
               </h1>
-              <p className="text-xs sm:text-sm text-indigo-100/85 leading-relaxed min-h-[50px]">
+              <p className="text-xs sm:text-sm text-indigo-100/85 leading-relaxed min-h-[48px]">
                 {slides[activeSlide].subtitle}
               </p>
 
               {/* Slide Highlights */}
-              <div className="my-5 space-y-2.5">
+              <div className="my-4 space-y-2.5">
                 {slides[activeSlide].highlights.map((hl, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 text-xs text-indigo-100 font-medium bg-white/5 backdrop-blur-xs p-3 rounded-2xl border border-white/10 hover:bg-white/10 transition-all"
+                    className="flex items-center gap-3 text-xs text-indigo-100 font-medium bg-white/5 backdrop-blur-xs p-3 rounded-2xl border border-white/10 hover:bg-white/10 transition-all shadow-xs"
                   >
                     <div className={`p-1.5 rounded-xl shrink-0 ${hl.bg}`}>
                       <hl.icon className="w-4 h-4" />
@@ -317,7 +317,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </div>
 
           {/* Carousel Footer Dots & Version */}
-          <div className="pt-4 mt-6 border-t border-white/10 flex items-center justify-between relative z-10 text-[11px] text-indigo-200/70">
+          <div className="pt-4 mt-5 border-t border-white/10 flex items-center justify-between relative z-10 text-[11px] text-indigo-200/70">
             {/* Slide Navigation Dots */}
             <div className="flex items-center gap-1.5">
               {slides.map((_, idx) => (
@@ -337,8 +337,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        {/* Right Form & Quick Access (7 cols) */}
-        <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-center bg-slate-50/50">
+        {/* LATAR 2 / LAYER 2: Right Form & Quick Access (7 cols) */}
+        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center bg-white rounded-3xl shadow-xl border border-slate-200/80">
           <div className="max-w-md mx-auto w-full">
             
             <div className="mb-6 text-left">
