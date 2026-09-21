@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Question, QuestionType, Exam, TrueFalseStatement, MatchingPair } from '../../types';
+import { Question, QuestionType, Exam, TrueFalseStatement, MatchingPremise, MatchingOption } from '../../types';
+import { getMatchingData } from '../../utils/matchingHelper';
 import {
   X,
   Plus,
@@ -58,13 +59,23 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     ]
   );
 
-  // For Matching
-  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(
-    initialQuestion?.matchingPairs || [
-      { id: 'm_1', left: 'Konsep 1 (Kolom Kiri)', right: 'Pasangan 1 (Kolom Kanan)' },
-      { id: 'm_2', left: 'Konsep 2 (Kolom Kiri)', right: 'Pasangan 2 (Kolom Kanan)' }
+  // For Matching (Kolom A & Kolom B + Pengecoh)
+  const initialMatching = initialQuestion ? getMatchingData(initialQuestion) : {
+    premises: [
+      { id: 'prem_1', text: 'Pertanyaan / Pernyataan 1', correctOptionId: 'opt_1' },
+      { id: 'prem_2', text: 'Pertanyaan / Pernyataan 2', correctOptionId: 'opt_2' },
+      { id: 'prem_3', text: 'Pertanyaan / Pernyataan 3', correctOptionId: 'opt_3' }
+    ],
+    options: [
+      { id: 'opt_1', label: 'A', text: 'Pilihan 1' },
+      { id: 'opt_2', label: 'B', text: 'Pilihan 2' },
+      { id: 'opt_3', label: 'C', text: 'Pilihan 3' },
+      { id: 'opt_4', label: 'D', text: 'Pilihan Pengecoh 1' },
+      { id: 'opt_5', label: 'E', text: 'Pilihan Pengecoh 2' }
     ]
-  );
+  };
+  const [matchingPremises, setMatchingPremises] = useState<MatchingPremise[]>(initialMatching.premises);
+  const [matchingOptions, setMatchingOptions] = useState<MatchingOption[]>(initialMatching.options);
 
   // For Case Study
   const [caseContext, setCaseContext] = useState(initialQuestion?.caseContext || '');
@@ -227,16 +238,30 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     }
   };
 
-  const handleAddMatchingPair = () => {
-    setMatchingPairs([
-      ...matchingPairs,
-      { id: `m_${Date.now()}`, left: 'Item baru kiri', right: 'Item pasangan kanan' }
+  const handleAddPremise = () => {
+    setMatchingPremises([
+      ...matchingPremises,
+      { id: `prem_${Date.now()}`, text: '', correctOptionId: matchingOptions[0]?.id || '' }
     ]);
   };
 
-  const handleRemoveMatchingPair = (index: number) => {
-    if (matchingPairs.length > 1) {
-      setMatchingPairs(matchingPairs.filter((_, i) => i !== index));
+  const handleRemovePremise = (index: number) => {
+    if (matchingPremises.length > 1) {
+      setMatchingPremises(matchingPremises.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleAddMatchingOption = () => {
+    const nextIdx = matchingOptions.length;
+    setMatchingOptions([
+      ...matchingOptions,
+      { id: `opt_${Date.now()}`, label: String.fromCharCode(65 + nextIdx), text: '' }
+    ]);
+  };
+
+  const handleRemoveMatchingOption = (index: number) => {
+    if (matchingOptions.length > 2) {
+      setMatchingOptions(matchingOptions.filter((_, i) => i !== index));
     }
   };
 
@@ -269,7 +294,14 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     } else if (type === 'true_false') {
       newQ.trueFalseItems = trueFalseItems;
     } else if (type === 'matching') {
-      newQ.matchingPairs = matchingPairs;
+      newQ.matchingData = {
+        premises: matchingPremises.map(p => ({ ...p, text: p.text.trim() })),
+        options: matchingOptions.map((o, idx) => ({
+          ...o,
+          label: String.fromCharCode(65 + idx),
+          text: o.text.trim()
+        }))
+      };
     } else if (type === 'case_study') {
       newQ.caseContext = caseContext.trim();
       newQ.caseKeywords = caseKeywordsStr
@@ -881,68 +913,132 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
             </div>
           )}
 
-          {/* 4. Matching Pairs */}
+          {/* 4. Matching Data (Kolom A & Kolom B + Pengecoh) */}
           {type === 'matching' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Pasangan Menjodohkan (Kolom Kiri ➔ Kolom Kanan):
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddMatchingPair}
-                  className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Pasangan
-                </button>
+            <div className="space-y-6">
+              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-900">
+                <strong>Model Menjodohkan Tarik Garis:</strong> Buat Kolom A (Pertanyaan/Pernyataan) beserta kunci jawaban yang mengarah ke opsi di Kolom B. Buat Kolom B berisi pilihan jawaban dan minimal 2 jawaban pengecoh agar siswa tidak bisa asal menebak di nomor terakhir.
               </div>
 
-              {matchingPairs.map((pair, idx) => (
-                <div key={pair.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                  <div className="sm:col-span-5">
-                    <input
-                      type="text"
-                      value={pair.left}
-                      onChange={(e) => {
-                        const next = [...matchingPairs];
-                        next[idx].left = e.target.value;
-                        setMatchingPairs(next);
-                      }}
-                      placeholder="Premise / Soal Kiri..."
-                      required
-                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
-                    />
-                  </div>
-                  <div className="sm:col-span-2 text-center text-xs text-slate-400 font-bold">
-                    ➔
-                  </div>
-                  <div className="sm:col-span-4">
-                    <input
-                      type="text"
-                      value={pair.right}
-                      onChange={(e) => {
-                        const next = [...matchingPairs];
-                        next[idx].right = e.target.value;
-                        setMatchingPairs(next);
-                      }}
-                      placeholder="Kunci Jawaban Kanan..."
-                      required
-                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
-                    />
-                  </div>
-                  <div className="sm:col-span-1 flex justify-end">
-                    {matchingPairs.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMatchingPair(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+              {/* Kolom A: Pertanyaan */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Kolom A: Daftar Pertanyaan & Kunci Jawaban
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddPremise}
+                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Pertanyaan (Kolom A)
+                  </button>
                 </div>
-              ))}
+
+                {matchingPremises.map((premise, idx) => (
+                  <div key={premise.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                    <div className="sm:col-span-7">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={premise.text}
+                          onChange={(e) => {
+                            const next = [...matchingPremises];
+                            next[idx].text = e.target.value;
+                            setMatchingPremises(next);
+                          }}
+                          placeholder={`Pertanyaan / Pernyataan ${idx + 1}...`}
+                          required
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="sm:col-span-4">
+                      <select
+                        value={premise.correctOptionId}
+                        onChange={(e) => {
+                          const next = [...matchingPremises];
+                          next[idx].correctOptionId = e.target.value;
+                          setMatchingPremises(next);
+                        }}
+                        required
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-semibold text-indigo-900"
+                      >
+                        <option value="">-- Pilih Kunci (Kolom B) --</option>
+                        {matchingOptions.map(opt => (
+                          <option key={opt.id} value={opt.id}>
+                            Opsi {opt.label}: {opt.text.substring(0, 25) || `Pilihan ${opt.label}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-1 flex justify-end">
+                      {matchingPremises.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePremise(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Kolom B: Pilihan Jawaban & Pengecoh */}
+              <div className="space-y-3 pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Kolom B: Pilihan Jawaban & Pengecoh (Lebih banyak dari Kolom A)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddMatchingOption}
+                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Pilihan / Pengecoh
+                  </button>
+                </div>
+
+                {matchingOptions.map((opt, idx) => {
+                  const label = String.fromCharCode(65 + idx);
+                  return (
+                    <div key={opt.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold text-xs flex items-center justify-center shrink-0">
+                        {label}
+                      </span>
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={(e) => {
+                          const next = [...matchingOptions];
+                          next[idx].text = e.target.value;
+                          setMatchingOptions(next);
+                        }}
+                        placeholder={`Teks pilihan ${label} (bisa sebagai kunci atau pengecoh)...`}
+                        required
+                        className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
+                      />
+                      {matchingOptions.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMatchingOption(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

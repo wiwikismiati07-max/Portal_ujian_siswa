@@ -20,6 +20,9 @@ import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
 import { SUPABASE_SETUP_SQL } from '../../utils/supabaseClient';
 import { ConfirmModal } from '../ConfirmModal';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
+import { OfficialLetterhead } from '../common/OfficialLetterhead';
+import { OfficialReportSignature } from '../common/OfficialReportSignature';
+import { PrintPreviewModal } from '../common/PrintPreviewModal';
 import {
   ShieldCheck,
   UserPlus,
@@ -43,7 +46,9 @@ import {
   X,
   Sparkles,
   RefreshCw,
-  BarChart3
+  BarChart3,
+  Printer,
+  Download
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -67,6 +72,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const [showExcelImport, setShowExcelImport] = useState(false);
   const [showSqlModal, setShowSqlModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [isPrintUsersModalOpen, setIsPrintUsersModalOpen] = useState(false);
+
+  const handleDownloadUsers = () => {
+    const headers = ['No', 'Nama Lengkap', 'Peran Akun', 'Username', 'Password', 'NIS/NIP', 'Kelas / Mapel'];
+    const rows = filteredUsers.map((u, i) => [
+      i + 1,
+      `"${u.name.replace(/"/g, '""')}"`,
+      u.role.toUpperCase(),
+      `"@${u.username}"`,
+      `"${u.password}"`,
+      `"${u.nipOrNis || '-'}"`,
+      `"${u.classGroup || u.subjectName || '-'}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Data_Pengguna_${roleFilter}_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification('success', `Berhasil mengunduh ${filteredUsers.length} data pengguna.`);
+  };
 
   // Confirm Modal state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -161,9 +189,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     });
   };
 
-  // Filter and search
+  // Filter and search (sorted by class/group and name)
   const filteredUsers = useMemo(() => {
-    return users.filter(u => {
+    const list = users.filter(u => {
       const matchRole = roleFilter === 'all' || u.role === roleFilter;
       const matchClass =
         selectedClass === 'all' || (u.role === 'siswa' && u.classGroup === selectedClass);
@@ -177,6 +205,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         (u.subjectName && u.subjectName.toLowerCase().includes(q));
 
       return matchRole && matchClass && matchSearch;
+    });
+
+    return list.sort((a, b) => {
+      const classA = (a.classGroup || a.subjectName || 'ZZZ').toLowerCase();
+      const classB = (b.classGroup || b.subjectName || 'ZZZ').toLowerCase();
+      if (classA !== classB) {
+        return classA.localeCompare(classB);
+      }
+      return a.name.localeCompare(b.name);
     });
   }, [users, roleFilter, selectedClass, searchQuery]);
 
@@ -652,13 +689,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 pt-1 gap-2">
             <span>
               Menampilkan <strong>{paginatedUsers.length}</strong> dari{' '}
               <strong>{filteredUsers.length}</strong> akun terdaftar
             </span>
             <div className="flex items-center gap-2">
-              <span>Per halaman:</span>
+              <button
+                type="button"
+                onClick={handleDownloadUsers}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="Unduh data pengguna (CSV)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPrintUsersModalOpen(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="Cetak daftar pengguna resmi"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Cetak</span>
+              </button>
+              <span className="pl-1">Per halaman:</span>
               <select
                 value={pageSize}
                 onChange={e => setPageSize(Number(e.target.value))}
@@ -1002,6 +1057,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
       />
+
+      {/* PRINT PREVIEW MODAL FOR USERS */}
+      <PrintPreviewModal
+        isOpen={isPrintUsersModalOpen}
+        onClose={() => setIsPrintUsersModalOpen(false)}
+        defaultOrientation="portrait"
+        title={`Daftar Pengguna Akun — Peran: ${roleFilter.toUpperCase()}`}
+      >
+        <div className="font-serif text-black leading-relaxed space-y-4">
+          <OfficialLetterhead 
+            judulDokumen={`DAFTAR KUMPULAN AKUN PENGGUNA (PERAN: ${roleFilter.toUpperCase()})`} 
+            showExamMetadata={false}
+          />
+          <p className="text-xs">
+            Dicetak pada: {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} &bull; Total Akun: {filteredUsers.length}
+          </p>
+          <table className="w-full text-xs border-collapse border border-black table-fixed">
+            <thead className="bg-slate-100 font-bold text-center">
+              <tr>
+                <th className="p-1.5 border border-black w-[8%]">No</th>
+                <th className="p-1.5 border border-black w-[32%] text-left">Nama Lengkap</th>
+                <th className="p-1.5 border border-black w-[15%]">Peran</th>
+                <th className="p-1.5 border border-black w-[20%] text-left">Username</th>
+                <th className="p-1.5 border border-black w-[15%]">Password</th>
+                <th className="p-1.5 border border-black w-[10%]">Kelas/Mapel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map((u, i) => (
+                <tr key={u.id}>
+                  <td className="p-1.5 border border-black text-center">{i + 1}</td>
+                  <td className="p-1.5 border border-black font-semibold truncate">{u.name}</td>
+                  <td className="p-1.5 border border-black text-center uppercase">{u.role}</td>
+                  <td className="p-1.5 border border-black truncate">@{u.username}</td>
+                  <td className="p-1.5 border border-black text-center font-mono">{u.password || '-'}</td>
+                  <td className="p-1.5 border border-black text-center">{u.classGroup || u.subjectName || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <OfficialReportSignature
+            teacherName={admin.name}
+            teacherNip={admin.nipOrNis || '19860410 201001 2 030'}
+            headmasterName="NUR FADILAH, S.Pd,.MPd"
+            headmasterNip="19860410 201001 2 030"
+            location="Pasuruan"
+            dateStr={new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+          />
+        </div>
+      </PrintPreviewModal>
     </div>
   );
 };

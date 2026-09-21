@@ -1,4 +1,5 @@
 import { Exam, Question, User, ExamSubmission, ViolationLog } from '../types';
+import { getMatchingData } from './matchingHelper';
 
 export function gradeSubmission(
   exam: Exam,
@@ -56,17 +57,18 @@ export function gradeSubmission(
         earned = Math.round((correctCount / q.trueFalseItems.length) * q.points);
         isCorrect = correctCount === q.trueFalseItems.length;
       }
-    } else if (q.type === 'matching' && q.matchingPairs) {
+    } else if (q.type === 'matching') {
+      const matchingData = getMatchingData(q);
       const matchAns = studentAns || {};
       let matchCount = 0;
-      q.matchingPairs.forEach(pair => {
-        if (matchAns[pair.id] === pair.right) {
+      matchingData.premises.forEach(premise => {
+        if (matchAns[premise.id] === premise.correctOptionId) {
           matchCount++;
         }
       });
-      if (q.matchingPairs.length > 0) {
-        earned = Math.round((matchCount / q.matchingPairs.length) * q.points);
-        isCorrect = matchCount === q.matchingPairs.length;
+      if (matchingData.premises.length > 0) {
+        earned = Math.round((matchCount / matchingData.premises.length) * q.points);
+        isCorrect = matchCount === matchingData.premises.length;
       }
     } else if (q.type === 'case_study') {
       // Essay / Case Study: check keywords if available, or give initial credit for thoughtful essay

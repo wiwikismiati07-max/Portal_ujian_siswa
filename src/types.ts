@@ -39,6 +39,23 @@ export interface MatchingPair {
   right: string; // Match / Pasangan kanan
 }
 
+export interface MatchingPremise {
+  id: string;
+  text: string; // Kolom A: Pertanyaan / Pernyataan
+  correctOptionId: string; // ID of the correct option in Kolom B
+}
+
+export interface MatchingOption {
+  id: string;
+  label: string; // "A", "B", "C", "D", "E", "F"...
+  text: string; // Kolom B: Teks Pilihan / Pengecoh
+}
+
+export interface MatchingData {
+  premises: MatchingPremise[]; // Kolom A
+  options: MatchingOption[]; // Kolom B (termasuk pengecoh)
+}
+
 export interface Question {
   id: string;
   examId: string;
@@ -49,7 +66,8 @@ export interface Question {
   correctSingle?: number; // index 0..4 for single choice
   correctMulti?: number[]; // array of indices for multiple choice
   trueFalseItems?: TrueFalseStatement[]; // for true_false
-  matchingPairs?: MatchingPair[]; // for matching
+  matchingPairs?: MatchingPair[]; // legacy matching
+  matchingData?: MatchingData; // for matching (Kolom A & Kolom B + distractors)
   caseContext?: string; // Scenario / Reading text / stimulus for case study
   caseKeywords?: string[]; // keywords or reference answer for grading case study
   rubricNotes?: string; // panduan penilaian untuk guru

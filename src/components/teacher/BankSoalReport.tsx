@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Exam, Question, Subject, User } from '../../types';
+import { getMatchingData } from '../../utils/matchingHelper';
 import {
   Printer,
   Plus,
@@ -536,19 +537,41 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                     </div>
                   )}
 
-                  {q.type === 'matching' && q.matchingPairs && (
-                    <div className="space-y-1.5 text-xs">
-                      {q.matchingPairs.map((pair, mIdx) => (
-                        <div key={pair.id} className="p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
-                          <span className="font-medium text-slate-800">{mIdx + 1}. {pair.left}</span>
-                          <span className="text-slate-400 font-bold">➔</span>
-                          <span className="font-semibold text-indigo-700 bg-white px-2 py-1 rounded border border-slate-200">
-                            {pair.right}
-                          </span>
+                  {q.type === 'matching' && (() => {
+                    const mData = getMatchingData(q);
+                    return (
+                      <div className="space-y-3 text-xs">
+                        {/* Kolom B Options */}
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                          <div className="font-bold text-slate-700 uppercase mb-2">Kolom B (Pilihan & Pengecoh):</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {mData.options.map(opt => (
+                              <div key={opt.id} className="p-1.5 bg-white border border-slate-200 rounded flex items-center gap-2">
+                                <span className="font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded text-[11px]">{opt.label}</span>
+                                <span>{opt.text}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+
+                        {/* Kolom A Premises & Answer Keys */}
+                        <div className="space-y-1.5">
+                          <div className="font-bold text-slate-700 uppercase">Kolom A (Pertanyaan & Kunci Jawaban):</div>
+                          {mData.premises.map((premise, mIdx) => {
+                            const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
+                            return (
+                              <div key={premise.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <span className="font-semibold text-slate-800">{mIdx + 1}. {premise.text}</span>
+                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 shrink-0">
+                                  Kunci: Opsi {correctOpt?.label || '-'} ({correctOpt?.text || '-'})
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {q.type === 'case_study' && (
                     <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs text-indigo-950 space-y-1">
@@ -760,16 +783,32 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                       </div>
                     )}
 
-                    {q.type === 'matching' && q.matchingPairs && (
-                      <div className="space-y-1 text-xs">
-                        {q.matchingPairs.map((pair, pIdx) => (
-                          <div key={pIdx} className="p-2 border border-slate-300 rounded flex items-center justify-between">
-                            <span>{pIdx + 1}. {pair.left}</span>
-                            <span className="font-bold">↔ {pair.right}</span>
+                    {q.type === 'matching' && (() => {
+                      const mData = getMatchingData(q);
+                      return (
+                        <div className="space-y-2 text-xs">
+                          <div className="font-bold uppercase">Kolom B (Pilihan & Pengecoh):</div>
+                          <div className="grid grid-cols-2 gap-1 mb-2">
+                            {mData.options.map(opt => (
+                              <div key={opt.id} className="p-1 border border-slate-300 rounded flex items-center gap-1.5 text-[11px]">
+                                <span className="font-bold border border-black px-1 rounded">{opt.label}</span>
+                                <span>{opt.text}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <div className="font-bold uppercase">Kolom A & Kunci Jawaban:</div>
+                          {mData.premises.map((premise, pIdx) => {
+                            const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
+                            return (
+                              <div key={premise.id} className="p-1.5 border border-slate-300 rounded flex items-center justify-between">
+                                <span>{pIdx + 1}. {premise.text}</span>
+                                <span className="font-bold">Kunci: Opsi {correctOpt?.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
 
                     {q.type === 'case_study' && (
                       <div className="p-2 bg-slate-50 border border-slate-300 rounded text-xs space-y-1">

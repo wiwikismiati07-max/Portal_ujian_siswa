@@ -11,6 +11,7 @@ interface OfficialLetterheadProps {
   // If false, it renders on screen as well (e.g. for preview modal or print view).
   isPrintOnly?: boolean;
   className?: string;
+  showExamMetadata?: boolean;
 }
 
 export const OfficialLetterhead: React.FC<OfficialLetterheadProps> = ({
@@ -21,7 +22,8 @@ export const OfficialLetterhead: React.FC<OfficialLetterheadProps> = ({
   judulDokumen,
   subJudulDokumen,
   isPrintOnly = true,
-  className = ''
+  className = '',
+  showExamMetadata = true
 }) => {
   // Format default date if none provided (e.g. "Senin, 20 September 2026")
   const defaultDate = React.useMemo(() => {
@@ -111,35 +113,37 @@ export const OfficialLetterhead: React.FC<OfficialLetterheadProps> = ({
       )}
 
       {/* KOTAK METADATA UJIAN (SESUAI DOKUMEN LAMPIRAN RESMI) */}
-      <div className="border-[2.5px] border-black text-xs sm:text-sm font-semibold text-black bg-white my-2.5">
-        {/* Baris 1: Mata Pelajaran & Hari/Tgl */}
-        <div className="grid grid-cols-12 px-4 py-2 border-b-[1.5px] border-black">
-          <div className="col-span-7 sm:col-span-8 flex items-center">
-            <span className="w-32 sm:w-36 shrink-0 font-serif font-bold">Mata Pelajaran</span>
-            <span className="mx-2 font-serif font-bold">:</span>
-            <span className="font-serif font-normal flex-1 truncate">{mataPelajaran}</span>
+      {showExamMetadata && (
+        <div className="border-[2.5px] border-black text-xs sm:text-sm font-semibold text-black bg-white my-2.5">
+          {/* Baris 1: Mata Pelajaran & Hari/Tgl */}
+          <div className="grid grid-cols-12 px-4 py-2 border-b-[1.5px] border-black">
+            <div className="col-span-7 sm:col-span-8 flex items-center">
+              <span className="w-32 sm:w-36 shrink-0 font-serif font-bold">Mata Pelajaran</span>
+              <span className="mx-2 font-serif font-bold">:</span>
+              <span className="font-serif font-normal flex-1 truncate">{mataPelajaran}</span>
+            </div>
+            <div className="col-span-5 sm:col-span-4 flex items-center">
+              <span className="w-20 sm:w-24 shrink-0 font-serif font-bold">Hari/Tgl</span>
+              <span className="mx-2 font-serif font-bold">:</span>
+              <span className="font-serif font-normal flex-1">{displayDate}</span>
+            </div>
           </div>
-          <div className="col-span-5 sm:col-span-4 flex items-center">
-            <span className="w-20 sm:w-24 shrink-0 font-serif font-bold">Hari/Tgl</span>
-            <span className="mx-2 font-serif font-bold">:</span>
-            <span className="font-serif font-normal flex-1">{displayDate}</span>
-          </div>
-        </div>
 
-        {/* Baris 2: Kelas & Waktu */}
-        <div className="grid grid-cols-12 px-4 py-2">
-          <div className="col-span-7 sm:col-span-8 flex items-center">
-            <span className="w-32 sm:w-36 shrink-0 font-serif font-bold">Kelas</span>
-            <span className="mx-2 font-serif font-bold">:</span>
-            <span className="font-serif font-normal flex-1 truncate">{kelas}</span>
-          </div>
-          <div className="col-span-5 sm:col-span-4 flex items-center">
-            <span className="w-20 sm:w-24 shrink-0 font-serif font-bold">Waktu</span>
-            <span className="mx-2 font-serif font-bold">:</span>
-            <span className="font-serif font-normal flex-1">{waktu}</span>
+          {/* Baris 2: Kelas & Waktu */}
+          <div className="grid grid-cols-12 px-4 py-2">
+            <div className="col-span-7 sm:col-span-8 flex items-center">
+              <span className="w-32 sm:w-36 shrink-0 font-serif font-bold">Kelas</span>
+              <span className="mx-2 font-serif font-bold">:</span>
+              <span className="font-serif font-normal flex-1 truncate">{kelas}</span>
+            </div>
+            <div className="col-span-5 sm:col-span-4 flex items-center">
+              <span className="w-20 sm:w-24 shrink-0 font-serif font-bold">Waktu</span>
+              <span className="mx-2 font-serif font-bold">:</span>
+              <span className="font-serif font-normal flex-1">{waktu}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

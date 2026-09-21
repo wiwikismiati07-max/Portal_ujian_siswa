@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getMatchingData } from '../../utils/matchingHelper';
 import {
   Clock,
   AlertTriangle,
@@ -426,7 +427,10 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     if (q.type === 'single_choice') return typeof ans === 'number';
     if (q.type === 'multiple_choice') return Array.isArray(ans) && ans.length > 0;
     if (q.type === 'true_false') return typeof ans === 'object' && Object.keys(ans).length === (q.trueFalseItems?.length || 0);
-    if (q.type === 'matching') return typeof ans === 'object' && Object.keys(ans).length === (q.matchingPairs?.length || 0);
+    if (q.type === 'matching') {
+      const mData = getMatchingData(q);
+      return typeof ans === 'object' && Object.keys(ans).length === mData.premises.length;
+    }
     if (q.type === 'case_study') return typeof ans === 'string' && ans.trim().length > 0;
     return false;
   };
@@ -910,57 +914,78 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             )}
 
             {/* TYPE 4: SOAL MENJODOHKAN (Matching) */}
-            {currentQ.type === 'matching' && currentQ.matchingPairs && (
-              <div className="space-y-4">
-                <div className="text-xs text-slate-500 mb-2">
-                  Pilih pasangan yang tepat dari pilihan pada Kolom Kanan untuk setiap butir di Kolom Kiri:
-                </div>
-                <div className="space-y-3">
-                  {currentQ.matchingPairs.map((pair, idx) => {
-                    const currentMatchAnswers = answers[currentQ.id] || {};
-                    const selectedRight = currentMatchAnswers[pair.id] || '';
-                    const rightOptions = currentQ.matchingPairs?.map(p => p.right) || [];
+            {currentQ.type === 'matching' && (() => {
+              const matchingData = getMatchingData(currentQ);
+              return (
+                <div className="space-y-6">
+                  <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-xs sm:text-sm text-indigo-950">
+                    <div className="font-bold mb-1">Soal Menjodohkan (Tarik Garis / Pasangan):</div>
+                    Pilih huruf pilihan yang tepat dari Kolom B (termasuk pilihan pengecoh) untuk setiap nomor pertanyaan di Kolom A.
+                  </div>
 
-                    return (
-                      <div key={pair.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                        <div className="md:col-span-5 text-xs sm:text-sm font-semibold text-slate-800 flex items-start gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
+                  {/* Kotak Kolom B: Pilihan Jawaban & Pengecoh */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                      Kolom B: Daftar Pilihan Jawaban & Pengecoh
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {matchingData.options.map(opt => (
+                        <div key={opt.id} className="p-2.5 bg-white border border-slate-200 rounded-xl text-xs flex items-center gap-2 shadow-xs">
+                          <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center shrink-0">
+                            {opt.label}
                           </span>
-                          <span>{pair.left}</span>
+                          <span className="text-slate-800 font-medium">{opt.text}</span>
                         </div>
+                      ))}
+                    </div>
+                  </div>
 
-                        <div className="md:col-span-2 flex justify-center text-slate-400">
-                          <span className="text-xs font-bold uppercase tracking-wider bg-white px-2 py-0.5 rounded border border-slate-200">
-                            Dijodohkan ke:
-                          </span>
-                        </div>
+                  {/* Kolom A: Daftar Pertanyaan & Dropdown */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Kolom A: Daftar Pertanyaan
+                    </div>
+                    <div className="space-y-3">
+                      {matchingData.premises.map((premise, idx) => {
+                        const currentMatchAnswers = answers[currentQ.id] || {};
+                        const selectedOptionId = currentMatchAnswers[premise.id] || '';
 
-                        <div className="md:col-span-5">
-                          <select
-                            value={selectedRight}
-                            onChange={(e) => {
-                              setAnswerForCurrent({
-                                ...currentMatchAnswers,
-                                [pair.id]: e.target.value
-                              });
-                            }}
-                            className="w-full text-xs sm:text-sm p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-medium"
-                          >
-                            <option value="">-- Pilih Pasangan Jawaban --</option>
-                            {rightOptions.map((opt, oIdx) => (
-                              <option key={oIdx} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        return (
+                          <div key={premise.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                            <div className="md:col-span-7 text-xs sm:text-sm font-semibold text-slate-800 flex items-start gap-3">
+                              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="pt-0.5">{premise.text}</span>
+                            </div>
+
+                            <div className="md:col-span-5">
+                              <select
+                                value={selectedOptionId}
+                                onChange={(e) => {
+                                  setAnswerForCurrent({
+                                    ...currentMatchAnswers,
+                                    [premise.id]: e.target.value
+                                  });
+                                }}
+                                className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-semibold text-indigo-900"
+                              >
+                                <option value="">-- Pilih Huruf Pilihan (A, B, C...) --</option>
+                                {matchingData.options.map(opt => (
+                                  <option key={opt.id} value={opt.id}>
+                                    Opsi {opt.label}: {opt.text}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* TYPE 5: STUDI KASUS (Analysis / Essay with live words count) */}
             {currentQ.type === 'case_study' && (
