@@ -194,8 +194,55 @@ export default function App() {
     setLoggedInUser(updatedUser);
   };
 
+  // 1. PRIORITAS UTAMA: LEMBAR UJIAN SISWA AKTIF (EXAM WORKSHEET)
+  // Langsung render 100% Layar Penuh Fokus tanpa sidebar, tanpa header launcher, tanpa gangguan
+  if (activeExam && currentUser) {
+    return (
+      <div className="min-h-screen w-full bg-slate-100 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
+        <ExamWorksheet
+          student={currentUser}
+          exam={activeExam}
+          questions={activeQuestions}
+          onFinishExam={handleFinishExam}
+          onExitToDashboard={handleExitExamWorksheet}
+        />
+      </div>
+    );
+  }
+
+  // 2. DASHBOARD KHUSUS SISWA
+  // Siswa melihat tampilan ujian bersih tanpa menu sidebar launcher guru/admin
+  if (currentUser && currentUser.role === 'siswa') {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
+        <Navbar
+          user={currentUser}
+          onLogout={handleLogout}
+          onOpenChangePassword={() => setIsChangePasswordOpen(true)}
+          isExamLockActive={false}
+          supabaseStatus={supabaseStatus}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        />
+        <main className="flex-1 flex flex-col">
+          <StudentDashboard
+            student={currentUser}
+            onStartExam={handleStartExam}
+          />
+        </main>
+        {isChangePasswordOpen && (
+          <ChangePasswordModal
+            user={currentUser}
+            isOpen={isChangePasswordOpen}
+            onClose={() => setIsChangePasswordOpen(false)}
+            onUpdated={handleUserUpdated}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
-    <Dashboard3DLauncher onSelectInternalRoute={handleSelectInternalRoute}>
+    <Dashboard3DLauncher onSelectInternalRoute={handleSelectInternalRoute} isExamActive={false}>
       <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
         {/* Supabase Realtime Setup Notification Banner */}
         {!activeExam && (
@@ -221,21 +268,6 @@ export default function App() {
         <main className="flex-1 flex flex-col">
           {!currentUser ? (
             <LoginView onLoginSuccess={handleLoginSuccess} />
-          ) : currentUser.role === 'siswa' ? (
-            activeExam ? (
-              <ExamWorksheet
-                student={currentUser}
-                exam={activeExam}
-                questions={activeQuestions}
-                onFinishExam={handleFinishExam}
-                onExitToDashboard={handleExitExamWorksheet}
-              />
-            ) : (
-              <StudentDashboard
-                student={currentUser}
-                onStartExam={handleStartExam}
-              />
-            )
           ) : currentUser.role === 'guru' ? (
             <TeacherDashboard teacher={currentUser} initialTab={teacherInitialTab} />
           ) : (

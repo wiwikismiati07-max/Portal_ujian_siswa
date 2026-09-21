@@ -25,7 +25,8 @@ import {
   Eye,
   Volume2,
   Calendar,
-  FileText
+  FileText,
+  LayoutGrid
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Exam, Question, User, ExamSubmission, ViolationLog } from '../../types';
@@ -53,6 +54,9 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
   const [startedAt] = useState<string>(() => new Date().toISOString());
+
+  // Layout & Palette visibility
+  const [showPalette, setShowPalette] = useState(true);
 
   // CBT Safe Exam Lockdown state (Automatic lock on mount)
   const [isLockdownStarted, setIsLockdownStarted] = useState(true);
@@ -675,8 +679,18 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             </span>
           </div>
 
-          {/* Right Status (Lockdown Active / Violation Counter) */}
+          {/* Right Status (Lockdown Active / Violation Counter / Palette Toggle) */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPalette(!showPalette)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              title={showPalette ? 'Sembunyikan panel nomor soal agar lembar soal lebih luas & fokus' : 'Tampilkan daftar nomor soal'}
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{showPalette ? 'Fokus Lembar Soal' : 'Daftar Nomor'}</span>
+            </button>
+
             <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold">
               <Shield className="w-3.5 h-3.5" />
               <span>Lockdown Aktif</span>
@@ -696,8 +710,8 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       {/* MAIN CONTAINER */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
         
-        {/* LEFT COLUMN: QUESTION CONTENT (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
+        {/* LEFT COLUMN: QUESTION CONTENT (8 cols when palette open, 12 cols when focused) */}
+        <div className={`${showPalette ? 'lg:col-span-8' : 'lg:col-span-12 max-w-4xl mx-auto w-full'} flex flex-col gap-4 transition-all duration-200`}>
           
           {/* Question Card */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex-1 flex flex-col">
@@ -1158,63 +1172,65 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
         </div>
 
         {/* RIGHT COLUMN: QUESTION NAVIGATION MATRIX (4 cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
-          
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Nomor Soal ({questions.length})
-              </h3>
-              <span className="text-[11px] font-bold text-emerald-600">
-                Terjawab: {answeredCount} / {questions.length}
-              </span>
-            </div>
+        {showPalette && (
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Nomor Soal ({questions.length})
+                </h3>
+                <span className="text-[11px] font-bold text-emerald-600">
+                  Terjawab: {answeredCount} / {questions.length}
+                </span>
+              </div>
 
-            {/* Matrix of Question Numbers */}
-            <div className="max-h-72 overflow-y-auto pr-1">
-              <div className="grid grid-cols-5 gap-2">
-                {questions.map((q, idx) => {
-                  const isCurrent = idx === currentIndex;
-                  const isAns = isQuestionAnswered(q);
-                  const isFlag = flagged[q.id];
+              {/* Matrix of Question Numbers */}
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <div className="grid grid-cols-5 gap-2">
+                  {questions.map((q, idx) => {
+                    const isCurrent = idx === currentIndex;
+                    const isAns = isQuestionAnswered(q);
+                    const isFlag = flagged[q.id];
 
-                  let btnBg = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
-                  if (isFlag) {
-                    btnBg = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-                  } else if (isAns) {
-                    btnBg = 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs';
-                  }
+                    let btnBg = 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+                    if (isFlag) {
+                      btnBg = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+                    } else if (isAns) {
+                      btnBg = 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs';
+                    }
 
-                  return (
-                    <button
-                      key={q.id}
-                      type="button"
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`h-10 rounded-xl text-xs font-bold border transition-all flex items-center justify-center cursor-pointer ${btnBg} ${
-                        isCurrent ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={q.id}
+                        type="button"
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`h-10 rounded-xl text-xs font-bold border transition-all flex items-center justify-center cursor-pointer ${btnBg} ${
+                          isCurrent ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick Finish Button on Matrix */}
+              <div className="mt-6 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowFinishConfirm(true)}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kumpulkan Lembar Ujian</span>
+                </button>
               </div>
             </div>
 
-            {/* Quick Finish Button on Matrix */}
-            <div className="mt-6 pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowFinishConfirm(true)}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Kumpulkan Lembar Ujian</span>
-              </button>
-            </div>
           </div>
-
-        </div>
+        )}
 
       </div>
 

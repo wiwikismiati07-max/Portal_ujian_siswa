@@ -54,6 +54,7 @@ interface Dashboard3DLauncherProps {
   children: React.ReactNode;
   activeInternalRoute?: string;
   onSelectInternalRoute?: (route: string) => void;
+  isExamActive?: boolean;
 }
 
 // Icon helper map
@@ -165,13 +166,14 @@ const COLOR_STYLES: Record<
 export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
   children,
   activeInternalRoute,
-  onSelectInternalRoute
+  onSelectInternalRoute,
+  isExamActive
 }) => {
   const [links, setLinks] = useState<AppLink[]>(() => getAllAppLinks());
   const [activeLinkId, setActiveLinkId] = useState<string>('link_portal_utama');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isIframeFullscreen, setIsIframeFullscreen] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
 
@@ -362,6 +364,11 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
+
+  // If exam is active, bypass launcher completely to give student full-screen distraction-free worksheet
+  if (isExamActive) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-800 flex flex-col font-sans overflow-x-hidden selection:bg-indigo-500 selection:text-white">
