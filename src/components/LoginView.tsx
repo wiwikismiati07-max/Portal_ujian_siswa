@@ -581,8 +581,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </div>
                 )}
 
-                {/* Login Form */}
-                <form onSubmit={handleLogin} className="space-y-4">
+                {/* Login Form (Configured to suppress browser 'Save Password' prompt so exam screen is not disturbed) */}
+                <form
+                  onSubmit={handleLogin}
+                  className="space-y-4"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                >
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Username / NIS / Nama
@@ -591,6 +598,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       <input
                         ref={usernameInputRef}
                         type="text"
+                        name="cbt_student_identity"
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-form-type="other"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder={
@@ -629,6 +641,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
+                        name="cbt_auth_secret"
+                        autoComplete="new-password"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-form-type="other"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Masukkan password"

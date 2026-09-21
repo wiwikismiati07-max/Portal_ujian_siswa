@@ -73,6 +73,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [imageScale, setImageScale] = useState(1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const mountTimeRef = useRef<number>(Date.now());
   const lastViolationTimeRef = useRef<number>(0);
   const violationCountRef = useRef<number>(0);
   const violationLogsRef = useRef<ViolationLog[]>([]);
@@ -195,15 +196,19 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        if (Date.now() - mountTimeRef.current < 7000) return;
         triggerViolation('Anda terdeteksi beralih aplikasi, meminimalkan layar HP, atau membuka tab lain.');
       }
     };
 
     const handleWindowBlur = () => {
+      // Abaikan kehilangan fokus pada 7 detik pertama saat lembar ujian dimuat (mencegah pelanggaran karena dialog browser/fullscreen)
+      if (Date.now() - mountTimeRef.current < 7000) return;
       triggerViolation('Fokus layar ujian terputus! Dilarang membuka aplikasi lain, kalkulator, catatan, atau menu split-screen.');
     };
 
     const handlePageHide = () => {
+      if (Date.now() - mountTimeRef.current < 7000) return;
       triggerViolation('Layar browser HP diminimalkan atau berpindah aplikasi.');
     };
 
@@ -216,6 +221,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       );
       setIsFullscreen(fs);
       if (!fs && !submittedResult) {
+        if (Date.now() - mountTimeRef.current < 7000) return;
         triggerViolation('Layar ujian keluar dari mode Layar Penuh (Fullscreen). Layar wajib dikunci kembali untuk melanjutkan.');
       }
     };
@@ -304,7 +310,11 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
   const triggerViolation = (reason: string) => {
     const now = Date.now();
-    if (now - lastViolationTimeRef.current < 1200) return;
+    // Masa tenggang 7 detik awal saat lembar ujian baru dimuat agar dialog browser tidak menghitung pelanggaran
+    if (now - mountTimeRef.current < 7000) {
+      return;
+    }
+    if (now - lastViolationTimeRef.current < 1500) return;
     lastViolationTimeRef.current = now;
 
     playWarningBeep();

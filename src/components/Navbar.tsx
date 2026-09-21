@@ -167,14 +167,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={onOpenChangePassword}
-                    title="Ubah Username & Password"
-                    className="p-1.5 sm:p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80 rounded-xl transition-all border border-transparent hover:border-indigo-100 cursor-pointer"
-                  >
-                    <KeyRound className="w-4 h-4" />
-                  </button>
+                  {user.role !== 'siswa' && (
+                    <button
+                      type="button"
+                      onClick={onOpenChangePassword}
+                      title="Ubah Username & Password"
+                      className="p-1.5 sm:p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80 rounded-xl transition-all border border-transparent hover:border-indigo-100 cursor-pointer"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onLogout}
