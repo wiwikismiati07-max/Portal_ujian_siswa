@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS public.cbt_questions (
   correct_multi JSONB,
   true_false_items JSONB,
   matching_pairs JSONB,
+  matching_data JSONB,
   case_context TEXT,
   case_keywords JSONB,
   rubric_notes TEXT,
@@ -96,6 +97,17 @@ CREATE TABLE IF NOT EXISTS public.cbt_questions (
   image_url TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migrasi aman kolom untuk cbt_questions jika tabel sudah ada sebelumnya
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS matching_data JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS option_images JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS true_false_items JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS matching_pairs JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS case_context TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS case_keywords JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS rubric_notes TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_cbt_questions_exam_id ON public.cbt_questions(exam_id);
 
@@ -226,3 +238,70 @@ BEGIN
   END IF;
 END $$;
 `;
+
+// Skrip SQL khusus untuk membuat dan mengaktifkan tabel Bank Soal (cbt_questions) di Supabase
+export const SUPABASE_QUESTIONS_TABLE_SQL = `-- ====================================================================
+-- SKRIP KHUSUS TABEL BANK SOAL: cbt_questions (PORTAL CBT SPANJU)
+-- Salin seluruh teks ini dan jalankan di Supabase Dashboard -> SQL Editor
+-- Link: https://supabase.com/dashboard/project/omuhzeuzxfincumsnjrd/sql
+-- ====================================================================
+
+-- 1. Buat Tabel cbt_questions jika belum ada
+CREATE TABLE IF NOT EXISTS public.cbt_questions (
+  id TEXT PRIMARY KEY,
+  exam_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  points NUMERIC DEFAULT 10,
+  options JSONB,
+  option_images JSONB,
+  correct_single INTEGER,
+  correct_multi JSONB,
+  true_false_items JSONB,
+  matching_pairs JSONB,
+  matching_data JSONB,
+  case_context TEXT,
+  case_keywords JSONB,
+  rubric_notes TEXT,
+  explanation TEXT,
+  image_url TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Pastikan semua kolom baru ditambahkan jika tabel sudah pernah dibuat sebelumnya
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS matching_data JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS option_images JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS true_false_items JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS matching_pairs JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS case_context TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS case_keywords JSONB;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS rubric_notes TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS explanation TEXT;
+ALTER TABLE IF EXISTS public.cbt_questions ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- 3. Indeks pencarian cepat soal berdasarkan ID paket ujian
+CREATE INDEX IF NOT EXISTS idx_cbt_questions_exam_id ON public.cbt_questions(exam_id);
+
+-- 4. Aktifkan Row Level Security (RLS) & Kebijakan Akses Penuh untuk Aplikasi CBT
+ALTER TABLE public.cbt_questions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "cbt_questions_all" ON public.cbt_questions;
+CREATE POLICY "cbt_questions_all" ON public.cbt_questions 
+  FOR ALL 
+  USING (true) 
+  WITH CHECK (true);
+
+-- 5. Tambahkan tabel cbt_questions ke publikasi Realtime Supabase
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_questions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_questions;
+  END IF;
+END $$;
+`;
+

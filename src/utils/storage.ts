@@ -1,4 +1,5 @@
 import { User, Subject, Exam, Question, ExamSubmission, ViolationLog, AppLink } from '../types';
+import { getMatchingData } from './matchingHelper';
 import {
   INITIAL_USERS,
   INITIAL_SUBJECTS,
@@ -502,21 +503,21 @@ export const getQuestionsByExamId = (examId: string): Question[] => {
   return getAllQuestions().filter(q => q.examId === examId);
 };
 
-export const addQuestion = async (question: Question): Promise<void> => {
+export const addQuestion = async (question: Question): Promise<{ success: boolean; error?: string }> => {
   const questions = getAllQuestions();
   questions.push(question);
   memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  await syncQuestionToSupabase(question);
   notifyDataUpdated();
+  return await syncQuestionToSupabase(question);
 };
 
-export const updateQuestion = async (updated: Question): Promise<void> => {
+export const updateQuestion = async (updated: Question): Promise<{ success: boolean; error?: string }> => {
   const questions = getAllQuestions().map(q => (q.id === updated.id ? updated : q));
   memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  await syncQuestionToSupabase(updated);
   notifyDataUpdated();
+  return await syncQuestionToSupabase(updated);
 };
 
 export const deleteQuestion = async (questionId: string): Promise<void> => {
@@ -618,7 +619,18 @@ export const gradeSubmission = (
 
       case 'true_false': {
         const items = q.trueFalseItems || [];
-        if (items.length > 0 && answer && typeof answer === 'object') {
+        if (items.length === 1) {
+          const item = items[0];
+          const studentVal = typeof answer === 'object' && answer !== null ? answer[item.id] : answer;
+          const isItemCorrect = typeof studentVal === 'boolean' && studentVal === item.isCorrect;
+          qEarned = isItemCorrect ? q.points : 0;
+          evaluatedAnswers[q.id] = {
+            earned: qEarned,
+            max: q.points,
+            isCorrect: isItemCorrect,
+            feedback: isItemCorrect ? 'Jawaban Benar' : 'Jawaban Salah'
+          };
+        } else if (items.length > 0 && answer && typeof answer === 'object') {
           let correctCount = 0;
           items.forEach(item => {
             if (answer[item.id] === item.isCorrect) {
@@ -638,21 +650,23 @@ export const gradeSubmission = (
       }
 
       case 'matching': {
-        const pairs = q.matchingPairs || [];
-        if (pairs.length > 0 && answer && typeof answer === 'object') {
-          let matchedCount = 0;
-          pairs.forEach(p => {
-            if (answer[p.id] === p.right) {
-              matchedCount++;
-            }
-          });
-          const ratio = matchedCount / pairs.length;
+        const matchingData = getMatchingData(q);
+        const matchAns = (answer && typeof answer === 'object') ? answer : {};
+        let matchedCount = 0;
+        matchingData.premises.forEach(premise => {
+          if (matchAns[premise.id] === premise.correctOptionId) {
+            matchedCount++;
+          }
+        });
+        const totalPremises = matchingData.premises.length;
+        if (totalPremises > 0) {
+          const ratio = matchedCount / totalPremises;
           qEarned = Math.round(ratio * q.points);
           evaluatedAnswers[q.id] = {
             earned: qEarned,
             max: q.points,
-            isCorrect: matchedCount === pairs.length,
-            feedback: `${matchedCount} dari ${pairs.length} pasangan cocok`
+            isCorrect: matchedCount === totalPremises,
+            feedback: `${matchedCount} dari ${totalPremises} pasangan cocok`
           };
         }
         break;

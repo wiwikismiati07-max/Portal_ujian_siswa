@@ -47,15 +47,27 @@ export function gradeSubmission(
       }
     } else if (q.type === 'true_false' && q.trueFalseItems) {
       const tfAns = studentAns || {};
-      let correctCount = 0;
-      q.trueFalseItems.forEach(item => {
-        if (tfAns[item.id] === item.isCorrect) {
-          correctCount++;
+      if (q.trueFalseItems.length === 1) {
+        const item = q.trueFalseItems[0];
+        const studentVal = typeof tfAns === 'object' && tfAns !== null ? tfAns[item.id] : tfAns;
+        if (typeof studentVal === 'boolean' && studentVal === item.isCorrect) {
+          earned = q.points;
+          isCorrect = true;
+        } else {
+          earned = 0;
+          isCorrect = false;
         }
-      });
-      if (q.trueFalseItems.length > 0) {
-        earned = Math.round((correctCount / q.trueFalseItems.length) * q.points);
-        isCorrect = correctCount === q.trueFalseItems.length;
+      } else {
+        let correctCount = 0;
+        q.trueFalseItems.forEach(item => {
+          if (tfAns[item.id] === item.isCorrect) {
+            correctCount++;
+          }
+        });
+        if (q.trueFalseItems.length > 0) {
+          earned = Math.round((correctCount / q.trueFalseItems.length) * q.points);
+          isCorrect = correctCount === q.trueFalseItems.length;
+        }
       }
     } else if (q.type === 'matching') {
       const matchingData = getMatchingData(q);
@@ -70,7 +82,7 @@ export function gradeSubmission(
         earned = Math.round((matchCount / matchingData.premises.length) * q.points);
         isCorrect = matchCount === matchingData.premises.length;
       }
-    } else if (q.type === 'single_choice' || q.type === 'case_study') {
+    } else if (q.type === 'case_study') {
       if (typeof studentAns === 'number' && studentAns === q.correctSingle) {
         earned = q.points;
         isCorrect = true;

@@ -302,6 +302,16 @@ export const upsertInChunks = async (
             console.error('Fallback chunk upsert also failed:', fbErr.message);
             return { success: false, error: fbErr.message };
           }
+        } else if (tableName === 'cbt_questions') {
+          const fallbackChunk = chunk.map((r: any) => {
+            const { matching_data, option_images, ...rest } = r;
+            return rest;
+          });
+          const { error: fbErr } = await supabase.from(tableName).upsert(fallbackChunk);
+          if (fbErr) {
+            console.error('Fallback cbt_questions chunk upsert failed:', fbErr.message);
+            return { success: false, error: fbErr.message };
+          }
         } else {
           return { success: false, error: error.message };
         }
@@ -463,7 +473,34 @@ export const pullFromSupabase = async (): Promise<void> => {
             !q.examId.startsWith('exam_ipa_pts') &&
             !q.examId.startsWith('exam_arb_pts')
         );
-      saveQuestions(cleanQuestions, false);
+
+      const localQuestions = getAllQuestions().filter(
+        q =>
+          !q.examId.startsWith('exam_inf_pts') &&
+          !q.examId.startsWith('exam_ipa_pts') &&
+          !q.examId.startsWith('exam_arb_pts')
+      );
+
+      if (cleanQuestions.length === 0 && localQuestions.length > 0) {
+        // Jangan timpa lokal dengan kosong! Pertahankan lokal dan upload ke Supabase
+        saveQuestions(localQuestions, false);
+        upsertInChunks('cbt_questions', localQuestions.map(mapQuestionToDb)).catch(err => {
+          console.warn('Seeding local questions to Supabase in background:', err);
+        });
+      } else if (cleanQuestions.length > 0) {
+        // Gabungkan butir soal lokal yang belum sempat tersinkron ke Supabase
+        const dbIdSet = new Set(cleanQuestions.map(q => q.id));
+        const unsyncedLocals = localQuestions.filter(lq => !dbIdSet.has(lq.id));
+        if (unsyncedLocals.length > 0) {
+          const merged = [...cleanQuestions, ...unsyncedLocals];
+          saveQuestions(merged, false);
+          upsertInChunks('cbt_questions', unsyncedLocals.map(mapQuestionToDb)).catch(() => {});
+        } else {
+          saveQuestions(cleanQuestions, false);
+        }
+      } else {
+        saveQuestions([], false);
+      }
     }
 
     // 5. Submissions
@@ -693,19 +730,56 @@ export const deleteExamFromSupabase = async (examId: string): Promise<boolean> =
   }
 };
 
-export const syncQuestionToSupabase = async (question: Question): Promise<boolean> => {
+export const syncQuestionToSupabase = async (question: Question): Promise<{ success: boolean; error?: string }> => {
   try {
     const dbRow = mapQuestionToDb(question);
     const { error } = await supabase.from('cbt_questions').upsert(dbRow);
     if (error) {
       console.warn('Supabase question sync error:', error.message);
-      return false;
+      
+      // Fallback: Jika tabel cbt_questions di Supabase belum memiliki kolom matching_data atau option_images
+      if (
+        error.message?.includes('matching_data') ||
+        error.message?.includes('option_images') ||
+        error.message?.includes('column') ||
+        error.code === 'PGRST204'
+      ) {
+        const fallbackRow = { ...dbRow };
+        delete (fallbackRow as any).matching_data;
+        delete (fallbackRow as any).option_images;
+        const { error: fbErr } = await supabase.from('cbt_questions').upsert(fallbackRow);
+        if (!fbErr) {
+          broadcastCbtEvent('question_updated', { questionId: question.id });
+          return { success: true };
+        }
+      }
+      return { success: false, error: error.message };
     }
     broadcastCbtEvent('question_updated', { questionId: question.id });
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.warn('Network error syncing question:', err);
-    return false;
+    return { success: false, error: err?.message || 'Network error' };
+  }
+};
+
+export const syncAllLocalQuestionsToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+  try {
+    const localQuestions = getAllQuestions().filter(
+      q => !q.examId.startsWith('exam_inf_pts') && !q.examId.startsWith('exam_ipa_pts') && !q.examId.startsWith('exam_arb_pts')
+    );
+    if (localQuestions.length === 0) {
+      return { success: true, count: 0 };
+    }
+    const dbRows = localQuestions.map(mapQuestionToDb);
+    const res = await upsertInChunks('cbt_questions', dbRows);
+    if (res.success) {
+      return { success: true, count: localQuestions.length };
+    } else {
+      return { success: false, count: 0, error: res.error };
+    }
+  } catch (err: any) {
+    return { success: false, count: 0, error: err?.message };
   }
 };
 

@@ -16,11 +16,13 @@ import {
   BookOpen,
   Award,
   Layers,
-  Table
+  Table,
+  Database
 } from 'lucide-react';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
 import { PrintPreviewModal } from '../common/PrintPreviewModal';
+import { SupabaseModal } from '../SupabaseModal';
 
 interface BankSoalReportProps {
   teacher: User;
@@ -49,6 +51,7 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
   const [viewMode, setViewMode] = useState<'bank_soal' | 'kisi_kisi'>('bank_soal');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [printDocMode, setPrintDocMode] = useState<'bank_soal' | 'kisi_kisi'>('bank_soal');
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
 
   const currentExam = exams.find(e => e.id === selectedExamId) || exams[0];
   const examQuestions = currentExam ? questions.filter(q => q.examId === currentExam.id) : [];
@@ -183,6 +186,15 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Cetak Bank Soal</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSupabaseModalOpen(true)}
+              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Buka & Salin Skrip SQL Supabase tabel cbt_questions agar butir soal tersimpan aman di Cloud"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span>SQL Supabase</span>
             </button>
           </div>
         </div>
@@ -523,18 +535,31 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                   )}
 
                   {q.type === 'true_false' && q.trueFalseItems && (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200 text-xs">
-                      {q.trueFalseItems.map((item, tfIdx) => (
-                        <div key={item.id} className="p-2.5 bg-slate-50 flex items-center justify-between gap-3">
-                          <span>{tfIdx + 1}. {item.statement}</span>
-                          <span className={`px-2 py-0.5 rounded font-bold text-[11px] shrink-0 ${
-                            item.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                          }`}>
-                            Kunci: {item.isCorrect ? 'BENAR' : 'SALAH'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    q.trueFalseItems.length === 1 ? (
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-semibold text-slate-700">Kunci Jawaban:</span>
+                        <span className={`px-3 py-1 rounded-lg font-bold text-xs ${
+                          q.trueFalseItems[0].isCorrect
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                        }`}>
+                          {q.trueFalseItems[0].isCorrect ? 'BENAR' : 'SALAH'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200 text-xs">
+                        {q.trueFalseItems.map((item, tfIdx) => (
+                          <div key={item.id} className="p-2.5 bg-slate-50 flex items-center justify-between gap-3">
+                            <span>{tfIdx + 1}. {item.statement}</span>
+                            <span className={`px-2 py-0.5 rounded font-bold text-[11px] shrink-0 ${
+                              item.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              Kunci: {item.isCorrect ? 'BENAR' : 'SALAH'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )
                   )}
 
                   {q.type === 'matching' && (() => {
@@ -805,14 +830,21 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                     )}
 
                     {q.type === 'true_false' && q.trueFalseItems && (
-                      <div className="space-y-1 text-xs">
-                        {q.trueFalseItems.map((item, tIdx) => (
-                          <div key={tIdx} className="p-2 border border-slate-300 rounded flex items-center justify-between">
-                            <span>{tIdx + 1}. {item.statement}</span>
-                            <span className="font-bold underline">{item.isCorrect ? 'BENAR' : 'SALAH'}</span>
-                          </div>
-                        ))}
-                      </div>
+                      q.trueFalseItems.length === 1 ? (
+                        <div className="p-2 border border-slate-300 rounded flex items-center justify-between text-xs">
+                          <span>Pilihan Kunci Jawaban:</span>
+                          <span className="font-bold underline">{q.trueFalseItems[0].isCorrect ? 'BENAR' : 'SALAH'}</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1 text-xs">
+                          {q.trueFalseItems.map((item, tIdx) => (
+                            <div key={tIdx} className="p-2 border border-slate-300 rounded flex items-center justify-between">
+                              <span>{tIdx + 1}. {item.statement}</span>
+                              <span className="font-bold underline">{item.isCorrect ? 'BENAR' : 'SALAH'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )
                     )}
 
                     {q.type === 'matching' && (() => {
@@ -882,6 +914,12 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
           teacherNip={teacher.nipOrNis || '19831116 200904 2 003'}
         />
       </PrintPreviewModal>
+
+      {/* Supabase SQL & Sync Modal */}
+      <SupabaseModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+      />
 
     </div>
   );

@@ -52,26 +52,23 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   const [correctMulti, setCorrectMulti] = useState<number[]>(initialQuestion?.correctMulti || [0]);
 
   // For True / False
-  const [trueFalseItems, setTrueFalseItems] = useState<TrueFalseStatement[]>(
-    initialQuestion?.trueFalseItems || [
-      { id: 'tf_1', statement: 'Pernyataan butir pertama', isCorrect: true },
-      { id: 'tf_2', statement: 'Pernyataan butir kedua', isCorrect: false }
-    ]
+  const [isTfCorrect, setIsTfCorrect] = useState<boolean>(
+    initialQuestion?.trueFalseItems?.[0]?.isCorrect ?? true
   );
 
   // For Matching (Kolom A & Kolom B + Pengecoh)
   const initialMatching = initialQuestion ? getMatchingData(initialQuestion) : {
     premises: [
-      { id: 'prem_1', text: 'Pertanyaan / Pernyataan 1', correctOptionId: 'opt_1' },
-      { id: 'prem_2', text: 'Pertanyaan / Pernyataan 2', correctOptionId: 'opt_2' },
-      { id: 'prem_3', text: 'Pertanyaan / Pernyataan 3', correctOptionId: 'opt_3' }
+      { id: 'prem_1', text: '', correctOptionId: 'opt_1' },
+      { id: 'prem_2', text: '', correctOptionId: 'opt_2' },
+      { id: 'prem_3', text: '', correctOptionId: 'opt_3' }
     ],
     options: [
-      { id: 'opt_1', label: 'A', text: 'Pilihan 1' },
-      { id: 'opt_2', label: 'B', text: 'Pilihan 2' },
-      { id: 'opt_3', label: 'C', text: 'Pilihan 3' },
-      { id: 'opt_4', label: 'D', text: 'Pilihan Pengecoh 1' },
-      { id: 'opt_5', label: 'E', text: 'Pilihan Pengecoh 2' }
+      { id: 'opt_1', label: 'A', text: '' },
+      { id: 'opt_2', label: 'B', text: '' },
+      { id: 'opt_3', label: 'C', text: '' },
+      { id: 'opt_4', label: 'D', text: '' },
+      { id: 'opt_5', label: 'E', text: '' }
     ]
   };
   const [matchingPremises, setMatchingPremises] = useState<MatchingPremise[]>(initialMatching.premises);
@@ -225,19 +222,6 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     }
   };
 
-  const handleAddTfItem = () => {
-    setTrueFalseItems([
-      ...trueFalseItems,
-      { id: `tf_${Date.now()}`, statement: 'Pernyataan baru...', isCorrect: true }
-    ]);
-  };
-
-  const handleRemoveTfItem = (index: number) => {
-    if (trueFalseItems.length > 1) {
-      setTrueFalseItems(trueFalseItems.filter((_, i) => i !== index));
-    }
-  };
-
   const handleAddPremise = () => {
     setMatchingPremises([
       ...matchingPremises,
@@ -292,7 +276,13 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
         newQ.optionImages = optionImages.map(img => img?.trim() || undefined);
       }
     } else if (type === 'true_false') {
-      newQ.trueFalseItems = trueFalseItems;
+      newQ.trueFalseItems = [
+        {
+          id: 'tf_1',
+          statement: prompt.trim() || 'Pernyataan',
+          isCorrect: isTfCorrect
+        }
+      ];
     } else if (type === 'matching') {
       newQ.matchingData = {
         premises: matchingPremises.map(p => ({ ...p, text: p.text.trim() })),
@@ -406,7 +396,12 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setType('matching')}
+                onClick={() => {
+                  setType('matching');
+                  if (!prompt || prompt.trim() === '') {
+                    setPrompt('Petunjuk: Jodohkan pernyataan pada Kolom A dengan pilihan jawaban yang tepat pada Kolom B.');
+                  }
+                }}
                 className={`p-3 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center gap-1.5 cursor-pointer ${
                   type === 'matching'
                     ? 'bg-indigo-50 border-indigo-600 text-indigo-700 ring-2 ring-indigo-500/20'
@@ -836,208 +831,243 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
             </div>
           )}
 
-          {/* 3. True / False statements */}
+          {/* 3. True / False (Pilihan & Kunci Jawaban Langsung: Benar / Salah) */}
           {type === 'true_false' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Daftar Pernyataan & Kunci Nilai:
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddTfItem}
-                  className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Pernyataan
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Pilihan & Kunci Jawaban (Benar / Salah):
+              </label>
 
-              {trueFalseItems.map((item, idx) => (
-                <div key={item.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400">#{idx + 1}</span>
-                  <input
-                    type="text"
-                    value={item.statement}
-                    onChange={(e) => {
-                      const next = [...trueFalseItems];
-                      next[idx].statement = e.target.value;
-                      setTrueFalseItems(next);
-                    }}
-                    placeholder="Ketik pernyataan..."
-                    required
-                    className="flex-1 px-3 py-1.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-lg outline-none"
-                  />
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = [...trueFalseItems];
-                        next[idx].isCorrect = true;
-                        setTrueFalseItems(next);
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                        item.isCorrect
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Kunci: Benar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = [...trueFalseItems];
-                        next[idx].isCorrect = false;
-                        setTrueFalseItems(next);
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                        !item.isCorrect
-                          ? 'bg-rose-600 text-white'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Kunci: Salah
-                    </button>
-                    {trueFalseItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTfItem(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <p className="text-xs text-slate-500 font-medium">
+                  Soal atau pernyataan ditulis pada kolom <strong>"Pertanyaan / Instruksi Soal"</strong> di atas. Tentukan kunci jawaban yang benar di bawah ini:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Kolom Pilihan & Kunci: BENAR */}
+                  <div
+                    onClick={() => setIsTfCorrect(true)}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                      isTfCorrect
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        isTfCorrect
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-500 border border-slate-200'
+                      }`}>
+                        ✓
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">BENAR</div>
+                        <div className="text-[11px] text-slate-500">Pernyataan bernilai Benar</div>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+                      isTfCorrect
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}>
+                      {isTfCorrect ? 'Kunci: Benar' : 'Pilih Kunci'}
+                    </span>
+                  </div>
+
+                  {/* Kolom Pilihan & Kunci: SALAH */}
+                  <div
+                    onClick={() => setIsTfCorrect(false)}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                      !isTfCorrect
+                        ? 'bg-rose-50 border-rose-500 text-rose-950 ring-2 ring-rose-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        !isTfCorrect
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-500 border border-slate-200'
+                      }`}>
+                        ✕
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">SALAH</div>
+                        <div className="text-[11px] text-slate-500">Pernyataan bernilai Salah</div>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+                      !isTfCorrect
+                        ? 'bg-rose-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}>
+                      {!isTfCorrect ? 'Kunci: Salah' : 'Pilih Kunci'}
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           )}
 
-          {/* 4. Matching Data (Kolom A & Kolom B + Pengecoh) */}
+          {/* 4. Matching Data (Format 2 Kolom: Kolom A & Kolom B + Pengecoh) */}
           {type === 'matching' && (
             <div className="space-y-6">
-              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-900">
-                <strong>Model Menjodohkan Tarik Garis:</strong> Buat Kolom A (Pertanyaan/Pernyataan) beserta kunci jawaban yang mengarah ke opsi di Kolom B. Buat Kolom B berisi pilihan jawaban dan minimal 2 jawaban pengecoh agar siswa tidak bisa asal menebak di nomor terakhir.
+              {/* Petunjuk / Panduan Standar Soal Menjodohkan */}
+              <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl text-xs text-indigo-950 space-y-2">
+                <div className="font-bold text-sm text-indigo-900 flex items-center gap-2">
+                  <GitCommit className="w-4 h-4 text-indigo-600" />
+                  <span>Petunjuk & Struktur Pembuatan Soal Menjodohkan (Format 2 Kolom)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs leading-relaxed pt-1">
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs">
+                    <span className="font-bold text-indigo-900 block mb-1">1. Kolom B (Pilihan Jawaban & Pengecoh):</span>
+                    Tuliskan terlebih dahulu semua pilihan jawaban pada <strong>Kolom B</strong> (diberi label A, B, C, D...). Tambahkan minimal 1-2 opsi pengecoh agar jumlah pilihan lebih banyak daripada pertanyaan.
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs">
+                    <span className="font-bold text-indigo-900 block mb-1">2. Kolom A (Pertanyaan & Kunci Pasangan):</span>
+                    Tuliskan daftar pertanyaan/pernyataan pada <strong>Kolom A</strong> (diberi nomor 1, 2, 3...), lalu pasangkan kunci jawaban yang tepat yang diambil dari opsi Kolom B di sampingnya.
+                  </div>
+                </div>
+                <p className="text-[11px] text-indigo-700 italic pt-0.5">
+                  * Catatan Guru: Dengan mengisi pilihan jawaban di Kolom B terlebih dahulu, Anda dapat langsung memilih kunci jawaban dengan mudah saat menyusun pertanyaan di Kolom A.
+                </p>
               </div>
 
-              {/* Kolom A: Pertanyaan */}
-              <div className="space-y-3">
+              {/* TAHAP 1: KOLOM B (Pilihan Jawaban & Pengecoh) */}
+              <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Kolom A: Daftar Pertanyaan & Kunci Jawaban
-                  </label>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Kolom B: Pilihan Jawaban & Pengecoh (Label Huruf A, B, C, ...)
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Buat daftar respon jawaban beserta pilihan pengecoh:
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddMatchingOption}
+                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah Pilihan (Kolom B)
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {matchingOptions.map((opt, idx) => {
+                    const label = String.fromCharCode(65 + idx);
+                    return (
+                      <div key={opt.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center gap-3 shadow-2xs">
+                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold text-xs flex items-center justify-center shrink-0">
+                          {label}
+                        </span>
+                        <input
+                          type="text"
+                          value={opt.text}
+                          onChange={(e) => {
+                            const next = [...matchingOptions];
+                            next[idx].text = e.target.value;
+                            setMatchingOptions(next);
+                          }}
+                          placeholder={`Tulis teks opsi ${label} (misal: jawaban atau pengecoh)...`}
+                          required
+                          className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:bg-white focus:border-indigo-500"
+                        />
+                        {matchingOptions.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMatchingOption(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                            title="Hapus Opsi"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* TAHAP 2: KOLOM A (Pertanyaan & Pasangan Kunci Jawaban) */}
+              <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Kolom A: Daftar Pertanyaan / Pernyataan & Kunci Jawaban (Nomor 1, 2, 3, ...)
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Ketikkan pertanyaan dan pilih kunci jawaban pasangannya dari Kolom B:
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={handleAddPremise}
-                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Pertanyaan (Kolom A)
                   </button>
                 </div>
 
-                {matchingPremises.map((premise, idx) => (
-                  <div key={premise.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                    <div className="sm:col-span-7">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center justify-center shrink-0">
-                          {idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={premise.text}
+                <div className="space-y-2.5">
+                  {matchingPremises.map((premise, idx) => (
+                    <div key={premise.id} className="p-3 bg-white rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center shadow-2xs">
+                      <div className="sm:col-span-7">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0 border border-slate-200">
+                            {idx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={premise.text}
+                            onChange={(e) => {
+                              const next = [...matchingPremises];
+                              next[idx].text = e.target.value;
+                              setMatchingPremises(next);
+                            }}
+                            placeholder={`Tulis butir pertanyaan / pernyataan nomor ${idx + 1}...`}
+                            required
+                            className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:bg-white focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="sm:col-span-4">
+                        <select
+                          value={premise.correctOptionId}
                           onChange={(e) => {
                             const next = [...matchingPremises];
-                            next[idx].text = e.target.value;
+                            next[idx].correctOptionId = e.target.value;
                             setMatchingPremises(next);
                           }}
-                          placeholder={`Pertanyaan / Pernyataan ${idx + 1}...`}
                           required
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
-                        />
+                          className="w-full px-3 py-1.5 text-xs bg-indigo-50/70 border border-indigo-200 rounded-lg outline-none font-semibold text-indigo-900 focus:bg-white focus:border-indigo-500"
+                        >
+                          <option value="">-- Pilih Kunci (Kolom B) --</option>
+                          {matchingOptions.map(opt => (
+                            <option key={opt.id} value={opt.id}>
+                              Opsi {opt.label}: {opt.text ? (opt.text.length > 25 ? opt.text.substring(0, 25) + '...' : opt.text) : `(Pilihan ${opt.label})`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-1 flex justify-end">
+                        {matchingPremises.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePremise(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                            title="Hapus Pertanyaan"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    
-                    <div className="sm:col-span-4">
-                      <select
-                        value={premise.correctOptionId}
-                        onChange={(e) => {
-                          const next = [...matchingPremises];
-                          next[idx].correctOptionId = e.target.value;
-                          setMatchingPremises(next);
-                        }}
-                        required
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-semibold text-indigo-900"
-                      >
-                        <option value="">-- Pilih Kunci (Kolom B) --</option>
-                        {matchingOptions.map(opt => (
-                          <option key={opt.id} value={opt.id}>
-                            Opsi {opt.label}: {opt.text.substring(0, 25) || `Pilihan ${opt.label}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-1 flex justify-end">
-                      {matchingPremises.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePremise(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Kolom B: Pilihan Jawaban & Pengecoh */}
-              <div className="space-y-3 pt-2 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Kolom B: Pilihan Jawaban & Pengecoh (Lebih banyak dari Kolom A)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAddMatchingOption}
-                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Tambah Pilihan / Pengecoh
-                  </button>
+                  ))}
                 </div>
-
-                {matchingOptions.map((opt, idx) => {
-                  const label = String.fromCharCode(65 + idx);
-                  return (
-                    <div key={opt.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold text-xs flex items-center justify-center shrink-0">
-                        {label}
-                      </span>
-                      <input
-                        type="text"
-                        value={opt.text}
-                        onChange={(e) => {
-                          const next = [...matchingOptions];
-                          next[idx].text = e.target.value;
-                          setMatchingOptions(next);
-                        }}
-                        placeholder={`Teks pilihan ${label} (bisa sebagai kunci atau pengecoh)...`}
-                        required
-                        className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none font-medium"
-                      />
-                      {matchingOptions.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMatchingOption(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
             </div>
           )}

@@ -250,13 +250,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setIsQuestionModalOpen(true);
   };
 
-  const handleSaveQuestion = (q: Question) => {
+  const handleSaveQuestion = async (q: Question) => {
     if (editingQuestion) {
-      updateQuestion(q);
+      const res = await updateQuestion(q);
+      setQuestions(getAllQuestions());
+      if (res && res.success) {
+        showNotification('success', 'Butir soal berhasil diperbarui & tersimpan di Supabase.');
+      } else {
+        showNotification('success', 'Butir soal tersimpan di sistem lokal (jalankan SQL Supabase jika ingin sinkron ke cloud).');
+      }
     } else {
-      addQuestion(q);
+      const res = await addQuestion(q);
+      setQuestions(getAllQuestions());
+      if (res && res.success) {
+        showNotification('success', 'Butir soal baru berhasil disimpan & tersimpan di Supabase.');
+      } else {
+        showNotification('success', 'Butir soal tersimpan di sistem lokal (jalankan SQL Supabase jika ingin sinkron ke cloud).');
+      }
     }
-    setQuestions(getAllQuestions());
   };
 
   const handleDeleteQuestion = (qId: string) => {

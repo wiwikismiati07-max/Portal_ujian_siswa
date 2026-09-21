@@ -426,7 +426,10 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     if (ans === undefined || ans === null) return false;
     if (q.type === 'single_choice') return typeof ans === 'number';
     if (q.type === 'multiple_choice') return Array.isArray(ans) && ans.length > 0;
-    if (q.type === 'true_false') return typeof ans === 'object' && Object.keys(ans).length === (q.trueFalseItems?.length || 0);
+    if (q.type === 'true_false') {
+      if (typeof ans === 'boolean') return true;
+      return typeof ans === 'object' && Object.keys(ans).length === (q.trueFalseItems?.length || 1);
+    }
     if (q.type === 'matching') {
       const mData = getMatchingData(q);
       return typeof ans === 'object' && Object.keys(ans).length === mData.premises.length;
@@ -857,60 +860,143 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               </div>
             )}
 
-            {/* TYPE 3: SOAL BENAR / SALAH (Matrix Pernyataan) */}
+            {/* TYPE 3: SOAL BENAR / SALAH */}
             {currentQ.type === 'true_false' && currentQ.trueFalseItems && (
-              <div className="space-y-4">
-                <div className="text-xs text-slate-500 mb-2">
-                  Pilihlah opsi <span className="font-bold text-emerald-700">BENAR</span> atau <span className="font-bold text-rose-700">SALAH</span> untuk setiap baris pernyataan di bawah ini:
-                </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200 bg-white">
-                  {currentQ.trueFalseItems.map((item, idx) => {
-                    const currentTfAnswers = answers[currentQ.id] || {};
-                    const selectedValue = currentTfAnswers[item.id];
+              currentQ.trueFalseItems.length === 1 ? (
+                <div className="space-y-4">
+                  <div className="text-xs text-slate-500 mb-2 font-medium">
+                    Tentukan apakah pernyataan/soal di atas bernilai <span className="font-bold text-emerald-700">BENAR</span> atau <span className="font-bold text-rose-700">SALAH</span>:
+                  </div>
+                  {(() => {
+                    const item = currentQ.trueFalseItems[0];
+                    const currentTfAnswers = answers[currentQ.id];
+                    const selectedValue = typeof currentTfAnswers === 'object' && currentTfAnswers !== null
+                      ? currentTfAnswers[item.id]
+                      : (typeof currentTfAnswers === 'boolean' ? currentTfAnswers : undefined);
 
                     const handleChoose = (val: boolean) => {
                       setAnswerForCurrent({
-                        ...currentTfAnswers,
                         [item.id]: val
                       });
                     };
 
                     return (
-                      <div key={item.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-2.5 flex-1 text-xs sm:text-sm text-slate-800">
-                          <span className="font-bold text-slate-400 shrink-0 mt-0.5">{idx + 1}.</span>
-                          <span className="leading-relaxed">{item.statement}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleChoose(true)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleChoose(true)}
+                          className={`p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                            selectedValue === true
+                              ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-bold shadow-xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-xl text-sm font-bold flex items-center justify-center shrink-0 ${
                               selectedValue === true
                                 ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
-                            }`}
-                          >
-                            Benar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleChoose(false)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              ✓
+                            </span>
+                            <div>
+                              <span className="text-sm font-bold block">BENAR</span>
+                              <span className="text-[11px] text-slate-500 font-normal">Pernyataan bernilai benar</span>
+                            </div>
+                          </div>
+                          {selectedValue === true && (
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
+                              Terpilih
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChoose(false)}
+                          className={`p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                            selectedValue === false
+                              ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500/20 text-rose-950 font-bold shadow-xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-xl text-sm font-bold flex items-center justify-center shrink-0 ${
                               selectedValue === false
                                 ? 'bg-rose-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
-                            }`}
-                          >
-                            Salah
-                          </button>
-                        </div>
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              ✕
+                            </span>
+                            <div>
+                              <span className="text-sm font-bold block">SALAH</span>
+                              <span className="text-[11px] text-slate-500 font-normal">Pernyataan bernilai salah</span>
+                            </div>
+                          </div>
+                          {selectedValue === false && (
+                            <span className="text-xs font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-lg">
+                              Terpilih
+                            </span>
+                          )}
+                        </button>
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-xs text-slate-500 mb-2">
+                    Pilihlah opsi <span className="font-bold text-emerald-700">BENAR</span> atau <span className="font-bold text-rose-700">SALAH</span> untuk setiap baris pernyataan di bawah ini:
+                  </div>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200 bg-white">
+                    {currentQ.trueFalseItems.map((item, idx) => {
+                      const currentTfAnswers = answers[currentQ.id] || {};
+                      const selectedValue = currentTfAnswers[item.id];
+
+                      const handleChoose = (val: boolean) => {
+                        setAnswerForCurrent({
+                          ...currentTfAnswers,
+                          [item.id]: val
+                        });
+                      };
+
+                      return (
+                        <div key={item.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start gap-2.5 flex-1 text-xs sm:text-sm text-slate-800">
+                            <span className="font-bold text-slate-400 shrink-0 mt-0.5">{idx + 1}.</span>
+                            <span className="leading-relaxed">{item.statement}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleChoose(true)}
+                              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                selectedValue === true
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
+                              }`}
+                            >
+                              Benar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleChoose(false)}
+                              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                selectedValue === false
+                                  ? 'bg-rose-600 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
+                              }`}
+                            >
+                              Salah
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
             )}
 
             {/* TYPE 4: SOAL MENJODOHKAN (Matching) */}
@@ -919,8 +1005,8 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               return (
                 <div className="space-y-6">
                   <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-xs sm:text-sm text-indigo-950">
-                    <div className="font-bold mb-1">Soal Menjodohkan (Tarik Garis / Pasangan):</div>
-                    Pilih huruf pilihan yang tepat dari Kolom B (termasuk pilihan pengecoh) untuk setiap nomor pertanyaan di Kolom A.
+                    <div className="font-bold mb-1">Petunjuk Pengerjaan:</div>
+                    Jodohkan setiap pernyataan pada <strong>Kolom A</strong> dengan pilihan jawaban yang tepat pada <strong>Kolom B</strong>.
                   </div>
 
                   {/* Kotak Kolom B: Pilihan Jawaban & Pengecoh */}
