@@ -70,22 +70,13 @@ export function gradeSubmission(
         earned = Math.round((matchCount / matchingData.premises.length) * q.points);
         isCorrect = matchCount === matchingData.premises.length;
       }
-    } else if (q.type === 'case_study') {
-      // Essay / Case Study: check keywords if available, or give initial credit for thoughtful essay
-      const essayText = typeof studentAns === 'string' ? studentAns.trim() : '';
-      if (essayText.length > 0) {
-        if (q.caseKeywords && q.caseKeywords.length > 0) {
-          const lowerText = essayText.toLowerCase();
-          const matchedKeywords = q.caseKeywords.filter(kw => lowerText.includes(kw.toLowerCase()));
-          const keywordRatio = matchedKeywords.length / q.caseKeywords.length;
-          earned = Math.max(Math.round(keywordRatio * q.points), Math.round(q.points * 0.5));
-          isCorrect = keywordRatio >= 0.7;
-          feedback = `Terdeteksi ${matchedKeywords.length}/${q.caseKeywords.length} kata kunci esensial.`;
-        } else {
-          // Default baseline score for completed analysis
-          earned = essayText.split(/\s+/).length >= 15 ? q.points : Math.round(q.points * 0.6);
-          isCorrect = earned === q.points;
-        }
+    } else if (q.type === 'single_choice' || q.type === 'case_study') {
+      if (typeof studentAns === 'number' && studentAns === q.correctSingle) {
+        earned = q.points;
+        isCorrect = true;
+        feedback = 'Jawaban Benar';
+      } else {
+        feedback = 'Jawaban Salah';
       }
     }
 

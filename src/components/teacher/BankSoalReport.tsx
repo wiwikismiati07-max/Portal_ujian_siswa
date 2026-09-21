@@ -574,13 +574,45 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                   })()}
 
                   {q.type === 'case_study' && (
-                    <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs text-indigo-950 space-y-1">
-                      <div>
-                        <strong>Kata Kunci Penilaian:</strong> {(q.caseKeywords || []).join(', ') || '-'}
-                      </div>
-                      {q.rubricNotes && (
-                        <div>
-                          <strong>Rubrik Guru:</strong> {q.rubricNotes}
+                    <div className="space-y-3">
+                      {q.caseContext && (
+                        <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 text-xs text-indigo-950 leading-relaxed whitespace-pre-wrap">
+                          <strong className="block text-indigo-900 mb-1 uppercase tracking-wide text-[11px]">Wacana / Skenario Studi Kasus:</strong>
+                          {q.caseContext}
+                        </div>
+                      )}
+                      {q.options && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {q.options.map((opt, oIdx) => {
+                            const isCorrect = q.correctSingle === oIdx;
+                            const optImg = q.optionImages?.[oIdx];
+
+                            return (
+                              <div
+                                key={oIdx}
+                                className={`p-2.5 rounded-lg border flex flex-col gap-1.5 ${
+                                  isCorrect
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-semibold'
+                                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="font-bold shrink-0">{String.fromCharCode(65 + oIdx)}.</span>
+                                  <span className="flex-1">{opt}</span>
+                                  {isCorrect && (
+                                    <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">
+                                      Kunci
+                                    </span>
+                                  )}
+                                </div>
+                                {optImg && (
+                                  <div className="ml-5 p-1 bg-white border border-slate-200 rounded max-w-[120px]">
+                                    <img src={optImg} alt={`Opsi ${String.fromCharCode(65 + oIdx)}`} className="h-14 object-contain rounded" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -811,9 +843,25 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                     })()}
 
                     {q.type === 'case_study' && (
-                      <div className="p-2 bg-slate-50 border border-slate-300 rounded text-xs space-y-1">
-                        <div><strong>Kata Kunci:</strong> {(q.caseKeywords || []).join(', ') || '-'}</div>
-                        {q.rubricNotes && <div><strong>Rubrik:</strong> {q.rubricNotes}</div>}
+                      <div className="space-y-2 text-xs">
+                        {q.caseContext && (
+                          <div className="p-2 bg-slate-100 border border-slate-300 rounded mb-2 whitespace-pre-wrap">
+                            <strong>Wacana / Skenario:</strong> {q.caseContext}
+                          </div>
+                        )}
+                        {q.options && (
+                          <div className="space-y-1">
+                            {q.options.map((opt, oIdx) => {
+                              const isCorrect = q.correctSingle === oIdx;
+                              return (
+                                <div key={oIdx} className={`p-1.5 border border-slate-300 rounded flex items-center justify-between ${isCorrect ? 'bg-emerald-50 font-bold' : ''}`}>
+                                  <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                                  {isCorrect && <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded">Kunci</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
 

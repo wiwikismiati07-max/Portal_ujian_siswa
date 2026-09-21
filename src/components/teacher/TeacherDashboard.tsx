@@ -66,9 +66,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   // Multi-User Teacher Accounts
   const [allTeachers, setAllTeachers] = useState<User[]>(() => {
     const list = getAllUsers().filter(u => u.role === 'guru');
+    if (!list.some(t => t.id === teacher.id)) {
+      list.push(teacher);
+    }
     return list.length > 0 ? list : [teacher];
   });
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teacher.id);
+
+  useEffect(() => {
+    if (teacher && teacher.id) {
+      setSelectedTeacherId(teacher.id);
+      setAllTeachers(prev => {
+        if (!prev.some(t => t.id === teacher.id)) {
+          return [...prev, teacher];
+        }
+        return prev;
+      });
+    }
+  }, [teacher?.id]);
+
   const activeTeacher = allTeachers.find(t => t.id === selectedTeacherId) || teacher;
 
   const allSubjectNamesList = Array.from(

@@ -304,11 +304,11 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
       };
     } else if (type === 'case_study') {
       newQ.caseContext = caseContext.trim();
-      newQ.caseKeywords = caseKeywordsStr
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-      newQ.rubricNotes = rubricNotes.trim();
+      newQ.options = options.map(o => o.trim());
+      newQ.correctSingle = correctSingle;
+      if (optionImages.some(img => img && img.trim())) {
+        newQ.optionImages = optionImages.map(img => img?.trim() || undefined);
+      }
     }
 
     onSaveQuestion(newQ);
@@ -589,8 +589,8 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
 
           {/* TYPE-SPECIFIC EDITOR */}
 
-          {/* 1. Single Choice Options */}
-          {type === 'single_choice' && (
+          {/* 1. Single Choice & Case Study Options */}
+          {(type === 'single_choice' || type === 'case_study') && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1042,39 +1042,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
             </div>
           )}
 
-          {/* 5. Case Study Criteria */}
-          {type === 'case_study' && (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Kata Kunci Penting untuk Penilaian Otomatis (Pisahkan dengan koma)
-                </label>
-                <input
-                  type="text"
-                  value={caseKeywordsStr}
-                  onChange={(e) => setCaseKeywordsStr(e.target.value)}
-                  placeholder="Contoh: ransomware, backup, isolasi, phishing, firewall"
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Sistem otomatis memberikan poin berdasarkan kesesuaian kata kunci dan kedalaman uraian siswa.
-                </p>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rubrik / Catatan Kunci Jawaban Guru
-                </label>
-                <textarea
-                  rows={2}
-                  value={rubricNotes}
-                  onChange={(e) => setRubricNotes(e.target.value)}
-                  placeholder="Panduan aspek penilaian..."
-                  className="w-full px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none"
-                />
-              </div>
-            </div>
-          )}
 
           {/* Explanation / Pembahasan */}
           <div>

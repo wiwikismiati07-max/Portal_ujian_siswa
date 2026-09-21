@@ -582,7 +582,8 @@ export const gradeSubmission = (
     let qEarned = 0;
 
     switch (q.type) {
-      case 'single_choice': {
+      case 'single_choice':
+      case 'case_study': {
         const isCorrect = typeof answer === 'number' && answer === q.correctSingle;
         if (isCorrect) qEarned = q.points;
         evaluatedAnswers[q.id] = {
@@ -657,47 +658,7 @@ export const gradeSubmission = (
         break;
       }
 
-      case 'case_study': {
-        const text = typeof answer === 'string' ? answer.trim() : '';
-        if (text.length === 0) {
-          qEarned = 0;
-          evaluatedAnswers[q.id] = {
-            earned: 0,
-            max: q.points,
-            isCorrect: false,
-            feedback: 'Tidak ada jawaban'
-          };
-        } else {
-          const lowerText = text.toLowerCase();
-          const keywords = q.caseKeywords || [];
-          let hits = 0;
-          keywords.forEach(kw => {
-            if (lowerText.includes(kw.toLowerCase())) {
-              hits++;
-            }
-          });
 
-          const wordCount = text.split(/\s+/).length;
-          let scoreRatio = 0.5;
-          if (wordCount >= 20) scoreRatio += 0.2;
-          if (wordCount >= 40) scoreRatio += 0.1;
-          if (keywords.length > 0) {
-            scoreRatio += Math.min(0.3, (hits / Math.min(3, keywords.length)) * 0.3);
-          } else {
-            scoreRatio = Math.min(1.0, scoreRatio + 0.2);
-          }
-          scoreRatio = Math.min(1.0, Math.max(0.2, scoreRatio));
-          qEarned = Math.round(scoreRatio * q.points);
-
-          evaluatedAnswers[q.id] = {
-            earned: qEarned,
-            max: q.points,
-            isCorrect: qEarned >= q.points * 0.7,
-            feedback: `Evaluasi analisis otomatis: terdeteksi ${hits} kata kunci relevan (${wordCount} kata)`
-          };
-        }
-        break;
-      }
     }
 
     earnedScore += qEarned;

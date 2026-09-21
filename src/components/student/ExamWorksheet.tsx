@@ -431,7 +431,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       const mData = getMatchingData(q);
       return typeof ans === 'object' && Object.keys(ans).length === mData.premises.length;
     }
-    if (q.type === 'case_study') return typeof ans === 'string' && ans.trim().length > 0;
+    if (q.type === 'case_study') return typeof ans === 'number';
     return false;
   };
 
@@ -987,22 +987,50 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               );
             })()}
 
-            {/* TYPE 5: STUDI KASUS (Analysis / Essay with live words count) */}
+            {/* TYPE 5: STUDI KASUS (Case Study with stimulus & options) */}
             {currentQ.type === 'case_study' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                  <span>Tuliskan uraian analisis Anda secara terperinci:</span>
-                  <span className="font-mono">
-                    {typeof answers[currentQ.id] === 'string' ? answers[currentQ.id].trim().split(/\s+/).filter(Boolean).length : 0} Kata
-                  </span>
-                </div>
-                <textarea
-                  value={answers[currentQ.id] || ''}
-                  onChange={(e) => setAnswerForCurrent(e.target.value)}
-                  placeholder="Ketikkan jawaban studi kasus Anda di sini..."
-                  rows={6}
-                  className="w-full text-xs sm:text-sm p-4 bg-slate-50 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all outline-none leading-relaxed resize-y"
-                />
+              <div className="space-y-4">
+                {currentQ.caseContext && (
+                  <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-2xl text-xs sm:text-sm text-indigo-950 leading-relaxed whitespace-pre-wrap">
+                    <div className="font-bold text-xs text-indigo-900 uppercase mb-1 tracking-wider">Wacana / Skenario Studi Kasus:</div>
+                    {currentQ.caseContext}
+                  </div>
+                )}
+                {currentQ.options && (
+                  <div className="space-y-2.5">
+                    <div className="text-xs text-slate-500 mb-2 font-medium">
+                      Pilihlah satu jawaban yang paling tepat berdasarkan studi kasus di atas:
+                    </div>
+                    {currentQ.options.map((opt, optIdx) => {
+                      const isSelected = answers[currentQ.id] === optIdx;
+                      const letter = String.fromCharCode(65 + optIdx);
+
+                      return (
+                        <button
+                          key={optIdx}
+                          type="button"
+                          onClick={() => setAnswerForCurrent(optIdx)}
+                          className={`w-full p-3.5 sm:p-4 rounded-xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500 text-indigo-950 font-semibold shadow-xs'
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800'
+                          }`}
+                        >
+                          <span className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {letter}
+                          </span>
+                          <span className="text-xs sm:text-sm leading-relaxed flex-1">
+                            {opt}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
