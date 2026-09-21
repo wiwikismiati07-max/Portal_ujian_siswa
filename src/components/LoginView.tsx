@@ -581,14 +581,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </div>
                 )}
 
-                {/* Login Form (Configured to suppress browser 'Save Password' prompt so exam screen is not disturbed) */}
-                <form
-                  onSubmit={handleLogin}
+                {/* Login Form (Custom container with text-security to completely eliminate browser 'Simpan sandi' bubble) */}
+                <div
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLogin(e as any);
+                    }
+                  }}
                   className="space-y-4"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-form-type="other"
                 >
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -598,11 +599,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       <input
                         ref={usernameInputRef}
                         type="text"
-                        name="cbt_student_identity"
+                        name="cbt_identity_field"
                         autoComplete="off"
                         data-lpignore="true"
                         data-1p-ignore="true"
-                        data-form-type="other"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder={
@@ -610,7 +610,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                             ? 'Contoh: abdul_hayyi atau NIS 9029'
                             : 'Masukkan username atau NIP'
                         }
-                        required
                         disabled={isLoading}
                         className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
                       />
@@ -640,28 +639,28 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     </div>
                     <div className="relative">
                       <input
-                        type={showPassword ? 'text' : 'password'}
-                        name="cbt_auth_secret"
-                        autoComplete="new-password"
+                        type="text"
+                        style={!showPassword ? { WebkitTextSecurity: 'disc' } as React.CSSProperties : undefined}
+                        name="cbt_secret_field"
+                        autoComplete="off"
                         data-lpignore="true"
                         data-1p-ignore="true"
-                        data-form-type="other"
                         autoCapitalize="off"
                         autoCorrect="off"
                         spellCheck={false}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Masukkan password"
-                        required
                         disabled={isLoading}
-                        className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium"
+                        className="w-full pl-10 pr-3.5 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-2xs transition-all outline-none disabled:opacity-60 font-medium font-sans"
                       />
                       <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     </div>
                   </div>
 
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleLogin}
                     disabled={isLoading}
                     className="w-full mt-3 py-3.5 px-4 flex items-center justify-center gap-2 text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-70"
                   >
@@ -677,7 +676,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       </>
                     )}
                   </button>
-                </form>
+                </div>
               </div>
             )}
 

@@ -26,7 +26,8 @@ import {
   Volume2,
   Calendar,
   FileText,
-  LayoutGrid
+  LayoutGrid,
+  Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Exam, Question, User, ExamSubmission, ViolationLog } from '../../types';
@@ -65,6 +66,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationReason, setViolationReason] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showReturnPrompt, setShowReturnPrompt] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<ExamSubmission | null>(null);
 
@@ -143,6 +145,10 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
     }
 
     try {
+      window.focus();
+    } catch {}
+
+    try {
       if (screen.orientation && (screen.orientation as any).lock) {
         (screen.orientation as any).lock('portrait').catch(() => {});
       }
@@ -191,25 +197,25 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       try {
         window.history.pushState({ cbt: 'lockdown' }, '', window.location.href);
       } catch {}
-      triggerViolation('Aksi Kembali / Back Gesture pada HP diblokir! Layar tetap dikunci di lembar ujian.');
+      setShowReturnPrompt(true);
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        if (Date.now() - mountTimeRef.current < 7000) return;
-        triggerViolation('Anda terdeteksi beralih aplikasi, meminimalkan layar HP, atau membuka tab lain.');
+        setShowReturnPrompt(true);
+      } else {
+        // Re-request wakeLock and fullscreen when returning
+        enterFullscreen();
       }
     };
 
     const handleWindowBlur = () => {
-      // Abaikan kehilangan fokus pada 7 detik pertama saat lembar ujian dimuat (mencegah pelanggaran karena dialog browser/fullscreen)
-      if (Date.now() - mountTimeRef.current < 7000) return;
-      triggerViolation('Fokus layar ujian terputus! Dilarang membuka aplikasi lain, kalkulator, catatan, atau menu split-screen.');
+      // Tampilkan notifikasi ramah kembali menyelesaikan soal tanpa menambah penalti pelanggaran
+      setShowReturnPrompt(true);
     };
 
     const handlePageHide = () => {
-      if (Date.now() - mountTimeRef.current < 7000) return;
-      triggerViolation('Layar browser HP diminimalkan atau berpindah aplikasi.');
+      setShowReturnPrompt(true);
     };
 
     const handleFullscreenChange = () => {
@@ -221,8 +227,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       );
       setIsFullscreen(fs);
       if (!fs && !submittedResult) {
-        if (Date.now() - mountTimeRef.current < 7000) return;
-        triggerViolation('Layar ujian keluar dari mode Layar Penuh (Fullscreen). Layar wajib dikunci kembali untuk melanjutkan.');
+        setShowReturnPrompt(true);
       }
     };
 
@@ -1351,6 +1356,51 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                 Ya, Kumpulkan Sekarang
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SILAKAN KEMBALI MENYELESAIKAN SOAL MODAL (Muncul saat membuka aplikasi lain/notifikasi tanpa memberikan sanksi pelanggaran) */}
+      {showReturnPrompt && !submittedResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => {
+            setShowReturnPrompt(false);
+            enterFullscreen();
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-indigo-100 text-center relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-4 shadow-xs">
+              <BookOpen className="w-8 h-8" />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full text-xs font-bold mb-3">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Layar Ujian Terkunci di Depan</span>
+            </div>
+
+            <h3 className="text-xl font-extrabold text-slate-900 tracking-tight mb-2">
+              Silakan Kembali Menyelesaikan Soal
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-600 mb-6 leading-relaxed font-medium">
+              Layar ujian dijeda sementara karena Anda membuka aplikasi lain atau notifikasi muncul. Klik tombol di bawah untuk langsung memposisikan layar kembali di depan dan melanjutkan ujian.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowReturnPrompt(false);
+                enterFullscreen();
+              }}
+              className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Kembali Menyelesaikan Soal</span>
+            </button>
           </div>
         </div>
       )}
