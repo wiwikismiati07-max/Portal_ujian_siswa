@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Question, QuestionType, Exam, TrueFalseStatement, MatchingPremise, MatchingOption } from '../../types';
-import { getMatchingData } from '../../utils/matchingHelper';
+import { getMatchingData, MATCHING_COLORS, getMatchingColor } from '../../utils/matchingHelper';
 import {
   X,
   Plus,
@@ -15,7 +15,10 @@ import {
   Image as ImageIcon,
   Keyboard,
   AlignRight,
-  ExternalLink
+  ExternalLink,
+  Layers,
+  Shuffle,
+  Eye
 } from 'lucide-react';
 import { ImageSearchModal } from './ImageSearchModal';
 import { ArabicVirtualKeyboard } from './ArabicVirtualKeyboard';
@@ -26,6 +29,9 @@ interface QuestionCreatorModalProps {
   onClose: () => void;
   onSaveQuestion: (question: Question) => void;
   initialQuestion?: Question | null;
+  allExams?: Exam[];
+  onSelectExam?: (exam: Exam) => void;
+  onOpenBankSoal?: (examId: string) => void;
 }
 
 export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
@@ -33,8 +39,17 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   isOpen,
   onClose,
   onSaveQuestion,
-  initialQuestion
+  initialQuestion,
+  allExams,
+  onSelectExam,
+  onOpenBankSoal
 }) => {
+  const [currentExam, setCurrentExam] = useState<Exam>(exam);
+  const [recentSuccessMsg, setRecentSuccessMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setCurrentExam(exam);
+  }, [exam]);
   const [type, setType] = useState<QuestionType>(initialQuestion?.type || 'single_choice');
   const [prompt, setPrompt] = useState(initialQuestion?.prompt || '');
   const [points, setPoints] = useState<number>(initialQuestion?.points || 20);
@@ -56,19 +71,19 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     initialQuestion?.trueFalseItems?.[0]?.isCorrect ?? true
   );
 
-  // For Matching (Kolom A & Kolom B + Pengecoh)
+  // For Matching (Kolom A & Kolom B + Gambar & Pasangan Kunci)
   const initialMatching = initialQuestion ? getMatchingData(initialQuestion) : {
     premises: [
-      { id: 'prem_1', text: '', correctOptionId: 'opt_1' },
-      { id: 'prem_2', text: '', correctOptionId: 'opt_2' },
-      { id: 'prem_3', text: '', correctOptionId: 'opt_3' }
+      { id: 'prem_1', text: '', imageUrl: undefined, correctOptionId: 'opt_1' },
+      { id: 'prem_2', text: '', imageUrl: undefined, correctOptionId: 'opt_2' },
+      { id: 'prem_3', text: '', imageUrl: undefined, correctOptionId: 'opt_3' },
+      { id: 'prem_4', text: '', imageUrl: undefined, correctOptionId: 'opt_4' }
     ],
     options: [
-      { id: 'opt_1', label: 'A', text: '' },
-      { id: 'opt_2', label: 'B', text: '' },
-      { id: 'opt_3', label: 'C', text: '' },
-      { id: 'opt_4', label: 'D', text: '' },
-      { id: 'opt_5', label: 'E', text: '' }
+      { id: 'opt_1', label: 'A', text: '', imageUrl: undefined },
+      { id: 'opt_2', label: 'B', text: '', imageUrl: undefined },
+      { id: 'opt_3', label: 'C', text: '', imageUrl: undefined },
+      { id: 'opt_4', label: 'D', text: '', imageUrl: undefined }
     ]
   };
   const [matchingPremises, setMatchingPremises] = useState<MatchingPremise[]>(initialMatching.premises);
@@ -84,8 +99,10 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   // Image Modal State
   const [imageModalOpen, setImageModalOpen] = useState<boolean>(false);
   const [imageModalTarget, setImageModalTarget] = useState<{
-    type: 'prompt' | 'option';
+    type: 'prompt' | 'option' | 'matching_premise' | 'matching_option';
     optionIndex?: number;
+    premiseIndex?: number;
+    matchingOptionIndex?: number;
     title: string;
     currentUrl?: string;
   }>({
@@ -194,6 +211,27 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     setImageModalOpen(true);
   };
 
+  const handleOpenImageModalForPremise = (index: number) => {
+    setImageModalTarget({
+      type: 'matching_premise',
+      premiseIndex: index,
+      title: `Gambar Kolom Kiri Soal #${index + 1}`,
+      currentUrl: matchingPremises[index]?.imageUrl || ''
+    });
+    setImageModalOpen(true);
+  };
+
+  const handleOpenImageModalForMatchingOption = (index: number) => {
+    const label = String.fromCharCode(65 + index);
+    setImageModalTarget({
+      type: 'matching_option',
+      matchingOptionIndex: index,
+      title: `Gambar Pilihan Jawaban ${label}`,
+      currentUrl: matchingOptions[index]?.imageUrl || ''
+    });
+    setImageModalOpen(true);
+  };
+
   const handleSaveSelectedImage = (selectedImgUrl: string) => {
     if (imageModalTarget.type === 'prompt') {
       setImageUrl(selectedImgUrl);
@@ -201,6 +239,14 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
       const next = [...optionImages];
       next[imageModalTarget.optionIndex] = selectedImgUrl || undefined;
       setOptionImages(next);
+    } else if (imageModalTarget.type === 'matching_premise' && imageModalTarget.premiseIndex !== undefined) {
+      const next = [...matchingPremises];
+      next[imageModalTarget.premiseIndex].imageUrl = selectedImgUrl || undefined;
+      setMatchingPremises(next);
+    } else if (imageModalTarget.type === 'matching_option' && imageModalTarget.matchingOptionIndex !== undefined) {
+      const next = [...matchingOptions];
+      next[imageModalTarget.matchingOptionIndex].imageUrl = selectedImgUrl || undefined;
+      setMatchingOptions(next);
     }
   };
 
@@ -223,9 +269,26 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   };
 
   const handleAddPremise = () => {
+    const newIdx = matchingPremises.length;
+    const targetOptId = matchingOptions[newIdx]?.id || matchingOptions[0]?.id || `opt_${Date.now()}`;
     setMatchingPremises([
       ...matchingPremises,
-      { id: `prem_${Date.now()}`, text: '', correctOptionId: matchingOptions[0]?.id || '' }
+      { id: `prem_${Date.now()}_${newIdx + 1}`, text: '', imageUrl: undefined, correctOptionId: targetOptId }
+    ]);
+  };
+
+  const handleAddMatchingPair = () => {
+    const nextIdx = matchingPremises.length;
+    const newOptId = `opt_${Date.now()}_${nextIdx + 1}`;
+    const newPremId = `prem_${Date.now()}_${nextIdx + 1}`;
+    
+    setMatchingOptions([
+      ...matchingOptions,
+      { id: newOptId, label: String.fromCharCode(65 + matchingOptions.length), text: '', imageUrl: undefined }
+    ]);
+    setMatchingPremises([
+      ...matchingPremises,
+      { id: newPremId, text: '', imageUrl: undefined, correctOptionId: newOptId }
     ]);
   };
 
@@ -239,23 +302,31 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     const nextIdx = matchingOptions.length;
     setMatchingOptions([
       ...matchingOptions,
-      { id: `opt_${Date.now()}`, label: String.fromCharCode(65 + nextIdx), text: '' }
+      { id: `opt_${Date.now()}`, label: String.fromCharCode(65 + nextIdx), text: '', imageUrl: undefined }
     ]);
   };
 
   const handleRemoveMatchingOption = (index: number) => {
     if (matchingOptions.length > 2) {
-      setMatchingOptions(matchingOptions.filter((_, i) => i !== index));
+      const removedOptId = matchingOptions[index]?.id;
+      const nextOpts = matchingOptions.filter((_, i) => i !== index);
+      setMatchingOptions(nextOpts);
+      // Remap any premise that had this removed option as key
+      setMatchingPremises(matchingPremises.map(p => {
+        if (p.correctOptionId === removedOptId) {
+          return { ...p, correctOptionId: nextOpts[0]?.id || '' };
+        }
+        return p;
+      }));
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveAndProcess = (actionType: 'close' | 'add_more' | 'open_bank') => {
     if (!prompt.trim()) return;
 
     const newQ: Question = {
       id: initialQuestion?.id || `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      examId: exam.id,
+      examId: currentExam.id,
       type,
       prompt: prompt.trim(),
       points: Number(points) || 10,
@@ -285,11 +356,16 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
       ];
     } else if (type === 'matching') {
       newQ.matchingData = {
-        premises: matchingPremises.map(p => ({ ...p, text: p.text.trim() })),
+        premises: matchingPremises.map(p => ({
+          ...p,
+          text: p.text.trim(),
+          imageUrl: p.imageUrl?.trim() || undefined
+        })),
         options: matchingOptions.map((o, idx) => ({
           ...o,
           label: String.fromCharCode(65 + idx),
-          text: o.text.trim()
+          text: o.text.trim(),
+          imageUrl: o.imageUrl?.trim() || undefined
         }))
       };
     } else if (type === 'case_study') {
@@ -302,7 +378,34 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     }
 
     onSaveQuestion(newQ);
-    onClose();
+
+    if (actionType === 'add_more') {
+      setPrompt('');
+      setImageUrl('');
+      setExplanation('');
+      setOptions(['', '', '', '']);
+      setOptionImages([]);
+      setCorrectSingle(0);
+      setCorrectMulti([0]);
+      setIsTfCorrect(true);
+      setCaseContext('');
+      setMatchingPremises([
+        { id: `prem_${Date.now()}_1`, text: '', correctOptionId: 'opt_1' },
+        { id: `prem_${Date.now()}_2`, text: '', correctOptionId: 'opt_2' },
+        { id: `prem_${Date.now()}_3`, text: '', correctOptionId: 'opt_3' }
+      ]);
+      setRecentSuccessMsg(`Soal berhasil disimpan ke dalam paket "${currentExam.title}". Silakan lanjutkan menulis butir soal berikutnya.`);
+    } else if (actionType === 'open_bank') {
+      onOpenBankSoal?.(currentExam.id);
+      onClose();
+    } else {
+      onClose();
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveAndProcess('close');
   };
 
   return (
@@ -316,7 +419,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
               {initialQuestion ? 'Edit Butir Soal Ujian' : 'Tambah Butir Soal Baru'}
             </h3>
             <p className="text-xs text-slate-500">
-              Paket Ujian: {exam.title} ({exam.subjectName})
+              Paket Ujian: <strong className="text-slate-700">{currentExam.title}</strong> ({currentExam.subjectName})
             </p>
           </div>
           
@@ -348,6 +451,71 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
 
         {/* Scrollable Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
+          
+          {/* Target Exam Package Banner */}
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    Paket Ujian Tujuan
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Menambahkan ke paket yang sama
+                  </span>
+                </div>
+                <div className="pt-1">
+                  {allExams && allExams.length > 1 ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-600">Pilih Paket:</span>
+                      <select
+                        value={currentExam.id}
+                        onChange={(e) => {
+                          const found = allExams.find(ex => ex.id === e.target.value);
+                          if (found) {
+                            setCurrentExam(found);
+                            onSelectExam?.(found);
+                          }
+                        }}
+                        className="text-xs sm:text-sm font-extrabold text-indigo-950 bg-white border border-indigo-300 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs cursor-pointer"
+                      >
+                        {allExams.map(ex => (
+                          <option key={ex.id} value={ex.id}>
+                            {ex.title} — {ex.subjectName} ({ex.targetClasses.join(', ')})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <h4 className="text-sm font-extrabold text-indigo-950">
+                      {currentExam.title} ({currentExam.subjectName})
+                    </h4>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  Butir soal yang Anda buat akan langsung ditambahkan ke dalam paket <strong>"{currentExam.title}"</strong> tanpa membuat paket ujian baru.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Success Alert */}
+          {recentSuccessMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{recentSuccessMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecentSuccessMsg(null)}
+                className="text-emerald-700 hover:text-emerald-900 font-bold text-[11px] underline cursor-pointer ml-3 shrink-0"
+              >
+                Tutup
+              </button>
+            </div>
+          )}
           
           {/* Question Type Selection (5 types) */}
           <div>
@@ -910,39 +1078,180 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
             </div>
           )}
 
-          {/* 4. Matching Data (Format 2 Kolom: Kolom A & Kolom B + Pengecoh) */}
+          {/* 4. Matching Data (Format 2 Kolom: Soal & Jawaban + Gambar + Penanda Warna) */}
           {type === 'matching' && (
             <div className="space-y-6">
-              {/* Petunjuk / Panduan Standar Soal Menjodohkan */}
+              {/* Header & Petunjuk */}
               <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl text-xs text-indigo-950 space-y-2">
-                <div className="font-bold text-sm text-indigo-900 flex items-center gap-2">
-                  <GitCommit className="w-4 h-4 text-indigo-600" />
-                  <span>Petunjuk & Struktur Pembuatan Soal Menjodohkan (Format 2 Kolom)</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs leading-relaxed pt-1">
-                  <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs">
-                    <span className="font-bold text-indigo-900 block mb-1">1. Kolom B (Pilihan Jawaban & Pengecoh):</span>
-                    Tuliskan terlebih dahulu semua pilihan jawaban pada <strong>Kolom B</strong> (diberi label A, B, C, D...). Tambahkan minimal 1-2 opsi pengecoh agar jumlah pilihan lebih banyak daripada pertanyaan.
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="font-bold text-sm text-indigo-900 flex items-center gap-2">
+                    <GitCommit className="w-4 h-4 text-indigo-600" />
+                    <span>Susun Butir Soal Menjodohkan (Teks / Gambar + Pasangan Kunci)</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-2xs">
-                    <span className="font-bold text-indigo-900 block mb-1">2. Kolom A (Pertanyaan & Kunci Pasangan):</span>
-                    Tuliskan daftar pertanyaan/pernyataan pada <strong>Kolom A</strong> (diberi nomor 1, 2, 3...), lalu pasangkan kunci jawaban yang tepat yang diambil dari opsi Kolom B di sampingnya.
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddMatchingPair}
+                      className="text-xs bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex items-center gap-1.5 px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Pasangan Soal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddMatchingOption}
+                      className="text-xs bg-white text-slate-700 font-bold hover:bg-slate-50 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Pilihan Ekstra
+                    </button>
                   </div>
                 </div>
-                <p className="text-[11px] text-indigo-700 italic pt-0.5">
-                  * Catatan Guru: Dengan mengisi pilihan jawaban di Kolom B terlebih dahulu, Anda dapat langsung memilih kunci jawaban dengan mudah saat menyusun pertanyaan di Kolom A.
+                <p className="text-[11px] text-indigo-700 leading-relaxed">
+                  Setiap butir pertanyaan di sebelah kiri dapat berupa <strong>Teks dan/atau Gambar</strong> dan dipasangkan dengan pilihan jawaban di sebelah kanan (berupa <strong>Teks dan/atau Gambar</strong>). Pasangan yang benar ditandai dengan <strong>warna yang sama</strong>. Saat ujian siswa, pilihan jawaban di sebelah kanan akan diacak secara otomatis.
                 </p>
               </div>
 
-              {/* TAHAP 1: KOLOM B (Pilihan Jawaban & Pengecoh) */}
-              <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+              {/* Daftar Butir Pertanyaan (Kolom Kiri) & Pilihan Kunci Jawaban (Kolom Kanan) */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 px-1 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <div className="md:col-span-6 flex items-center gap-2">
+                    <span>Kolom Kiri: Pertanyaan / Pernyataan (1, 2, 3...)</span>
+                  </div>
+                  <div className="md:col-span-6 flex items-center gap-2">
+                    <span>Kolom Kanan: Pilihan Jawaban & Kunci Pasangan</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {matchingPremises.map((premise, pIdx) => {
+                    const pairColor = getMatchingColor(pIdx);
+                    const matchedOptIdx = matchingOptions.findIndex(o => o.id === premise.correctOptionId);
+                    const matchedOpt = matchedOptIdx >= 0 ? matchingOptions[matchedOptIdx] : null;
+
+                    return (
+                      <div
+                        key={premise.id}
+                        className={`p-3.5 bg-white rounded-2xl border-2 transition-all shadow-xs ${pairColor.border} ${pairColor.bgLight}`}
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                          {/* SISI KIRI (PERTANYAAN / PREMISE) */}
+                          <div className="md:col-span-6 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <span className={`w-7 h-7 rounded-xl ${pairColor.badgeBg} ${pairColor.badgeText} text-xs font-bold flex items-center justify-center shrink-0 shadow-2xs mt-1`}>
+                                {pIdx + 1}
+                              </span>
+                              <div className="flex-1 space-y-1.5">
+                                <input
+                                  type="text"
+                                  value={premise.text}
+                                  onChange={(e) => {
+                                    const next = [...matchingPremises];
+                                    next[pIdx].text = e.target.value;
+                                    setMatchingPremises(next);
+                                  }}
+                                  placeholder={`Tulis teks pertanyaan nomor ${pIdx + 1}...`}
+                                  className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none font-medium focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                />
+
+                                {/* Gambar Sisi Kiri (Opsional) */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenImageModalForPremise(pIdx)}
+                                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border flex items-center gap-1.5 cursor-pointer transition-colors ${
+                                      premise.imageUrl
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                    {premise.imageUrl ? 'Ubah Gambar Kiri' : '+ Tambah Gambar'}
+                                  </button>
+
+                                  {premise.imageUrl && (
+                                    <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-slate-200">
+                                      <img
+                                        src={premise.imageUrl}
+                                        alt={`Gambar ${pIdx + 1}`}
+                                        className="w-8 h-8 object-cover rounded-md border border-slate-200"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = [...matchingPremises];
+                                          next[pIdx].imageUrl = undefined;
+                                          setMatchingPremises(next);
+                                        }}
+                                        className="text-rose-500 hover:text-rose-700 p-0.5"
+                                        title="Hapus gambar"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* SISI KANAN (KUNCI JAWABAN PASANGAN) */}
+                          <div className="md:col-span-6 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-slate-600">
+                                Pasangkan ke Kunci Jawaban:
+                              </span>
+                              {matchingPremises.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePremise(pIdx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded-lg cursor-pointer"
+                                  title="Hapus butir pertanyaan ini"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={premise.correctOptionId}
+                                onChange={(e) => {
+                                  const next = [...matchingPremises];
+                                  next[pIdx].correctOptionId = e.target.value;
+                                  setMatchingPremises(next);
+                                }}
+                                className="flex-1 px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl outline-none font-bold text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                              >
+                                {matchingOptions.map((opt, oIdx) => (
+                                  <option key={opt.id} value={opt.id}>
+                                    Pilihan {opt.label}: {opt.text || (opt.imageUrl ? '[Gambar]' : `(Opsi ${opt.label})`)}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {matchedOpt && (
+                                <span className={`px-2.5 py-1.5 rounded-xl ${pairColor.badgeBg} ${pairColor.badgeText} text-xs font-bold shrink-0 shadow-2xs flex items-center gap-1`}>
+                                  <span>{matchedOpt.label}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Kelola Daftar Lengkap Pilihan Jawaban (Kolom B) */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Kolom B: Pilihan Jawaban & Pengecoh (Label Huruf A, B, C, ...)
+                      Daftar Pilihan Jawaban (Kolom B / Label Huruf)
                     </label>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Buat daftar respon jawaban beserta pilihan pengecoh:
+                      Kelola teks dan gambar untuk setiap pilihan jawaban (minimal sejumlah pertanyaan, atau boleh lebih):
                     </p>
                   </div>
                   <button
@@ -950,159 +1259,205 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
                     onClick={handleAddMatchingOption}
                     className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Tambah Pilihan (Kolom B)
+                    <Plus className="w-3.5 h-3.5" /> Tambah Pilihan
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  {matchingOptions.map((opt, idx) => {
-                    const label = String.fromCharCode(65 + idx);
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {matchingOptions.map((opt, oIdx) => {
+                    const label = String.fromCharCode(65 + oIdx);
+                    // Check if this option is assigned to any premise
+                    const matchedPremiseIdx = matchingPremises.findIndex(p => p.correctOptionId === opt.id);
+                    const pairColor = matchedPremiseIdx >= 0 ? getMatchingColor(matchedPremiseIdx) : null;
+
                     return (
-                      <div key={opt.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center gap-3 shadow-2xs">
-                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold text-xs flex items-center justify-center shrink-0">
-                          {label}
-                        </span>
+                      <div
+                        key={opt.id}
+                        className={`p-3 bg-white rounded-xl border transition-all space-y-2 shadow-2xs ${
+                          pairColor ? `${pairColor.border} border-2 ${pairColor.bgLight}` : 'border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-6 h-6 rounded-lg ${
+                              pairColor ? `${pairColor.badgeBg} ${pairColor.badgeText}` : 'bg-slate-200 text-slate-700'
+                            } font-bold text-xs flex items-center justify-center shrink-0`}>
+                              {label}
+                            </span>
+                            {pairColor && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                Kunci Soal #{matchedPremiseIdx + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          {matchingOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMatchingOption(oIdx)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded-lg cursor-pointer"
+                              title="Hapus opsi ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
                         <input
                           type="text"
                           value={opt.text}
                           onChange={(e) => {
                             const next = [...matchingOptions];
-                            next[idx].text = e.target.value;
+                            next[oIdx].text = e.target.value;
                             setMatchingOptions(next);
                           }}
-                          placeholder={`Tulis teks opsi ${label} (misal: jawaban atau pengecoh)...`}
-                          required
-                          className="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:bg-white focus:border-indigo-500"
+                          placeholder={`Teks pilihan jawaban ${label}...`}
+                          className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:bg-white focus:border-indigo-500"
                         />
-                        {matchingOptions.length > 2 && (
+
+                        {/* Gambar Pilihan Jawaban */}
+                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
                           <button
                             type="button"
-                            onClick={() => handleRemoveMatchingOption(idx)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                            title="Hapus Opsi"
+                            onClick={() => handleOpenImageModalForMatchingOption(oIdx)}
+                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border flex items-center gap-1.5 cursor-pointer transition-colors ${
+                              opt.imageUrl
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            {opt.imageUrl ? 'Ubah Gambar' : '+ Tambah Gambar'}
                           </button>
-                        )}
+
+                          {opt.imageUrl && (
+                            <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-200">
+                              <img
+                                src={opt.imageUrl}
+                                alt={`Gambar ${label}`}
+                                className="w-7 h-7 object-cover rounded-md border border-slate-200"
+                                referrerPolicy="no-referrer"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...matchingOptions];
+                                  next[oIdx].imageUrl = undefined;
+                                  setMatchingOptions(next);
+                                }}
+                                className="text-rose-500 hover:text-rose-700 p-0.5"
+                                title="Hapus gambar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* TAHAP 2: KOLOM A (Pertanyaan & Pasangan Kunci Jawaban) */}
-              <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Kolom A: Daftar Pertanyaan / Pernyataan & Kunci Jawaban (Nomor 1, 2, 3, ...)
-                    </label>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Ketikkan pertanyaan dan pilih kunci jawaban pasangannya dari Kolom B:
-                    </p>
+              {/* PRATINJAU LANGSUNG: KISI-KISI SOAL & KUNCI JAWABAN (SESUAI CONTOH GAMBAR) */}
+              <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-4 shadow-md">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2 font-bold text-xs text-indigo-400 uppercase tracking-wider">
+                    <Eye className="w-4 h-4" />
+                    <span>Pratinjau Lembar Soal & Pasangan Warna Kunci Jawaban</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddPremise}
-                    className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center gap-1 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-indigo-50"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Tambah Pertanyaan (Kolom A)
-                  </button>
+                  <span className="text-[11px] text-slate-400">
+                    {matchingPremises.length} Soal &bull; {matchingOptions.length} Pilihan
+                  </span>
                 </div>
 
+                {/* Tampilan Pasangan Berwarna Sesuai Kunci */}
                 <div className="space-y-2.5">
-                  {matchingPremises.map((premise, idx) => (
-                    <div key={premise.id} className="p-3 bg-white rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center shadow-2xs">
-                      <div className="sm:col-span-7">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0 border border-slate-200">
-                            {idx + 1}
-                          </span>
-                          <input
-                            type="text"
-                            value={premise.text}
-                            onChange={(e) => {
-                              const next = [...matchingPremises];
-                              next[idx].text = e.target.value;
-                              setMatchingPremises(next);
-                            }}
-                            placeholder={`Tulis butir pertanyaan / pernyataan nomor ${idx + 1}...`}
-                            required
-                            className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium focus:bg-white focus:border-indigo-500"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="sm:col-span-4">
-                        <select
-                          value={premise.correctOptionId}
-                          onChange={(e) => {
-                            const next = [...matchingPremises];
-                            next[idx].correctOptionId = e.target.value;
-                            setMatchingPremises(next);
-                          }}
-                          required
-                          className="w-full px-3 py-1.5 text-xs bg-indigo-50/70 border border-indigo-200 rounded-lg outline-none font-semibold text-indigo-900 focus:bg-white focus:border-indigo-500"
+                  <div className="text-[11px] font-bold text-slate-300">
+                    Simulasi Kunci Pasangan (Warna yang Sama):
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {matchingPremises.map((p, idx) => {
+                      const color = getMatchingColor(idx);
+                      const opt = matchingOptions.find(o => o.id === p.correctOptionId);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-2.5 rounded-xl border ${color.border} ${color.bgLight} ${color.text} flex items-center justify-between gap-2 shadow-2xs`}
                         >
-                          <option value="">-- Pilih Kunci (Kolom B) --</option>
-                          {matchingOptions.map(opt => (
-                            <option key={opt.id} value={opt.id}>
-                              Opsi {opt.label}: {opt.text ? (opt.text.length > 25 ? opt.text.substring(0, 25) + '...' : opt.text) : `(Pilihan ${opt.label})`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-5 h-5 rounded-md ${color.badgeBg} ${color.badgeText} text-[11px] font-bold flex items-center justify-center shrink-0`}>
+                              {idx + 1}
+                            </span>
+                            {p.imageUrl && (
+                              <img src={p.imageUrl} alt="P" className="w-6 h-6 object-cover rounded border border-slate-300 shrink-0" referrerPolicy="no-referrer" />
+                            )}
+                            <span className="truncate font-semibold text-xs">{p.text || `(Pernyataan ${idx + 1})`}</span>
+                          </div>
 
-                      <div className="sm:col-span-1 flex justify-end">
-                        {matchingPremises.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePremise(idx)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
-                            title="Hapus Pertanyaan"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-xs font-bold opacity-60">&harr;</span>
+                            <span className={`w-5 h-5 rounded-md ${color.badgeBg} ${color.badgeText} text-[11px] font-bold flex items-center justify-center`}>
+                              {opt?.label || '?'}
+                            </span>
+                            {opt?.imageUrl && (
+                              <img src={opt.imageUrl} alt="O" className="w-6 h-6 object-cover rounded border border-slate-300 shrink-0" referrerPolicy="no-referrer" />
+                            )}
+                            <span className="truncate font-semibold text-xs max-w-[90px]">{opt?.text || ''}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-
-
-          {/* Explanation / Pembahasan */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Penjelasan / Pembahasan Soal (Opsional)
-            </label>
-            <textarea
-              rows={2}
-              value={explanation}
-              onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Tuliskan pembahasan atau alasan mengapa kunci jawaban tersebut benar..."
-              className="w-full px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none"
-            />
-          </div>
-
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 flex-wrap">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Batal
             </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              Simpan Butir Soal
-            </button>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {!initialQuestion && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => saveAndProcess('add_more')}
+                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                    title="Simpan soal ini dan langsung tambah butir soal berikutnya pada paket yang sama"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Simpan & Tambah Soal Lagi</span>
+                  </button>
+                  {onOpenBankSoal && (
+                    <button
+                      type="button"
+                      onClick={() => saveAndProcess('open_bank')}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                      title="Simpan soal dan langsung buka daftar butir soal paket ini di Bank Soal"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Simpan & Buka Bank Soal</span>
+                    </button>
+                  )}
+                </>
+              )}
+
+              <button
+                type="submit"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{initialQuestion ? 'Simpan Perubahan Soal' : 'Simpan & Selesai'}</span>
+              </button>
+            </div>
           </div>
 
         </form>

@@ -42,13 +42,15 @@ export interface MatchingPair {
 export interface MatchingPremise {
   id: string;
   text: string; // Kolom A: Pertanyaan / Pernyataan
+  imageUrl?: string; // Gambar Kolom A (opsional)
   correctOptionId: string; // ID of the correct option in Kolom B
 }
 
 export interface MatchingOption {
   id: string;
   label: string; // "A", "B", "C", "D", "E", "F"...
-  text: string; // Kolom B: Teks Pilihan / Pengecoh
+  text: string; // Kolom B: Teks Pilihan Jawaban
+  imageUrl?: string; // Gambar Kolom B (opsional)
 }
 
 export interface MatchingData {

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Exam, Question, Subject, User } from '../../types';
-import { getMatchingData } from '../../utils/matchingHelper';
+import { getMatchingData, getMatchingColor } from '../../utils/matchingHelper';
 import {
   Printer,
   Plus,
@@ -17,7 +17,8 @@ import {
   Award,
   Layers,
   Table,
-  Database
+  Database,
+  Image as ImageIcon
 } from 'lucide-react';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
@@ -33,6 +34,8 @@ interface BankSoalReportProps {
   onEditQuestion: (exam: Exam, question: Question) => void;
   onDeleteQuestion: (questionId: string) => void;
   onEditExam?: (exam: Exam) => void;
+  preselectedExamId?: string;
+  onSelectExam?: (examId: string) => void;
 }
 
 export const BankSoalReport: React.FC<BankSoalReportProps> = ({
@@ -43,11 +46,26 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
   onAddQuestion,
   onEditQuestion,
   onDeleteQuestion,
-  onEditExam
+  onEditExam,
+  preselectedExamId,
+  onSelectExam
 }) => {
-  const [selectedExamId, setSelectedExamId] = useState<string>(
-    exams.length > 0 ? exams[0].id : ''
-  );
+  const [selectedExamId, setSelectedExamId] = useState<string>(() => {
+    if (preselectedExamId && exams.some(e => e.id === preselectedExamId)) {
+      return preselectedExamId;
+    }
+    return exams.length > 0 ? exams[0].id : '';
+  });
+
+  // Sync state if preselectedExamId prop updates from outside (e.g. clicking Kelola Soal on a card)
+  useEffect(() => {
+    if (preselectedExamId && exams.some(e => e.id === preselectedExamId)) {
+      setSelectedExamId(preselectedExamId);
+    } else if (exams.length > 0 && !exams.some(e => e.id === selectedExamId)) {
+      setSelectedExamId(exams[0].id);
+    }
+  }, [preselectedExamId, exams]);
+
   const [viewMode, setViewMode] = useState<'bank_soal' | 'kisi_kisi'>('bank_soal');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [printDocMode, setPrintDocMode] = useState<'bank_soal' | 'kisi_kisi'>('bank_soal');
@@ -136,7 +154,10 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
         <div className="flex flex-wrap items-center gap-2.5">
           <select
             value={selectedExamId}
-            onChange={(e) => setSelectedExamId(e.target.value)}
+            onChange={(e) => {
+              setSelectedExamId(e.target.value);
+              onSelectExam?.(e.target.value);
+            }}
             className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             {exams.map(ex => (
@@ -565,34 +586,107 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                   {q.type === 'matching' && (() => {
                     const mData = getMatchingData(q);
                     return (
-                      <div className="space-y-3 text-xs">
+                      <div className="space-y-4 text-xs">
                         {/* Kolom B Options */}
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                          <div className="font-bold text-slate-700 uppercase mb-2">Kolom B (Pilihan & Pengecoh):</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {mData.options.map(opt => (
-                              <div key={opt.id} className="p-1.5 bg-white border border-slate-200 rounded flex items-center gap-2">
-                                <span className="font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded text-[11px]">{opt.label}</span>
-                                <span>{opt.text}</span>
-                              </div>
-                            ))}
+                        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                          <div className="font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                            <span>Kolom B (Pilihan Jawaban):</span>
+                            <span className="text-[11px] text-slate-500 font-normal">{mData.options.length} Opsi</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {mData.options.map((opt, oIdx) => {
+                              const matchedPremiseIdx = mData.premises.findIndex(p => p.correctOptionId === opt.id);
+                              const pairColor = matchedPremiseIdx >= 0 ? getMatchingColor(matchedPremiseIdx) : null;
+
+                              return (
+                                <div
+                                  key={opt.id}
+                                  className={`p-2.5 bg-white rounded-xl border flex flex-col gap-1.5 shadow-2xs ${
+                                    pairColor ? `${pairColor.border} border-2 ${pairColor.bgLight}` : 'border-slate-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-6 h-6 rounded-lg ${
+                                        pairColor ? `${pairColor.badgeBg} ${pairColor.badgeText}` : 'bg-slate-200 text-slate-800'
+                                      } font-bold text-xs flex items-center justify-center shrink-0`}>
+                                        {opt.label}
+                                      </span>
+                                      <span className="font-medium text-slate-800">{opt.text || '(Opsi Gambar)'}</span>
+                                    </div>
+                                    {pairColor && (
+                                      <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/80 text-slate-600 border border-slate-200">
+                                        Kunci Soal #{matchedPremiseIdx + 1}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {opt.imageUrl && (
+                                    <div className="pl-8">
+                                      <img
+                                        src={opt.imageUrl}
+                                        alt={`Opsi ${opt.label}`}
+                                        className="h-16 w-auto max-w-full object-contain rounded-lg border border-slate-200 bg-white"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 
                         {/* Kolom A Premises & Answer Keys */}
-                        <div className="space-y-1.5">
-                          <div className="font-bold text-slate-700 uppercase">Kolom A (Pertanyaan & Kunci Jawaban):</div>
-                          {mData.premises.map((premise, mIdx) => {
-                            const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
-                            return (
-                              <div key={premise.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <span className="font-semibold text-slate-800">{mIdx + 1}. {premise.text}</span>
-                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 shrink-0">
-                                  Kunci: Opsi {correctOpt?.label || '-'} ({correctOpt?.text || '-'})
-                                </span>
-                              </div>
-                            );
-                          })}
+                        <div className="space-y-2">
+                          <div className="font-bold text-slate-700 uppercase tracking-wider">
+                            Kolom A (Pertanyaan & Pasangan Kunci Jawaban):
+                          </div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {mData.premises.map((premise, mIdx) => {
+                              const pairColor = getMatchingColor(mIdx);
+                              const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
+
+                              return (
+                                <div
+                                  key={premise.id}
+                                  className={`p-3 rounded-xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs ${pairColor.border} ${pairColor.bgLight}`}
+                                >
+                                  <div className="flex items-start gap-2.5">
+                                    <span className={`w-6 h-6 rounded-lg ${pairColor.badgeBg} ${pairColor.badgeText} text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs`}>
+                                      {mIdx + 1}
+                                    </span>
+                                    <div className="space-y-1">
+                                      <span className="font-semibold text-slate-900 block">{premise.text || `(Pernyataan #${mIdx + 1})`}</span>
+                                      {premise.imageUrl && (
+                                        <img
+                                          src={premise.imageUrl}
+                                          alt={`Soal ${mIdx + 1}`}
+                                          className="h-16 w-auto max-w-full object-contain rounded-lg border border-slate-200 bg-white"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                    <span className="text-xs text-slate-500 font-bold">&harr;</span>
+                                    <span className={`px-2.5 py-1 rounded-lg ${pairColor.badgeBg} ${pairColor.badgeText} font-bold text-xs flex items-center gap-1.5 shadow-2xs`}>
+                                      <span>Kunci: Opsi {correctOpt?.label || '?'}</span>
+                                      {correctOpt?.text && <span className="font-normal opacity-90">({correctOpt.text})</span>}
+                                    </span>
+                                    {correctOpt?.imageUrl && (
+                                      <img
+                                        src={correctOpt.imageUrl}
+                                        alt={`Kunci ${correctOpt.label}`}
+                                        className="w-7 h-7 object-cover rounded border border-slate-300 bg-white"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     );
@@ -850,26 +944,41 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                     {q.type === 'matching' && (() => {
                       const mData = getMatchingData(q);
                       return (
-                        <div className="space-y-2 text-xs">
-                          <div className="font-bold uppercase">Kolom B (Pilihan & Pengecoh):</div>
-                          <div className="grid grid-cols-2 gap-1 mb-2">
+                        <div className="space-y-3 text-xs">
+                          <div className="font-bold uppercase tracking-wider">Kolom B (Pilihan Jawaban):</div>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
                             {mData.options.map(opt => (
-                              <div key={opt.id} className="p-1 border border-slate-300 rounded flex items-center gap-1.5 text-[11px]">
-                                <span className="font-bold border border-black px-1 rounded">{opt.label}</span>
-                                <span>{opt.text}</span>
+                              <div key={opt.id} className="p-1.5 border border-slate-300 rounded flex flex-col gap-1 text-[11px]">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold border border-black px-1.5 py-0.5 rounded text-[10px]">{opt.label}</span>
+                                  <span>{opt.text}</span>
+                                </div>
+                                {opt.imageUrl && (
+                                  <img src={opt.imageUrl} alt={`Opsi ${opt.label}`} className="h-12 w-auto object-contain rounded border border-slate-200" />
+                                )}
                               </div>
                             ))}
                           </div>
-                          <div className="font-bold uppercase">Kolom A & Kunci Jawaban:</div>
-                          {mData.premises.map((premise, pIdx) => {
-                            const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
-                            return (
-                              <div key={premise.id} className="p-1.5 border border-slate-300 rounded flex items-center justify-between">
-                                <span>{pIdx + 1}. {premise.text}</span>
-                                <span className="font-bold">Kunci: Opsi {correctOpt?.label}</span>
-                              </div>
-                            );
-                          })}
+                          <div className="font-bold uppercase tracking-wider">Kolom A & Kunci Jawaban:</div>
+                          <div className="space-y-1.5">
+                            {mData.premises.map((premise, pIdx) => {
+                              const correctOpt = mData.options.find(o => o.id === premise.correctOptionId);
+                              return (
+                                <div key={premise.id} className="p-2 border border-slate-300 rounded flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold">{pIdx + 1}.</span>
+                                    <span>{premise.text}</span>
+                                    {premise.imageUrl && (
+                                      <img src={premise.imageUrl} alt={`Soal ${pIdx + 1}`} className="h-10 w-auto object-contain rounded border border-slate-200" />
+                                    )}
+                                  </div>
+                                  <span className="font-bold border border-black px-1.5 py-0.5 rounded text-[11px] shrink-0">
+                                    Kunci: Opsi {correctOpt?.label} {correctOpt?.text ? `(${correctOpt.text})` : ''}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })()}

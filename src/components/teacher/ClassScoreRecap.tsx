@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
 import { getAllUsers } from '../../utils/storage';
+import { pullFromSupabase } from '../../utils/supabaseSync';
 import {
   Printer,
   Search,
@@ -27,7 +28,8 @@ import {
   BarChart3,
   PieChart,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  RefreshCw
 } from 'lucide-react';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
@@ -58,8 +60,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [activeReportTab, setActiveReportTab] = useState<'rekap' | 'analisis'>('rekap');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [printDocMode, setPrintDocMode] = useState<'rekap' | 'analisis'>('rekap');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
-  const allUsers = useMemo(() => getAllUsers(), []);
+  const [allUsers, setAllUsers] = useState<User[]>(getAllUsers());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setAllUsers(getAllUsers());
+    };
+    window.addEventListener('cbt_storage_update', handleUpdate);
+    return () => window.removeEventListener('cbt_storage_update', handleUpdate);
+  }, []);
+
   const allStudents = useMemo(() => allUsers.filter(u => u.role === 'siswa'), [allUsers]);
 
   // Extract unique classes from submissions & exams & default classes (7A-9H)
@@ -76,20 +89,55 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
   const currentExam = useMemo(() => exams.find(e => e.id === selectedExamId), [exams, selectedExamId]);
 
+  const handleManualCloudSync = async () => {
+    setIsSyncing(true);
+    setSyncStatusMsg(null);
+    try {
+      await pullFromSupabase();
+      setSyncStatusMsg('Data berhasil disinkronkan dari database cloud!');
+      setTimeout(() => setSyncStatusMsg(null), 3000);
+    } catch {
+      setSyncStatusMsg('Gagal menyinkronkan data dari cloud.');
+      setTimeout(() => setSyncStatusMsg(null), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Base filtered by Exam & Class (with optional full class roster inclusion)
   const baseSubmissions = useMemo(() => {
     const rawFiltered = submissions.filter(sub => {
-      if (selectedExamId !== 'all' && sub.examId !== selectedExamId) return false;
+      if (selectedExamId !== 'all') {
+        const matchesId = sub.examId === selectedExamId;
+        const matchesTitle =
+          currentExam &&
+          sub.examTitle &&
+          sub.examTitle.trim().toLowerCase() === currentExam.title.trim().toLowerCase();
+        if (!matchesId && !matchesTitle) return false;
+      }
       if (selectedClass !== 'all' && sub.studentClass !== selectedClass) return false;
       return true;
     });
 
-    if (!showAllClassRoster || selectedClass === 'all') {
+    if (!showAllClassRoster) {
       return rawFiltered;
     }
 
-    // Merge registered students in the selected class who have not submitted
-    const targetStudents = allStudents.filter(s => s.classGroup === selectedClass);
+    // Determine target students to include when roster is enabled
+    let targetStudents: User[] = [];
+    if (selectedClass !== 'all') {
+      targetStudents = allStudents.filter(s => s.classGroup === selectedClass);
+    } else if (currentExam) {
+      const examClasses = currentExam.targetClasses || [];
+      if (examClasses.length === 0 || examClasses.includes('Semua Kelas') || examClasses.includes('all')) {
+        targetStudents = allStudents;
+      } else {
+        targetStudents = allStudents.filter(s => s.classGroup && examClasses.includes(s.classGroup));
+      }
+    } else {
+      targetStudents = allStudents;
+    }
+
     const existingStudentIds = new Set(rawFiltered.map(s => s.studentId));
 
     const missingRows: ExamSubmission[] = [];
@@ -97,12 +145,12 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       if (!existingStudentIds.has(stu.id)) {
         missingRows.push({
           id: `unsub_${stu.id}_${selectedExamId}`,
-          examId: selectedExamId !== 'all' ? selectedExamId : 'unassigned',
+          examId: selectedExamId !== 'all' ? selectedExamId : (currentExam ? currentExam.id : 'unassigned'),
           examTitle: currentExam ? currentExam.title : 'Belum Mengikuti',
           subjectName: currentExam ? currentExam.subjectName : 'Semua Mapel',
           studentId: stu.id,
           studentName: stu.name,
-          studentClass: stu.classGroup || selectedClass,
+          studentClass: stu.classGroup || (selectedClass !== 'all' ? selectedClass : 'Umum'),
           studentNipOrNis: stu.nipOrNis || undefined,
           answers: {},
           earnedScore: 0,
@@ -327,7 +375,22 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         </div>
 
         {/* Quick action buttons */}
-        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={handleManualCloudSync}
+            disabled={isSyncing}
+            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer border ${
+              isSyncing
+                ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                : 'bg-white text-indigo-700 hover:bg-indigo-50 border-indigo-200'
+            }`}
+            title="Tarik data nilai terbaru dari database Supabase"
+          >
+            <RefreshCw className={`w-4 h-4 text-indigo-600 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Cloud'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExportExcel}
@@ -359,6 +422,13 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           </button>
         </div>
       </div>
+
+      {syncStatusMsg && (
+        <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+          <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span>{syncStatusMsg}</span>
+        </div>
+      )}
 
       {/* View Switcher: Rekap vs Analisis Nilai */}
       <div className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs no-print">
@@ -460,17 +530,15 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </select>
           </div>
 
-          {selectedClass !== 'all' && (
-            <label className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showAllClassRoster}
-                onChange={(e) => setShowAllClassRoster(e.target.checked)}
-                className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-              />
-              <span className="font-semibold">Sertakan Siswa Belum Ujian (Nilai 0)</span>
-            </label>
-          )}
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showAllClassRoster}
+              onChange={(e) => setShowAllClassRoster(e.target.checked)}
+              className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span className="font-semibold">Sertakan Siswa Belum Ujian (Nilai 0)</span>
+          </label>
         </div>
 
         {/* Search box */}

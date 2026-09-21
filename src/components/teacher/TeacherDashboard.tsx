@@ -161,6 +161,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
   const [targetExamForQuestion, setTargetExamForQuestion] = useState<Exam | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [selectedBankExamId, setSelectedBankExamId] = useState<string>('');
 
   // New/Edit Exam Form State
   const [newExamTitle, setNewExamTitle] = useState('');
@@ -240,12 +241,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   // Handle Question add/edit
   const handleOpenAddQuestion = (exam: Exam) => {
     setTargetExamForQuestion(exam);
+    setSelectedBankExamId(exam.id);
     setEditingQuestion(null);
     setIsQuestionModalOpen(true);
   };
 
+  const handleOpenManageQuestions = (exam: Exam) => {
+    setSelectedBankExamId(exam.id);
+    setActiveTab('bank_soal');
+  };
+
   const handleOpenEditQuestion = (exam: Exam, question: Question) => {
     setTargetExamForQuestion(exam);
+    setSelectedBankExamId(exam.id);
     setEditingQuestion(question);
     setIsQuestionModalOpen(true);
   };
@@ -492,23 +500,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full lg:w-auto shrink-0">
-            <div className="bg-white px-3 py-1.5 sm:py-2 rounded-xl border border-emerald-200 text-center min-w-0 shadow-2xs">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="bg-white px-3.5 py-1.5 sm:py-2 rounded-xl border border-emerald-200 text-center min-w-0 shadow-2xs">
               <span className="text-[10px] text-emerald-700 font-bold block">Paket Ujian</span>
               <span className="text-base sm:text-lg font-black text-slate-900">{displayExams.length}</span>
             </div>
-            <div className="bg-white px-3 py-1.5 sm:py-2 rounded-xl border border-emerald-200 text-center min-w-0 shadow-2xs">
+            <div className="bg-white px-3.5 py-1.5 sm:py-2 rounded-xl border border-emerald-200 text-center min-w-0 shadow-2xs">
               <span className="text-[10px] text-amber-700 font-bold block">Bank Soal</span>
               <span className="text-base sm:text-lg font-black text-amber-700">{displayQuestions.length}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenCreateExam}
-              className="col-span-2 sm:col-span-1 px-3.5 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5 text-white stroke-[3]" />
-              <span>Buat Paket Ujian Baru</span>
-            </button>
           </div>
         </div>
       </div>
@@ -826,16 +826,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                             type="button"
                             onClick={() => handleOpenAddQuestion(ex)}
                             className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title={`Tambah butir soal baru ke paket "${ex.title}"`}
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Tambah Butir Soal</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setActiveTab('bank_soal');
-                            }}
+                            onClick={() => handleOpenManageQuestions(ex)}
                             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200"
+                            title="Kelola butir soal pada paket ini"
                           >
                             Kelola Soal
                           </button>
@@ -855,6 +855,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               exams={displayExams}
               questions={displayQuestions}
               subjects={displaySubjects}
+              preselectedExamId={selectedBankExamId || displayExams[0]?.id}
+              onSelectExam={(id) => setSelectedBankExamId(id)}
               onAddQuestion={handleOpenAddQuestion}
               onEditQuestion={handleOpenEditQuestion}
               onDeleteQuestion={handleDeleteQuestion}
@@ -1058,6 +1060,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
           exam={targetExamForQuestion}
           initialQuestion={editingQuestion}
           isOpen={isQuestionModalOpen}
+          allExams={displayExams}
+          onSelectExam={(selectedEx) => {
+            setTargetExamForQuestion(selectedEx);
+            setSelectedBankExamId(selectedEx.id);
+          }}
+          onOpenBankSoal={(examId) => {
+            setSelectedBankExamId(examId);
+            setActiveTab('bank_soal');
+          }}
           onClose={() => {
             setIsQuestionModalOpen(false);
             setEditingQuestion(null);

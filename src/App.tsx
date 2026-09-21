@@ -112,80 +112,94 @@ export default function App() {
   const handleSelectInternalRoute = (route: string) => {
     const allUsers = getAllUsers();
     if (route === 'internal:siswa_jadwal') {
-      const studentUser = allUsers.find(u => u.role === 'siswa') || {
-        id: 'user_siswa_1',
-        username: 'ahmad_siswa',
-        password: 'siswa123',
-        name: 'Ahmad Fauzi Ramadhan',
-        role: 'siswa',
-        nipOrNis: '20241001',
-        classGroup: 'X-IPA-1'
-      };
-      setLoggedInUser(studentUser as User);
-      setCurrentUser(studentUser as User);
-      setActiveExam(null);
+      if (currentUser?.role === 'siswa') {
+        setActiveExam(null);
+      } else {
+        const studentUser = allUsers.find(u => u.role === 'siswa') || {
+          id: 'user_siswa_1',
+          username: 'ahmad_siswa',
+          password: 'siswa123',
+          name: 'Ahmad Fauzi Ramadhan',
+          role: 'siswa',
+          nipOrNis: '20241001',
+          classGroup: 'X-IPA-1'
+        };
+        setLoggedInUser(studentUser as User);
+        setCurrentUser(studentUser as User);
+        setActiveExam(null);
+      }
     } else if (route === 'internal:guru_kelola_paket') {
-      const teacherUser = allUsers.find(u => u.role === 'guru') || {
-        id: 'user_guru_2',
-        username: 'siti_guru',
-        password: 'guru123',
-        name: 'Siti Rahmawati, S.Pd., M.Si.',
-        role: 'guru',
-        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-      };
       setTeacherInitialTab('paket_ujian');
-      setLoggedInUser(teacherUser as User);
-      setCurrentUser(teacherUser as User);
+      if (currentUser?.role !== 'guru') {
+        const teacherUser = allUsers.find(u => u.role === 'guru') || {
+          id: 'user_guru_2',
+          username: 'siti_guru',
+          password: 'guru123',
+          name: 'Siti Rahmawati, S.Pd., M.Si.',
+          role: 'guru',
+          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+        };
+        setLoggedInUser(teacherUser as User);
+        setCurrentUser(teacherUser as User);
+      }
       setActiveExam(null);
     } else if (route === 'internal:guru_bank_soal' || route === 'internal:portal' || route === 'internal:input_data') {
-      const teacherUser = allUsers.find(u => u.role === 'guru') || {
-        id: 'user_guru_2',
-        username: 'siti_guru',
-        password: 'guru123',
-        name: 'Siti Rahmawati, S.Pd., M.Si.',
-        role: 'guru',
-        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-      };
       setTeacherInitialTab('bank_soal');
-      setLoggedInUser(teacherUser as User);
-      setCurrentUser(teacherUser as User);
+      if (currentUser?.role !== 'guru') {
+        const teacherUser = allUsers.find(u => u.role === 'guru') || {
+          id: 'user_guru_2',
+          username: 'siti_guru',
+          password: 'guru123',
+          name: 'Siti Rahmawati, S.Pd., M.Si.',
+          role: 'guru',
+          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+        };
+        setLoggedInUser(teacherUser as User);
+        setCurrentUser(teacherUser as User);
+      }
       setActiveExam(null);
     } else if (route === 'internal:guru_rekap_nilai') {
-      const teacherUser = allUsers.find(u => u.role === 'guru') || {
-        id: 'user_guru_2',
-        username: 'siti_guru',
-        password: 'guru123',
-        name: 'Siti Rahmawati, S.Pd., M.Si.',
-        role: 'guru',
-        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-      };
       setTeacherInitialTab('rekap');
-      setLoggedInUser(teacherUser as User);
-      setCurrentUser(teacherUser as User);
+      if (currentUser?.role !== 'guru') {
+        const teacherUser = allUsers.find(u => u.role === 'guru') || {
+          id: 'user_guru_2',
+          username: 'siti_guru',
+          password: 'guru123',
+          name: 'Siti Rahmawati, S.Pd., M.Si.',
+          role: 'guru',
+          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+        };
+        setLoggedInUser(teacherUser as User);
+        setCurrentUser(teacherUser as User);
+      }
       setActiveExam(null);
     } else if (route === 'internal:guru_berita_acara') {
-      const teacherUser = allUsers.find(u => u.role === 'guru') || {
-        id: 'user_guru_2',
-        username: 'siti_guru',
-        password: 'guru123',
-        name: 'Siti Rahmawati, S.Pd., M.Si.',
-        role: 'guru',
-        subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-      };
       setTeacherInitialTab('berita_acara');
-      setLoggedInUser(teacherUser as User);
-      setCurrentUser(teacherUser as User);
+      if (currentUser?.role !== 'guru') {
+        const teacherUser = allUsers.find(u => u.role === 'guru') || {
+          id: 'user_guru_2',
+          username: 'siti_guru',
+          password: 'guru123',
+          name: 'Siti Rahmawati, S.Pd., M.Si.',
+          role: 'guru',
+          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
+        };
+        setLoggedInUser(teacherUser as User);
+        setCurrentUser(teacherUser as User);
+      }
       setActiveExam(null);
     } else if (route === 'internal:admin_management') {
-      const adminUser = allUsers.find(u => u.role === 'admin') || {
-        id: 'user_admin_1',
-        username: 'admin',
-        password: 'admin123',
-        name: 'Administrator CBT',
-        role: 'admin'
-      };
-      setLoggedInUser(adminUser as User);
-      setCurrentUser(adminUser as User);
+      if (currentUser?.role !== 'admin') {
+        const adminUser = allUsers.find(u => u.role === 'admin') || {
+          id: 'user_admin_1',
+          username: 'admin',
+          password: 'admin123',
+          name: 'Administrator CBT',
+          role: 'admin'
+        };
+        setLoggedInUser(adminUser as User);
+        setCurrentUser(adminUser as User);
+      }
       setActiveExam(null);
     }
   };
@@ -210,39 +224,16 @@ export default function App() {
     );
   }
 
-  // 2. DASHBOARD KHUSUS SISWA
-  // Siswa melihat tampilan ujian bersih tanpa menu sidebar launcher guru/admin
-  if (currentUser && currentUser.role === 'siswa') {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
-        <Navbar
-          user={currentUser}
-          onLogout={handleLogout}
-          onOpenChangePassword={() => setIsChangePasswordOpen(true)}
-          isExamLockActive={false}
-          supabaseStatus={supabaseStatus}
-          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-        />
-        <main className="flex-1 flex flex-col">
-          <StudentDashboard
-            student={currentUser}
-            onStartExam={handleStartExam}
-          />
-        </main>
-        {isChangePasswordOpen && (
-          <ChangePasswordModal
-            user={currentUser}
-            isOpen={isChangePasswordOpen}
-            onClose={() => setIsChangePasswordOpen(false)}
-            onUpdated={handleUserUpdated}
-          />
-        )}
-      </div>
-    );
-  }
-
+  // 2. DASHBOARD & PORTAL APLIKASI CBT DENGAN FILTER ROLE OTOMATIS
+  // - Guru: Hanya Menu Guru & Menu Utama
+  // - Siswa: Hanya Menu Siswa
+  // - Admin: Tampilkan Semua Menu
   return (
-    <Dashboard3DLauncher onSelectInternalRoute={handleSelectInternalRoute} isExamActive={false}>
+    <Dashboard3DLauncher
+      currentUser={currentUser}
+      onSelectInternalRoute={handleSelectInternalRoute}
+      isExamActive={false}
+    >
       <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
         {/* Supabase Realtime Setup Notification Banner */}
         {!activeExam && (
@@ -268,6 +259,11 @@ export default function App() {
         <main className="flex-1 flex flex-col">
           {!currentUser ? (
             <LoginView onLoginSuccess={handleLoginSuccess} />
+          ) : currentUser.role === 'siswa' ? (
+            <StudentDashboard
+              student={currentUser}
+              onStartExam={handleStartExam}
+            />
           ) : currentUser.role === 'guru' ? (
             <TeacherDashboard teacher={currentUser} initialTab={teacherInitialTab} />
           ) : (

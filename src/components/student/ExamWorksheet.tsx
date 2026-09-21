@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { getMatchingData } from '../../utils/matchingHelper';
+import { getMatchingData, getMatchingColor } from '../../utils/matchingHelper';
 import {
   Clock,
   AlertTriangle,
@@ -1031,71 +1031,207 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             {/* TYPE 4: SOAL MENJODOHKAN (Matching) */}
             {currentQ.type === 'matching' && (() => {
               const matchingData = getMatchingData(currentQ);
+              const currentMatchAnswers: Record<string, string> = answers[currentQ.id] || {};
+              const answeredCount = matchingData.premises.filter(p => !!currentMatchAnswers[p.id]).length;
+              const totalCount = matchingData.premises.length;
+
               return (
-                <div className="space-y-6">
-                  <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-xs sm:text-sm text-indigo-950">
-                    <div className="font-bold mb-1">Petunjuk Pengerjaan:</div>
-                    Jodohkan setiap pernyataan pada <strong>Kolom A</strong> dengan pilihan jawaban yang tepat pada <strong>Kolom B</strong>.
-                  </div>
-
-                  {/* Kotak Kolom B: Pilihan Jawaban & Pengecoh */}
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
-                      Kolom B: Daftar Pilihan Jawaban & Pengecoh
+                <div className="space-y-5">
+                  {/* Petunjuk Pengerjaan & Status */}
+                  <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-950">
+                    <div>
+                      <div className="font-bold text-sm text-indigo-900 mb-0.5">Petunjuk Pengerjaan Soal Menjodohkan:</div>
+                      <p className="text-indigo-800 leading-relaxed">
+                        Jodohkan setiap butir pertanyaan pada <strong>Kolom A</strong> dengan pilihan jawaban yang sesuai pada <strong>Kolom B</strong>. Pasangan yang Anda pilih akan otomatis ditandai dengan <strong>warna yang sama</strong>.
+                      </p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {matchingData.options.map(opt => (
-                        <div key={opt.id} className="p-2.5 bg-white border border-slate-200 rounded-xl text-xs flex items-center gap-2 shadow-xs">
-                          <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center shrink-0">
-                            {opt.label}
-                          </span>
-                          <span className="text-slate-800 font-medium">{opt.text}</span>
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs ${
+                        answeredCount === totalCount
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-indigo-600 text-white'
+                      }`}>
+                        {answeredCount} / {totalCount} Terpasang
+                      </span>
                     </div>
                   </div>
 
-                  {/* Kolom A: Daftar Pertanyaan & Dropdown */}
-                  <div className="space-y-3">
-                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Kolom A: Daftar Pertanyaan
+                  {/* Tata Letak 2 Kolom: Kolom A (Pertanyaan) & Kolom B (Pilihan Jawaban) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    {/* SISI KIRI: KOLOM A (Daftar Pertanyaan) */}
+                    <div className="lg:col-span-7 space-y-3">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Kolom A: Daftar Butir Soal ({matchingData.premises.length})
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {matchingData.premises.map((premise, pIdx) => {
+                          const selectedOptId = currentMatchAnswers[premise.id] || '';
+                          const matchedOpt = matchingData.options.find(o => o.id === selectedOptId);
+                          const pairColor = getMatchingColor(pIdx);
+                          const isMatched = !!selectedOptId;
+
+                          return (
+                            <div
+                              key={premise.id}
+                              className={`p-4 rounded-2xl border-2 transition-all shadow-xs ${
+                                isMatched
+                                  ? `${pairColor.border} ${pairColor.bgLight}`
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="space-y-3">
+                                {/* Header Pertanyaan */}
+                                <div className="flex items-start gap-3">
+                                  <span className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-2xs ${
+                                    isMatched
+                                      ? `${pairColor.badgeBg} ${pairColor.badgeText}`
+                                      : 'bg-slate-200 text-slate-700'
+                                  }`}>
+                                    {pIdx + 1}
+                                  </span>
+
+                                  <div className="flex-1 space-y-2">
+                                    <div className="text-xs sm:text-sm font-semibold text-slate-900 leading-relaxed">
+                                      {premise.text || `(Pertanyaan #${pIdx + 1})`}
+                                    </div>
+
+                                    {/* Gambar pada Butir Soal jika ada */}
+                                    {premise.imageUrl && (
+                                      <div className="pt-1">
+                                        <img
+                                          src={premise.imageUrl}
+                                          alt={`Soal ${pIdx + 1}`}
+                                          className="max-h-36 w-auto object-contain rounded-xl border border-slate-200 bg-white shadow-2xs"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Bagian Pemilihan Kunci Pasangan */}
+                                <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                  <div className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                                    <span>Pasangan Jawaban:</span>
+                                    {matchedOpt && (
+                                      <span className={`px-2 py-0.5 rounded-lg ${pairColor.badgeBg} ${pairColor.badgeText} text-xs font-extrabold shadow-2xs`}>
+                                        Opsi {matchedOpt.label}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 flex-1 sm:max-w-xs">
+                                    <select
+                                      value={selectedOptId}
+                                      onChange={(e) => {
+                                        setAnswerForCurrent({
+                                          ...currentMatchAnswers,
+                                          [premise.id]: e.target.value
+                                        });
+                                      }}
+                                      className={`w-full text-xs p-2 rounded-xl outline-none font-semibold transition-all border ${
+                                        isMatched
+                                          ? 'bg-white border-indigo-400 text-indigo-950 font-bold'
+                                          : 'bg-slate-50 border-slate-300 text-slate-700 focus:bg-white focus:border-indigo-500'
+                                      }`}
+                                    >
+                                      <option value="">-- Pilih Jawaban (Kolom B) --</option>
+                                      {matchingData.options.map(opt => (
+                                        <option key={opt.id} value={opt.id}>
+                                          Pilihan {opt.label}: {opt.text ? (opt.text.length > 25 ? opt.text.substring(0, 25) + '...' : opt.text) : '(Gambar)'}
+                                        </option>
+                                      ))}
+                                    </select>
+
+                                    {isMatched && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = { ...currentMatchAnswers };
+                                          delete next[premise.id];
+                                          setAnswerForCurrent(next);
+                                        }}
+                                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer bg-white border border-slate-200"
+                                        title="Lepas Pasangan"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="space-y-3">
-                      {matchingData.premises.map((premise, idx) => {
-                        const currentMatchAnswers = answers[currentQ.id] || {};
-                        const selectedOptionId = currentMatchAnswers[premise.id] || '';
 
-                        return (
-                          <div key={premise.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                            <div className="md:col-span-7 text-xs sm:text-sm font-semibold text-slate-800 flex items-start gap-3">
-                              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
-                                {idx + 1}
-                              </span>
-                              <span className="pt-0.5">{premise.text}</span>
-                            </div>
+                    {/* SISI KANAN: KOLOM B (Daftar Pilihan Jawaban) */}
+                    <div className="lg:col-span-5 space-y-3">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Kolom B: Pilihan Jawaban ({matchingData.options.length})
+                        </span>
+                      </div>
 
-                            <div className="md:col-span-5">
-                              <select
-                                value={selectedOptionId}
-                                onChange={(e) => {
-                                  setAnswerForCurrent({
-                                    ...currentMatchAnswers,
-                                    [premise.id]: e.target.value
-                                  });
-                                }}
-                                className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none font-semibold text-indigo-900"
-                              >
-                                <option value="">-- Pilih Huruf Pilihan (A, B, C...) --</option>
-                                {matchingData.options.map(opt => (
-                                  <option key={opt.id} value={opt.id}>
-                                    Opsi {opt.label}: {opt.text}
-                                  </option>
-                                ))}
-                              </select>
+                      <div className="space-y-2.5">
+                        {matchingData.options.map((opt) => {
+                          // Check which premise selected this option
+                          const selectedPremiseIdx = matchingData.premises.findIndex(
+                            p => currentMatchAnswers[p.id] === opt.id
+                          );
+                          const isAssigned = selectedPremiseIdx >= 0;
+                          const pairColor = isAssigned ? getMatchingColor(selectedPremiseIdx) : null;
+
+                          return (
+                            <div
+                              key={opt.id}
+                              className={`p-3.5 rounded-2xl border-2 transition-all shadow-xs ${
+                                pairColor
+                                  ? `${pairColor.border} ${pairColor.bgLight}`
+                                  : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 shadow-2xs ${
+                                      pairColor
+                                        ? `${pairColor.badgeBg} ${pairColor.badgeText}`
+                                        : 'bg-slate-200 text-slate-700'
+                                    }`}>
+                                      {opt.label}
+                                    </span>
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-800 leading-snug">
+                                      {opt.text || '(Pilihan Gambar)'}
+                                    </span>
+                                  </div>
+
+                                  {isAssigned && pairColor && (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${pairColor.badgeBg} ${pairColor.badgeText} shadow-2xs shrink-0`}>
+                                      Dipilih Soal #{selectedPremiseIdx + 1}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {opt.imageUrl && (
+                                  <div className="pl-9 pt-1">
+                                    <img
+                                      src={opt.imageUrl}
+                                      alt={`Pilihan ${opt.label}`}
+                                      className="max-h-28 w-auto object-contain rounded-xl border border-slate-200 bg-white shadow-2xs"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>

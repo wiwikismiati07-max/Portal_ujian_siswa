@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { AppLink } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { AppLink, User } from '../types';
 import {
   getAllAppLinks,
   addAppLink,
@@ -7,7 +7,8 @@ import {
   deleteAppLink,
   exportAppLinksJSON,
   importAppLinksJSON,
-  resetAppLinksToDefault
+  resetAppLinksToDefault,
+  getCurrentUser
 } from '../utils/storage';
 import {
   Sparkles,
@@ -52,6 +53,7 @@ import {
 
 interface Dashboard3DLauncherProps {
   children: React.ReactNode;
+  currentUser?: User | null;
   activeInternalRoute?: string;
   onSelectInternalRoute?: (route: string) => void;
   isExamActive?: boolean;
@@ -165,6 +167,7 @@ const COLOR_STYLES: Record<
 
 export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
   children,
+  currentUser,
   activeInternalRoute,
   onSelectInternalRoute,
   isExamActive
@@ -194,6 +197,10 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Effective current user & role
+  const effectiveUser = currentUser !== undefined ? currentUser : getCurrentUser();
+  const userRole = effectiveUser?.role; // 'guru' | 'siswa' | 'admin' | undefined
+
   // Refresh links list when storage updates
   useEffect(() => {
     const handleUpdate = () => {
@@ -210,7 +217,41 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const activeLink = links.find(l => l.id === activeLinkId) || links[0] || {
+  // Base role-filtered links:
+  // - Guru: Hanya Menu Guru ("Fitur Guru") dan Menu Utama ("Aplikasi Utama")
+  // - Siswa: Hanya Menu Siswa ("Fitur Siswa")
+  // - Administrator: Tampilkan SEMUA
+  const roleAllowedLinks = useMemo(() => {
+    if (!userRole) {
+      return links.filter(l => l.category === 'Aplikasi Utama' || l.category === 'Fitur Siswa');
+    }
+    if (userRole === 'guru') {
+      return links.filter(l => l.category === 'Fitur Guru' || l.category === 'Aplikasi Utama');
+    }
+    if (userRole === 'siswa') {
+      return links.filter(l => l.category === 'Fitur Siswa');
+    }
+    // admin sees all
+    return links;
+  }, [links, userRole]);
+
+  // Derived available categories for the role
+  const categories = useMemo(() => {
+    const rawCategories = Array.from(new Set(roleAllowedLinks.map(l => l.category || 'Umum')));
+    if (userRole === 'siswa') {
+      return rawCategories.length > 1 ? ['Semua', ...rawCategories] : rawCategories;
+    }
+    return ['Semua', ...rawCategories];
+  }, [roleAllowedLinks, userRole]);
+
+  // Ensure selectedCategory is valid
+  useEffect(() => {
+    if (categories.length > 0 && !categories.includes(selectedCategory)) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
+
+  const activeLink = roleAllowedLinks.find(l => l.id === activeLinkId) || roleAllowedLinks[0] || {
     id: 'link_portal_utama',
     title: 'Portal Ujian SPANJU (Utama)',
     url: 'internal:portal',
@@ -221,18 +262,17 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
     isInternal: true
   };
 
-  // Get categories list
-  const categories = ['Semua', ...Array.from(new Set(links.map(l => l.category || 'Umum')))];
-
-  // Filter links
-  const filteredLinks = links.filter(link => {
-    const matchesCategory = selectedCategory === 'Semua' || link.category === selectedCategory;
-    const matchesSearch =
-      link.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      link.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      link.url.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Filter links based on role, category, and search query
+  const filteredLinks = useMemo(() => {
+    return roleAllowedLinks.filter(link => {
+      const matchesCategory = selectedCategory === 'Semua' || link.category === selectedCategory;
+      const matchesSearch =
+        link.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        link.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        link.url.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [roleAllowedLinks, selectedCategory, searchQuery]);
 
   const handleSelectLink = (link: AppLink) => {
     setActiveLinkId(link.id);
@@ -416,14 +456,36 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h2 className="text-sm font-black tracking-tight text-slate-900 uppercase truncate">
-                      DASHBOARD PORTAL
+                      {userRole === 'guru'
+                        ? 'MENU GURU & UTAMA'
+                        : userRole === 'siswa'
+                        ? 'RUANG UJIAN SISWA'
+                        : userRole === 'admin'
+                        ? 'PANEL ADMINISTRATOR'
+                        : 'DASHBOARD PORTAL'}
                     </h2>
-                    <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md shrink-0">
-                      3D
+                    <span
+                      className={`px-1.5 py-0.5 text-[9px] font-black rounded-md border shrink-0 ${
+                        userRole === 'guru'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : userRole === 'siswa'
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : userRole === 'admin'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      }`}
+                    >
+                      {userRole === 'guru' ? 'GURU' : userRole === 'siswa' ? 'SISWA' : userRole === 'admin' ? 'ADMIN' : '3D'}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 truncate">
-                    Launcher & Management Link SPANJU
+                    {userRole === 'guru'
+                      ? 'Kelola Soal, Paket & Rekap Nilai'
+                      : userRole === 'siswa'
+                      ? 'Daftar Ujian & Asesmen Terjadwal'
+                      : userRole === 'admin'
+                      ? 'Akses Penuh Semua Menu & Modul'
+                      : 'Launcher & Navigasi SPANJU'}
                   </p>
                 </div>
               )}
@@ -482,38 +544,45 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                   ))}
                 </div>
 
-                {/* Top Action Bar: Add Link, Backup, Upload, Reset */}
-                <div className="grid grid-cols-4 gap-1.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleOpenAddModal}
-                    title="Tambah Link Aplikasi Baru"
-                    className="py-2 px-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:from-indigo-800 active:to-indigo-900 text-white font-extrabold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-md shadow-indigo-600/20 border-b-2 border-indigo-900 transition-all cursor-pointer col-span-2 active:translate-y-0.5"
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>+ Tambah Link</span>
-                  </button>
+                {/* Top Action Bar: If Siswa, show student banner; If Guru or Admin, show Add, Backup, Upload */}
+                {userRole === 'siswa' ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/80 border border-indigo-200/80 rounded-xl text-xs text-indigo-900 font-bold">
+                    <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="truncate">Menu Akses Ujian Khusus Siswa</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleOpenAddModal}
+                      title="Tambah Link Aplikasi Baru"
+                      className="py-2 px-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:from-indigo-800 active:to-indigo-900 text-white font-extrabold text-[11px] rounded-xl flex items-center justify-center gap-1 shadow-md shadow-indigo-600/20 border-b-2 border-indigo-900 transition-all cursor-pointer col-span-2 active:translate-y-0.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>+ Tambah Link</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={handleExportBackup}
-                    title="Download Backup JSON"
-                    className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
-                  >
-                    <Download className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Backup</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={handleExportBackup}
+                      title="Download Backup JSON"
+                      className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
+                    >
+                      <Download className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Backup</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Upload Restore JSON"
-                    className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Upload</span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Upload Restore JSON"
+                      className="py-2 px-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 border border-slate-200 transition-all cursor-pointer active:translate-y-0.5 shadow-2xs"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Upload</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Scrollable List of 3D Buttons */}
@@ -589,25 +658,27 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
                             </div>
                           </div>
 
-                          {/* Action Buttons: Edit & Delete */}
-                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenEditModal(link, e)}
-                              title="Edit Link Aplikasi"
-                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleDeleteLinkItem(link.id, e)}
-                              title="Hapus Link Aplikasi"
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {/* Action Buttons: Edit & Delete (Hidden for student) */}
+                          {userRole !== 'siswa' && (
+                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenEditModal(link, e)}
+                                title="Edit Link Aplikasi"
+                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteLinkItem(link.id, e)}
+                                title="Hapus Link Aplikasi"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Active Glowing Indicator */}
@@ -625,15 +696,21 @@ export const Dashboard3DLauncher: React.FC<Dashboard3DLauncherProps> = ({
 
               {/* Sidebar Footer Info */}
               <div className="p-3 border-t border-slate-200/90 bg-slate-50/80 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-                <button
-                  type="button"
-                  onClick={handleResetDefault}
-                  className="flex items-center gap-1 text-slate-500 hover:text-amber-700 transition-colors cursor-pointer font-bold"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset Standar</span>
-                </button>
-                <span className="font-semibold">{links.length} Aplikasi Tersimpan</span>
+                {userRole === 'admin' ? (
+                  <button
+                    type="button"
+                    onClick={handleResetDefault}
+                    className="flex items-center gap-1 text-slate-500 hover:text-amber-700 transition-colors cursor-pointer font-bold"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset Standar</span>
+                  </button>
+                ) : (
+                  <span className="font-semibold text-slate-400 text-[10px]">
+                    {userRole === 'guru' ? 'Mode Guru' : userRole === 'siswa' ? 'Mode Siswa' : 'Portal CBT'}
+                  </span>
+                )}
+                <span className="font-semibold">{filteredLinks.length} Menu Aktif</span>
               </div>
             </>
           )}

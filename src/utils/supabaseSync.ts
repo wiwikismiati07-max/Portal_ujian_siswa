@@ -507,9 +507,34 @@ export const pullFromSupabase = async (): Promise<void> => {
     const { data: dbSubmissions, error: subError } = await supabase
       .from('cbt_submissions')
       .select('*')
-      .limit(2000);
+      .limit(5000);
+
+    const localSubs = getAllSubmissions();
+
     if (!subError && dbSubmissions) {
-      saveSubmissions(dbSubmissions.map(mapSubmissionFromDb), false);
+      const cloudSubs = dbSubmissions.map(mapSubmissionFromDb);
+
+      if (cloudSubs.length === 0 && localSubs.length > 0) {
+        // Jangan timpa lokal dengan kosong! Pertahankan lokal dan upload ke Supabase
+        saveSubmissions(localSubs, false);
+        upsertInChunks('cbt_submissions', localSubs.map(s => mapSubmissionToDb(s))).catch(err => {
+          console.warn('Seeding local submissions to Supabase in background:', err);
+        });
+      } else if (cloudSubs.length > 0) {
+        // Gabungkan submission lokal yang belum ada di Supabase
+        const dbIdSet = new Set(cloudSubs.map(s => s.id));
+        const unsyncedLocals = localSubs.filter(ls => !dbIdSet.has(ls.id));
+        if (unsyncedLocals.length > 0) {
+          const merged = [...cloudSubs, ...unsyncedLocals];
+          saveSubmissions(merged, false);
+          upsertInChunks('cbt_submissions', unsyncedLocals.map(s => mapSubmissionToDb(s))).catch(() => {});
+        } else {
+          saveSubmissions(cloudSubs, false);
+        }
+      }
+    } else if (subError && localSubs.length > 0) {
+      // Jika terjadi error koneksi ke tabel, pertahankan data lokal
+      saveSubmissions(localSubs, false);
     }
 
     notifyDataUpdated();
@@ -669,20 +694,62 @@ export const broadcastCbtEvent = (action: string, data?: any) => {
 
 export const syncSubmissionToSupabase = async (submission: ExamSubmission): Promise<boolean> => {
   try {
+    let syncSuccess = false;
     const dbRow = mapSubmissionToDb(submission, false);
     const { error } = await supabase.from('cbt_submissions').upsert(dbRow as any);
-    if (error) {
+    
+    if (!error) {
+      syncSuccess = true;
+    } else {
       console.warn('Supabase submission full upsert failed, retrying with fallback compatibility payload:', error.message);
-      // Fallback in case columns like violation_logs or evaluated_answers are not yet in user's Supabase
+      // Fallback 1: in case columns like violation_logs or evaluated_answers are not yet in user's Supabase
       const fallbackRow = mapSubmissionToDb(submission, true);
       const { error: fbErr } = await supabase.from('cbt_submissions').upsert(fallbackRow as any);
-      if (fbErr) {
-        console.error('Supabase submission fallback upsert also failed:', fbErr.message);
-        return false;
+      
+      if (!fbErr) {
+        syncSuccess = true;
+      } else {
+        console.warn('Supabase submission fallback 1 failed, trying minimal core payload:', fbErr.message);
+        // Fallback 2: Minimal core payload
+        const minimalRow = {
+          id: submission.id,
+          exam_id: submission.examId,
+          exam_title: submission.examTitle,
+          subject_name: submission.subjectName,
+          student_id: submission.studentId,
+          student_name: submission.studentName,
+          student_class: submission.studentClass,
+          answers: submission.answers || {},
+          earned_score: typeof submission.earnedScore === 'number' ? submission.earnedScore : 0,
+          total_score: typeof submission.totalScore === 'number' ? submission.totalScore : 100,
+          percentage: typeof submission.percentage === 'number' ? submission.percentage : 0,
+          passed: !!submission.passed,
+          started_at: submission.startedAt || new Date().toISOString(),
+          submitted_at: submission.submittedAt || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        const { error: minErr } = await supabase.from('cbt_submissions').upsert(minimalRow as any);
+        if (!minErr) {
+          syncSuccess = true;
+        } else {
+          console.error('Supabase submission minimal upsert also failed:', minErr.message);
+        }
       }
     }
+
+    // Always backup to cbt_sync_store table as safety net
+    try {
+      await supabase.from('cbt_sync_store').upsert({
+        key: `sub_${submission.id}`,
+        value: submission,
+        updated_at: new Date().toISOString()
+      });
+    } catch {
+      // Non-blocking backup
+    }
+
     broadcastCbtEvent('new_submission', { examId: submission.examId, studentId: submission.studentId });
-    return true;
+    return syncSuccess;
   } catch (err) {
     console.warn('Network error syncing submission:', err);
     return false;
