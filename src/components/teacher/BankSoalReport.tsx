@@ -390,8 +390,9 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                       keyText = q.correctMulti.map(i => String.fromCharCode(65 + i)).join(', ');
                     } else if (q.type === 'true_false' && q.trueFalseItems) {
                       keyText = q.trueFalseItems.map((tf, i) => `${i + 1}:${tf.isCorrect ? 'B' : 'S'}`).join(', ');
-                    } else if (q.type === 'matching' && q.matchingPairs) {
-                      keyText = `${q.matchingPairs.length} Pasangan Valid`;
+                    } else if (q.type === 'matching') {
+                      const mData = getMatchingData(q);
+                      keyText = `${mData.premises.length} Pasangan Valid`;
                     } else if (q.type === 'case_study') {
                       keyText = (q.caseKeywords || []).slice(0, 3).join(', ') || 'Rubrik Terlampir';
                     }
@@ -852,8 +853,9 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                         keyText = q.correctMulti.map(i => String.fromCharCode(65 + i)).join(', ');
                       } else if (q.type === 'true_false' && q.trueFalseItems) {
                         keyText = q.trueFalseItems.map((tf, i) => `${i + 1}:${tf.isCorrect ? 'B' : 'S'}`).join(', ');
-                      } else if (q.type === 'matching' && q.matchingPairs) {
-                        keyText = `${q.matchingPairs.length} Pasangan`;
+                      } else if (q.type === 'matching') {
+                        const mData = getMatchingData(q);
+                        keyText = `${mData.premises.length} Pasangan`;
                       } else if (q.type === 'case_study') {
                         keyText = (q.caseKeywords || []).slice(0, 2).join(', ') || 'Rubrik';
                       }

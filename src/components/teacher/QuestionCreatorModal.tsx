@@ -50,6 +50,71 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   React.useEffect(() => {
     setCurrentExam(exam);
   }, [exam]);
+
+  // Synchronize internal form state whenever modal is opened or initialQuestion changes
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialQuestion) {
+        setType(initialQuestion.type || 'single_choice');
+        setInstructions(initialQuestion.instructions || '');
+        setPrompt(
+          initialQuestion.prompt ||
+            (initialQuestion.type === 'matching'
+              ? 'Petunjuk: Jodohkan pernyataan pada Kolom A dengan jawaban yang tepat pada Kolom B. Tuliskan huruf jawaban yang sesuai.'
+              : '')
+        );
+        setPoints(initialQuestion.points ?? 20);
+        setExplanation(initialQuestion.explanation || '');
+        setImageUrl(initialQuestion.imageUrl || '');
+        setOptions(
+          initialQuestion.options && initialQuestion.options.length > 0
+            ? initialQuestion.options
+            : ['Opsi A', 'Opsi B', 'Opsi C', 'Opsi D']
+        );
+        setOptionImages(initialQuestion.optionImages || []);
+        setCorrectSingle(initialQuestion.correctSingle ?? 0);
+        setCorrectMulti(initialQuestion.correctMulti || [0]);
+        setIsTfCorrect(initialQuestion.trueFalseItems?.[0]?.isCorrect ?? true);
+        setCaseContext(initialQuestion.caseContext || '');
+        setCaseKeywordsStr((initialQuestion.caseKeywords || []).join(', '));
+        setRubricNotes(initialQuestion.rubricNotes || '');
+
+        const matching = getMatchingData(initialQuestion);
+        setMatchingPremises(matching.premises || []);
+        setMatchingOptions(matching.options || []);
+      } else {
+        setType('single_choice');
+        setInstructions('');
+        setPrompt('');
+        setPoints(20);
+        setExplanation('');
+        setImageUrl('');
+        setOptions(['Opsi A', 'Opsi B', 'Opsi C', 'Opsi D']);
+        setOptionImages([]);
+        setCorrectSingle(0);
+        setCorrectMulti([0]);
+        setIsTfCorrect(true);
+        setCaseContext('');
+        setCaseKeywordsStr('');
+        setRubricNotes('');
+
+        setMatchingPremises([
+          { id: `prem_${Date.now()}_1`, text: '', imageUrl: undefined, correctOptionId: 'opt_1' },
+          { id: `prem_${Date.now()}_2`, text: '', imageUrl: undefined, correctOptionId: 'opt_2' },
+          { id: `prem_${Date.now()}_3`, text: '', imageUrl: undefined, correctOptionId: 'opt_3' },
+          { id: `prem_${Date.now()}_4`, text: '', imageUrl: undefined, correctOptionId: 'opt_4' }
+        ]);
+        setMatchingOptions([
+          { id: 'opt_1', label: 'A', text: '', imageUrl: undefined },
+          { id: 'opt_2', label: 'B', text: '', imageUrl: undefined },
+          { id: 'opt_3', label: 'C', text: '', imageUrl: undefined },
+          { id: 'opt_4', label: 'D', text: '', imageUrl: undefined }
+        ]);
+      }
+      setRecentSuccessMsg(null);
+    }
+  }, [isOpen, initialQuestion]);
+
   const [type, setType] = useState<QuestionType>(initialQuestion?.type || 'single_choice');
   const [instructions, setInstructions] = useState(initialQuestion?.instructions || '');
   const [prompt, setPrompt] = useState(initialQuestion?.prompt || '');
@@ -323,13 +388,22 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
   };
 
   const saveAndProcess = (actionType: 'close' | 'add_more' | 'open_bank') => {
-    if (!prompt.trim()) return;
+    let finalPrompt = prompt.trim();
+    if (!finalPrompt && type === 'matching') {
+      finalPrompt = 'Petunjuk: Jodohkan pernyataan pada Kolom A dengan jawaban yang tepat pada Kolom B. Tuliskan huruf jawaban yang sesuai.';
+      setPrompt(finalPrompt);
+    }
+
+    if (!finalPrompt) {
+      alert('Teks petunjuk / pertanyaan soal tidak boleh kosong.');
+      return;
+    }
 
     const newQ: Question = {
       id: initialQuestion?.id || `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       examId: currentExam.id,
       type,
-      prompt: prompt.trim(),
+      prompt: finalPrompt,
       instructions: instructions.trim() || undefined,
       points: Number(points) || 10,
       imageUrl: imageUrl.trim() || undefined,
@@ -352,24 +426,39 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
       newQ.trueFalseItems = [
         {
           id: 'tf_1',
-          statement: prompt.trim() || 'Pernyataan',
+          statement: finalPrompt || 'Pernyataan',
           isCorrect: isTfCorrect
         }
       ];
     } else if (type === 'matching') {
+      const cleanPremises = matchingPremises.map(p => ({
+        ...p,
+        text: p.text.trim(),
+        imageUrl: p.imageUrl?.trim() || undefined
+      }));
+      const cleanOptions = matchingOptions.map((o, idx) => ({
+        ...o,
+        label: String.fromCharCode(65 + idx),
+        text: o.text.trim(),
+        imageUrl: o.imageUrl?.trim() || undefined
+      }));
+
       newQ.matchingData = {
-        premises: matchingPremises.map(p => ({
-          ...p,
-          text: p.text.trim(),
-          imageUrl: p.imageUrl?.trim() || undefined
-        })),
-        options: matchingOptions.map((o, idx) => ({
-          ...o,
-          label: String.fromCharCode(65 + idx),
-          text: o.text.trim(),
-          imageUrl: o.imageUrl?.trim() || undefined
-        }))
+        premises: cleanPremises,
+        options: cleanOptions
       };
+
+      // Also generate matchingPairs for maximum backwards compatibility & Supabase fallback
+      newQ.matchingPairs = cleanPremises.map((p, idx) => {
+        const opt = cleanOptions.find(o => o.id === p.correctOptionId);
+        return {
+          id: p.id || `m_${idx}`,
+          left: p.text || '',
+          right: opt?.text || '',
+          leftImageUrl: p.imageUrl,
+          rightImageUrl: opt?.imageUrl
+        };
+      });
     } else if (type === 'case_study') {
       newQ.caseContext = caseContext.trim();
       newQ.options = options.map(o => o.trim());

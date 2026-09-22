@@ -1,7 +1,13 @@
 import { Question, MatchingData, MatchingPremise, MatchingOption } from '../types';
 
 export function getMatchingData(q: Question): MatchingData {
-  if (q.matchingData && q.matchingData.premises && q.matchingData.options) {
+  if (
+    q.matchingData &&
+    Array.isArray(q.matchingData.premises) &&
+    q.matchingData.premises.length > 0 &&
+    Array.isArray(q.matchingData.options) &&
+    q.matchingData.options.length > 0
+  ) {
     return q.matchingData;
   }
   
@@ -13,14 +19,16 @@ export function getMatchingData(q: Question): MatchingData {
   
   const premises: MatchingPremise[] = pairs.map((p, idx) => ({
     id: p.id || `prem_${idx}`,
-    text: p.left,
+    text: p.left || '',
+    imageUrl: p.leftImageUrl,
     correctOptionId: `opt_${idx}`
   }));
   
   const options: MatchingOption[] = pairs.map((p, idx) => ({
     id: `opt_${idx}`,
     label: String.fromCharCode(65 + idx),
-    text: p.right
+    text: p.right || '',
+    imageUrl: p.rightImageUrl
   }));
 
   return { premises, options };
