@@ -50,9 +50,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   subjects,
   teacher
 }) => {
-  const [selectedExamId, setSelectedExamId] = useState<string>(
-    exams.length > 0 ? exams[0].id : 'all'
-  );
+  const [selectedExamId, setSelectedExamId] = useState<string>('all');
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [integrityFilter, setIntegrityFilter] = useState<'all' | 'clean' | 'violated' | 'critical'>('all');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'zero' | 'remedial' | 'passed'>('all');
@@ -64,6 +62,26 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [printDocMode, setPrintDocMode] = useState<'rekap' | 'analisis'>('rekap');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  // Calculate submission counts & remedial counts per exam for dropdown
+  const examSubmissionCounts = useMemo(() => {
+    const counts: Record<string, { total: number; remedial: number; passed: number }> = {};
+    submissions.forEach(s => {
+      if (s.submittedAt && s.id && !s.id.startsWith('unsub_') && !s.id.startsWith('unsubmitted_')) {
+        if (!counts[s.examId]) {
+          counts[s.examId] = { total: 0, remedial: 0, passed: 0 };
+        }
+        counts[s.examId].total++;
+        if (s.passed) counts[s.examId].passed++;
+        else counts[s.examId].remedial++;
+      }
+    });
+    return counts;
+  }, [submissions]);
+
+  const totalCompletedSubmissions = useMemo(() => {
+    return submissions.filter(s => s.submittedAt && s.id && !s.id.startsWith('unsub_') && !s.id.startsWith('unsubmitted_')).length;
+  }, [submissions]);
 
   // Reset Remedial Modal Confirmation State
   const [resetModalState, setResetModalState] = useState<{
@@ -305,21 +323,39 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     }, 200);
   };
 
+  // Cross-exam search detector: if user searches for a student while filtering a specific exam, check other exams
+  const crossExamMatches = useMemo(() => {
+    if (!searchKeyword.trim() || selectedExamId === 'all') return [];
+    const q = searchKeyword.trim().toLowerCase();
+    return submissions.filter(s => {
+      if (!s.submittedAt || s.id.startsWith('unsub_') || s.id.startsWith('unsubmitted_') || s.examId === selectedExamId) {
+        return false;
+      }
+      const matchesName = s.studentName.toLowerCase().includes(q);
+      const matchesNis = s.studentNipOrNis && s.studentNipOrNis.toLowerCase().includes(q);
+      return matchesName || matchesNis;
+    });
+  }, [submissions, searchKeyword, selectedExamId]);
+
   // Comprehensive Statistics calculations for Analisis Nilai & Ketuntasan
   const analysisStats = useMemo(() => {
     const kkm = currentExam?.passingScore || 75;
-    const scores = filteredSubmissions.map(s => s.percentage);
+    // Only consider students who actually submitted for score distribution & averages
+    const submittedOnly = filteredSubmissions.filter(
+      s => s.submittedAt && !s.id.startsWith('unsub_') && !s.id.startsWith('unsubmitted_')
+    );
+    const scores = submittedOnly.map(s => s.percentage);
     const validScores = scores.filter(sc => sc !== undefined && !isNaN(sc));
     const highest = validScores.length > 0 ? Math.max(...validScores) : 0;
     const lowest = validScores.length > 0 ? Math.min(...validScores) : 0;
     const avg = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
 
-    const sangatBaik = filteredSubmissions.filter(s => s.percentage >= 90);
-    const baik = filteredSubmissions.filter(s => s.percentage >= 80 && s.percentage < 90);
-    const cukup = filteredSubmissions.filter(s => s.percentage >= kkm && s.percentage < 80);
-    const kurang = filteredSubmissions.filter(s => s.percentage < kkm);
+    const sangatBaik = submittedOnly.filter(s => s.percentage >= 90);
+    const baik = submittedOnly.filter(s => s.percentage >= 80 && s.percentage < 90);
+    const cukup = submittedOnly.filter(s => s.percentage >= kkm && s.percentage < 80);
+    const kurang = submittedOnly.filter(s => s.percentage < kkm); // Actual remedial students who took the exam
 
-    const totalStudents = filteredSubmissions.length;
+    const totalStudents = submittedOnly.length;
     const tuntasCount = sangatBaik.length + baik.length + cukup.length;
     const belumTuntasCount = kurang.length;
     const ketuntasanKlasikal = totalStudents > 0 ? ((tuntasCount / totalStudents) * 100).toFixed(1) : '0';
@@ -338,14 +374,16 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       tuntasCount,
       belumTuntasCount,
       ketuntasanKlasikal,
-      isKlasikalTuntas
+      isKlasikalTuntas,
+      submittedCount: submittedOnly.length,
+      unsubmittedCount: filteredSubmissions.length - submittedOnly.length
     };
   }, [filteredSubmissions, currentExam]);
 
   // List of submissions that are submitted and remedial (score < KKM or failed)
   const remedialSubmissions = useMemo(() => {
     return filteredSubmissions.filter(
-      s => s.submittedAt && !s.passed && s.id && !s.id.startsWith('unsubmitted_')
+      s => s.submittedAt && !s.passed && s.id && !s.id.startsWith('unsubmitted_') && !s.id.startsWith('unsub_')
     );
   }, [filteredSubmissions]);
 
@@ -567,12 +605,17 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
               onChange={(e) => setSelectedExamId(e.target.value)}
               className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 w-full sm:max-w-xs truncate"
             >
-              <option value="all">-- Semua Paket Ujian --</option>
-              {exams.map(e => (
-                <option key={e.id} value={e.id}>
-                  {e.subjectName} — {e.title}
-                </option>
-              ))}
+              <option value="all">
+                📋 -- Semua Paket Ujian ({totalCompletedSubmissions} Siswa Selesai) --
+              </option>
+              {exams.map(e => {
+                const stat = examSubmissionCounts[e.id] || { total: 0, remedial: 0, passed: 0 };
+                return (
+                  <option key={e.id} value={e.id}>
+                    {e.subjectName} — {e.title} ({stat.total} Selesai{stat.remedial > 0 ? ` • ${stat.remedial} Remedial` : ''})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -768,6 +811,51 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         </div>
 
       </div>
+
+      {/* Cross-Exam Search Discovery Banner */}
+      {crossExamMatches.length > 0 && (
+        <div className="p-4 bg-amber-50/90 border border-amber-300 rounded-2xl text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in no-print">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-extrabold text-amber-900 text-xs sm:text-sm block">
+                💡 Ditemukan {crossExamMatches.length} Data Pengerjaan Siswa Pada Paket Lain:
+              </span>
+              <div className="text-[11px] text-amber-800 mt-1 space-y-1">
+                {crossExamMatches.slice(0, 3).map(m => (
+                  <div key={m.id} className="flex items-center gap-1.5 flex-wrap">
+                    <span>•</span>
+                    <strong className="text-amber-950">{m.studentName}</strong>
+                    <span className="text-amber-700">({m.studentClass})</span>
+                    <span>pada paket</span>
+                    <strong className="text-indigo-900">{m.examTitle}</strong>
+                    <span>&mdash; Nilai:</span>
+                    <span className={`font-black px-1.5 py-0.2 rounded text-[10px] ${m.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                      {m.earnedScore}/{m.totalScore} ({m.percentage}%) {m.passed ? 'TUNTAS' : 'REMEDIAL'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedExamId(crossExamMatches[0].examId)}
+              className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              Buka Paket &quot;{crossExamMatches[0].examTitle}&quot;
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedExamId('all')}
+              className="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            >
+              Tampilkan Semua Paket
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Results Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1202,16 +1290,29 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* DAFTAR SISWA REMEDIAL */}
             <div className="bg-white rounded-2xl border border-rose-200 shadow-xs overflow-hidden">
-              <div className="p-3.5 bg-rose-50/80 border-b border-rose-200 flex items-center justify-between">
+              <div className="p-3.5 bg-rose-50/80 border-b border-rose-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-600" />
                   <h4 className="text-xs font-bold text-rose-900 uppercase">
                     Daftar Siswa Remedial (&lt; KKM {analysisStats.kkm})
                   </h4>
                 </div>
-                <span className="px-2 py-0.5 bg-rose-200/80 text-rose-900 font-extrabold text-[11px] rounded-full">
-                  {analysisStats.kurang.length} Siswa
-                </span>
+                <div className="flex items-center gap-2">
+                  {analysisStats.kurang.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handlePromptBulkReset(analysisStats.kurang)}
+                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      title="Reset semua siswa remedial ini agar dapat mengikuti ujian ulang"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset Semua ({analysisStats.kurang.length})</span>
+                    </button>
+                  )}
+                  <span className="px-2 py-0.5 bg-rose-200/80 text-rose-900 font-extrabold text-[11px] rounded-full">
+                    {analysisStats.kurang.length} Siswa
+                  </span>
+                </div>
               </div>
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
                 {analysisStats.kurang.length === 0 ? (
@@ -1221,16 +1322,30 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                   </div>
                 ) : (
                   analysisStats.kurang.map((s, idx) => (
-                    <div key={s.id || idx} className="p-2.5 px-3.5 flex items-center justify-between hover:bg-rose-50/30">
-                      <div>
-                        <div className="font-bold text-slate-800">{idx + 1}. {s.studentName}</div>
-                        <div className="text-[10px] text-slate-500">Kelas: {s.studentClass} • NIS: {s.studentId}</div>
+                    <div key={s.id || idx} className="p-2.5 px-3.5 flex items-center justify-between hover:bg-rose-50/30 gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 truncate">{idx + 1}. {s.studentName}</div>
+                        <div className="text-[10px] text-slate-500">
+                          Kelas: {s.studentClass} • Mapel: {s.subjectName || 'BK'} • Paket: {s.examTitle}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="inline-block px-2 py-0.5 rounded font-black text-rose-700 bg-rose-100 text-xs">
-                          {s.percentage}%
-                        </span>
-                        <div className="text-[10px] text-rose-600 font-medium mt-0.5">Perlu Tes Ulang</div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <span className="inline-block px-2 py-0.5 rounded font-black text-rose-700 bg-rose-100 text-xs">
+                            {s.percentage}% ({s.earnedScore}/{s.totalScore})
+                          </span>
+                        </div>
+                        {s.submittedAt && !s.id.startsWith('unsub_') && (
+                          <button
+                            type="button"
+                            onClick={() => handlePromptReset(s)}
+                            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-900 rounded-lg text-[10px] font-bold border border-amber-300 flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                            title="Reset hasil remedial siswa ini agar dapat ikut ujian ulang"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-700" />
+                            <span>Reset</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -1536,7 +1651,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
             {/* Modal Footer */}
             <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              {inspectionSubmission && inspectionSubmission.id && !inspectionSubmission.id.startsWith('unsubmitted_') ? (
+              {inspectionSubmission && inspectionSubmission.id && inspectionSubmission.submittedAt && !inspectionSubmission.id.startsWith('unsubmitted_') && !inspectionSubmission.id.startsWith('unsub_') ? (
                 <button
                   type="button"
                   onClick={() => {

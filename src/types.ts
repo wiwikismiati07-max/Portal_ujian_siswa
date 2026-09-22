@@ -37,6 +37,8 @@ export interface MatchingPair {
   id: string;
   left: string; // Premise / Soal kiri
   right: string; // Match / Pasangan kanan
+  leftImageUrl?: string;
+  rightImageUrl?: string;
 }
 
 export interface MatchingPremise {
