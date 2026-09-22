@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Exam, Question, Subject, ExamSubmission } from '../../types';
+import { isSameTeacher } from '../../utils/userDeduplication';
 import {
   getAllExams,
   getAllQuestions,
@@ -13,6 +14,7 @@ import {
   addExam,
   updateExam,
   deleteExam,
+  copyExamWithQuestionsDirect,
   clearAllExamsDirect,
   addQuestion,
   updateQuestion,
@@ -25,6 +27,7 @@ import { BankSoalReport } from './BankSoalReport';
 import { ClassScoreRecap } from './ClassScoreRecap';
 import { BeritaAcaraExamReport } from './BeritaAcaraExamReport';
 import { QuestionCreatorModal } from './QuestionCreatorModal';
+import { CopyFromOtherTeacherModal } from './CopyFromOtherTeacherModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { TargetClassMultiSelect, ALL_ROMPEL_CLASSES } from './TargetClassMultiSelect';
 import {
@@ -47,7 +50,8 @@ import {
   Search,
   ArrowRight,
   Filter,
-  Edit
+  Edit,
+  Copy
 } from 'lucide-react';
 
 interface TeacherDashboardProps {
@@ -63,11 +67,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   const [subjects, setSubjects] = useState<Subject[]>(getAllSubjects());
   const [submissions, setSubmissions] = useState<ExamSubmission[]>(getAllSubmissions());
 
-  // Multi-User Teacher Accounts
+  // Multi-User Teacher Accounts (strictly active teachers, excluding deleted ones)
   const [allTeachers, setAllTeachers] = useState<User[]>(() => {
     const list = getAllUsers().filter(u => u.role === 'guru');
-    if (!list.some(t => t.id === teacher.id)) {
-      list.push(teacher);
+    if (teacher && !list.some(t => t.id === teacher.id)) {
+      list.unshift(teacher);
     }
     return list.length > 0 ? list : [teacher];
   });
@@ -76,28 +80,53 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   useEffect(() => {
     if (teacher && teacher.id) {
       setSelectedTeacherId(teacher.id);
-      setAllTeachers(prev => {
-        if (!prev.some(t => t.id === teacher.id)) {
-          return [...prev, teacher];
-        }
-        return prev;
-      });
+      if (teacher.subjectName) {
+        setSelectedSubjectName(teacher.subjectName);
+      }
+      const list = getAllUsers().filter(u => u.role === 'guru');
+      setAllTeachers(list.length > 0 ? list : [teacher]);
     }
   }, [teacher?.id]);
 
-  const activeTeacher = allTeachers.find(t => t.id === selectedTeacherId) || teacher;
+  const activeTeacher = useMemo(() => {
+    return allTeachers.find(t => t.id === selectedTeacherId) || teacher;
+  }, [allTeachers, selectedTeacherId, teacher]);
 
-  const allSubjectNamesList = Array.from(
-    new Set([
-      ...(activeTeacher.subjectName ? [activeTeacher.subjectName] : []),
-      ...subjects.map(s => s.name),
-      ...exams.map(e => e.subjectName)
-    ])
-  );
+  const handleSwitchTeacher = (newTeacherId: string) => {
+    setSelectedTeacherId(newTeacherId);
+    const chosen = allTeachers.find(t => t.id === newTeacherId);
+    if (chosen?.subjectName) {
+      setSelectedSubjectName(chosen.subjectName);
+    }
+  };
+
+  // Only exams created by or assigned to activeTeacher
+  const activeTeacherExams = useMemo(() => {
+    return exams.filter(e =>
+      isSameTeacher(
+        { id: e.teacherId, name: e.teacherName },
+        { id: activeTeacher.id, name: activeTeacher.name }
+      )
+    );
+  }, [exams, activeTeacher]);
+
+  const allSubjectNamesList = useMemo(() => {
+    const list = new Set<string>();
+    if (activeTeacher.subjectName) {
+      list.add(activeTeacher.subjectName);
+    }
+    activeTeacherExams.forEach(e => {
+      if (e.subjectName) list.add(e.subjectName);
+    });
+    if (list.size === 0) {
+      subjects.forEach(s => list.add(s.name));
+    }
+    return Array.from(list);
+  }, [activeTeacher, activeTeacherExams, subjects]);
 
   // Auto-select subject by default so clicking menu 1 time goes directly to data input worksheet
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(() => {
-    return activeTeacher.subjectName || allSubjectNamesList[0] || 'Ilmu Pengetahuan Alam (IPA)';
+    return activeTeacher.subjectName || null;
   });
 
   const [searchSubjectQuery, setSearchSubjectQuery] = useState('');
@@ -110,7 +139,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       const defaultSubj = activeTeacher.subjectName || allSubjectNamesList[0] || 'Ilmu Pengetahuan Alam (IPA)';
       setSelectedSubjectName(defaultSubj);
     }
-  }, [initialTab, activeTeacher]);
+  }, [initialTab, activeTeacher, allSubjectNamesList]);
 
   // Confirm Modal state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -150,10 +179,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setQuestions(getAllQuestions());
       setSubjects(getAllSubjects());
       setSubmissions(getAllSubmissions());
+      const freshGuruList = getAllUsers().filter(u => u.role === 'guru');
+      setAllTeachers(freshGuruList.length > 0 ? freshGuruList : [teacher]);
     };
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
-  }, []);
+  }, [teacher]);
 
   // Modal states
   const [isCreateExamOpen, setIsCreateExamOpen] = useState(false);
@@ -218,25 +249,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setIsCreateExamOpen(true);
   };
 
-  // Filter dataset for current selected subject (if any)
-  const displayExams = selectedSubjectName
-    ? exams.filter(e => e.subjectName === selectedSubjectName)
-    : exams;
+  // Filter dataset for current active teacher and selected subject
+  const displayExams = useMemo(() => {
+    if (!selectedSubjectName) return activeTeacherExams;
+    return activeTeacherExams.filter(e => e.subjectName === selectedSubjectName);
+  }, [activeTeacherExams, selectedSubjectName]);
 
-  const displayQuestions = selectedSubjectName
-    ? questions.filter(q => {
-        const ex = exams.find(e => e.id === q.examId);
-        return ex?.subjectName === selectedSubjectName;
-      })
-    : questions;
+  const displayQuestions = useMemo(() => {
+    const myExamIds = new Set(activeTeacherExams.map(e => e.id));
+    const myQuestions = questions.filter(q => myExamIds.has(q.examId));
+    if (!selectedSubjectName) return myQuestions;
+    return myQuestions.filter(q => {
+      const ex = exams.find(e => e.id === q.examId);
+      return ex?.subjectName === selectedSubjectName;
+    });
+  }, [activeTeacherExams, questions, exams, selectedSubjectName]);
 
-  const displaySubmissions = selectedSubjectName
-    ? submissions.filter(s => s.subjectName === selectedSubjectName)
-    : submissions;
+  const displaySubmissions = useMemo(() => {
+    const myExamIds = new Set(activeTeacherExams.map(e => e.id));
+    const mySubs = submissions.filter(s => myExamIds.has(s.examId));
+    if (!selectedSubjectName) return mySubs;
+    return mySubs.filter(s => s.subjectName === selectedSubjectName);
+  }, [activeTeacherExams, submissions, selectedSubjectName]);
 
-  const displaySubjects = selectedSubjectName
-    ? subjects.filter(s => s.name === selectedSubjectName)
-    : subjects;
+  const displaySubjects = useMemo(() => {
+    return selectedSubjectName
+      ? subjects.filter(s => s.name === selectedSubjectName)
+      : subjects;
+  }, [subjects, selectedSubjectName]);
 
   // Handle Question add/edit
   const handleOpenAddQuestion = (exam: Exam) => {
@@ -329,8 +369,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
         title: newExamTitle.trim(),
         subjectId: chosenSubject.id,
         subjectName: chosenSubject.name,
-        teacherId: teacher.id,
-        teacherName: teacher.name,
+        teacherId: activeTeacher.id,
+        teacherName: activeTeacher.name,
         targetClasses: finalClasses,
         durationMinutes: Number(newExamDuration) || 45,
         totalScore: 100,
@@ -372,6 +412,68 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
         }
       }
     });
+  };
+
+  // Copy Exam Modal State & Handlers
+  const [copyModalExam, setCopyModalExam] = useState<Exam | null>(null);
+  const [copyModalTitle, setCopyModalTitle] = useState('');
+  const [copyModalClasses, setCopyModalClasses] = useState<string[]>([]);
+  const [isCopyingExam, setIsCopyingExam] = useState(false);
+
+  // Copy Exam From Other Teacher Modal State
+  const [isCopyFromOtherTeacherOpen, setIsCopyFromOtherTeacherOpen] = useState(false);
+
+  const handleOpenCopyExamModal = (ex: Exam) => {
+    setCopyModalExam(ex);
+    setCopyModalTitle(`${ex.title} (Salinan ${activeTeacher.name})`);
+    setCopyModalClasses(ex.targetClasses && ex.targetClasses.length > 0 ? ex.targetClasses : ['7A', '7B']);
+  };
+
+  const handleConfirmCopyExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!copyModalExam || !copyModalTitle.trim()) return;
+
+    setIsCopyingExam(true);
+    try {
+      const res = await copyExamWithQuestionsDirect(
+        copyModalExam.id,
+        {
+          newTitle: copyModalTitle.trim(),
+          targetClasses: copyModalClasses.length > 0 ? copyModalClasses : copyModalExam.targetClasses,
+          targetTeacherId: activeTeacher.id,
+          targetTeacherName: activeTeacher.name
+        }
+      );
+
+      if (res.success && res.newExam) {
+        setExams(getAllExams());
+        setQuestions(getAllQuestions());
+        const count = res.copiedQuestionsCount;
+        setCopyModalExam(null);
+        showNotification(
+          'success',
+          `Paket ujian "${res.newExam.title}" berhasil disalin ke akun ${activeTeacher.name} beserta ${count} butir soalnya!`
+        );
+      } else {
+        showNotification('error', res.error || 'Gagal menyalin paket ujian.');
+      }
+    } catch (err: any) {
+      showNotification('error', err?.message || 'Terjadi kesalahan sistem saat menyalin paket.');
+    } finally {
+      setIsCopyingExam(false);
+    }
+  };
+
+  const handleSuccessCopyFromOther = (newExam: Exam, copiedCount: number) => {
+    setExams(getAllExams());
+    setQuestions(getAllQuestions());
+    if (newExam.subjectName && newExam.subjectName !== selectedSubjectName) {
+      setSelectedSubjectName(newExam.subjectName);
+    }
+    showNotification(
+      'success',
+      `Paket ujian "${newExam.title}" berhasil disalin ke akun Anda (${activeTeacher.name}) beserta ${copiedCount} butir soalnya!`
+    );
   };
 
   const handleClearAllExams = () => {
@@ -466,7 +568,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                   <span className="shrink-0 text-slate-500">Switch:</span>
                   <select
                     value={selectedTeacherId}
-                    onChange={(e) => setSelectedTeacherId(e.target.value)}
+                    onChange={(e) => handleSwitchTeacher(e.target.value)}
                     className="bg-transparent text-slate-800 font-extrabold text-[11px] outline-none cursor-pointer border-b border-dashed border-emerald-400 truncate max-w-[130px] sm:max-w-[180px]"
                   >
                     {allTeachers.map((t) => (
@@ -544,9 +646,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               .filter(name => !searchSubjectQuery || name.toLowerCase().includes(searchSubjectQuery.toLowerCase()))
               .map((subjectName, idx) => {
                 const subjectObj = subjects.find(s => s.name === subjectName);
-                const subjExams = exams.filter(e => e.subjectName === subjectName);
+                const subjExams = activeTeacherExams.filter(e => e.subjectName === subjectName);
                 const subjQuestCount = questions.filter(q => {
-                  const ex = exams.find(e => e.id === q.examId);
+                  const ex = activeTeacherExams.find(e => e.id === q.examId);
                   return ex?.subjectName === subjectName;
                 }).length;
                 const theme = getSubjectTheme(idx);
@@ -710,7 +812,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                     Atur durasi, target kelas, dan tambahkan butir soal ke masing-masing paket ujian.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {displayExams.length > 0 && (
                     <button
                       type="button"
@@ -722,6 +824,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                       <span>Kosongkan Semua Paket</span>
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setIsCopyFromOtherTeacherOpen(true)}
+                    className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                    title="Salin paket ujian dan kisi-kisi soal yang dibuat oleh guru/pengampu lain"
+                  >
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    <span>Copy dari Pengampu Lain</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleOpenCreateExam}
@@ -742,16 +853,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                     Belum Ada Paket Ujian untuk {selectedSubjectName}
                   </h4>
                   <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
-                    Buat paket ujian baru untuk mata pelajaran {selectedSubjectName} dan tentukan tanggal upload rilis agar dapat dikerjakan oleh siswa.
+                    Buat paket ujian baru atau salin dari paket ujian yang telah dibuat oleh rekan guru/pengampu lain beserta seluruh kisi-kisi soalnya.
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateExam}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/10 cursor-pointer transition-all"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Buat Paket Ujian Sekarang</span>
-                  </button>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsCopyFromOtherTeacherOpen(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
+                    >
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      <span>Salin Paket dari Pengampu Lain</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateExam}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/10 cursor-pointer transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Buat Paket Ujian Baru</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -768,6 +889,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                               <span className="text-xs text-slate-500 font-medium mr-1">
                                 {ex.createdAt}
                               </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCopyExamModal(ex)}
+                                className="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                                title="Salin / Duplikat paket ujian ini beserta seluruh butir soalnya"
+                              >
+                                <Copy className="w-4 h-4 text-indigo-600" />
+                                <span className="hidden sm:inline">Copy</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditExam(ex)}
@@ -793,6 +923,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                           </h4>
 
                           <div className="text-xs text-slate-500 space-y-1 py-3 border-y border-slate-100 my-3">
+                            <div>Pengampu: <strong className="text-slate-800">{ex.teacherName || 'Guru'}</strong></div>
                             <div>Target Kelas: <strong className="text-slate-800">{ex.targetClasses.join(', ')}</strong></div>
                             <div>Durasi: <strong className="text-slate-800">{ex.durationMinutes} Menit</strong> • KKM: <strong className="text-indigo-600">{ex.passingScore}</strong></div>
                             <div>Jumlah Butir Soal: <strong className="text-emerald-700">{qCount} Butir</strong></div>
@@ -813,6 +944,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                         </div>
 
                         <div className="flex items-center gap-2 pt-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCopyExamModal(ex)}
+                            className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            title="Salin / duplikat paket ujian ini beserta seluruh butir soalnya"
+                          >
+                            <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Copy Paket</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleOpenEditExam(ex)}
@@ -861,6 +1001,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
               onEditQuestion={handleOpenEditQuestion}
               onDeleteQuestion={handleDeleteQuestion}
               onEditExam={handleOpenEditExam}
+              onCopyExam={handleOpenCopyExamModal}
+              onOpenCopyFromOtherTeacher={() => setIsCopyFromOtherTeacherOpen(true)}
             />
           )}
 
@@ -1054,6 +1196,107 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
         </div>
       )}
 
+      {/* COPY EXAM MODAL */}
+      {copyModalExam && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <Copy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Salin / Duplikat Paket Ujian
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Gandakan paket beserta seluruh butir soalnya
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isCopyingExam && setCopyModalExam(null)}
+                disabled={isCopyingExam}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCopyExam} className="mt-4 space-y-4">
+              {/* Ringkasan Paket Asal */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Paket Asal:</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[240px]">{copyModalExam.title}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Mata Pelajaran:</span>
+                  <span className="font-bold text-indigo-700">{copyModalExam.subjectName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Butir Soal yang Disalin:</span>
+                  <span className="font-bold text-emerald-700">
+                    {questions.filter(q => q.examId === copyModalExam.id).length} Butir Soal (Lengkap)
+                  </span>
+                </div>
+              </div>
+
+              {/* Judul Baru */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Judul Paket Ujian Baru <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={copyModalTitle}
+                  onChange={(e) => setCopyModalTitle(e.target.value)}
+                  placeholder="Contoh: STS GANJIL INFORMATIKA - SUSULAN"
+                  required
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-medium"
+                />
+              </div>
+
+              {/* Target Kelas */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5 flex flex-wrap items-center justify-between gap-1 text-xs">
+                  <span>Target Kelas / Rombel Peserta Ujian</span>
+                  <span className="text-[11px] font-normal text-slate-500">Sesuaikan target kelas salinan</span>
+                </label>
+                <TargetClassMultiSelect
+                  selectedClasses={copyModalClasses}
+                  onChange={setCopyModalClasses}
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                💡 <strong>Catatan:</strong> Seluruh butir soal (Pilihan Ganda, PG Kompleks, Benar/Salah, Menjodohkan, Uraian, petunjuk pengerjaan, gambar, dan kunci jawaban) akan diduplikat dengan ID baru yang independen sehingga perubahan pada paket hasil salinan tidak mempengaruhi paket asli.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isCopyingExam}
+                  onClick={() => setCopyModalExam(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCopyingExam || !copyModalTitle.trim()}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>{isCopyingExam ? 'Menyalin Paket & Soal...' : 'Duplikat Paket Sekarang'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* QUESTION CREATOR / EDITOR MODAL */}
       {isQuestionModalOpen && targetExamForQuestion && (
         <QuestionCreatorModal
@@ -1076,6 +1319,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
           onSaveQuestion={handleSaveQuestion}
         />
       )}
+
+      {/* COPY FROM OTHER TEACHER MODAL */}
+      <CopyFromOtherTeacherModal
+        isOpen={isCopyFromOtherTeacherOpen}
+        onClose={() => setIsCopyFromOtherTeacherOpen(false)}
+        activeTeacher={activeTeacher}
+        allTeachers={allTeachers}
+        allExams={exams}
+        allQuestions={questions}
+        allSubjects={subjects}
+        onSuccessCopy={handleSuccessCopyFromOther}
+      />
 
       {/* IN-APP CONFIRMATION MODAL */}
       <ConfirmModal

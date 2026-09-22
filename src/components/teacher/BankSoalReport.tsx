@@ -7,6 +7,8 @@ import {
   Edit,
   Edit2,
   Trash2,
+  Copy,
+  Users,
   Filter,
   FileText,
   CheckCircle2,
@@ -34,6 +36,8 @@ interface BankSoalReportProps {
   onEditQuestion: (exam: Exam, question: Question) => void;
   onDeleteQuestion: (questionId: string) => void;
   onEditExam?: (exam: Exam) => void;
+  onCopyExam?: (exam: Exam) => void;
+  onOpenCopyFromOtherTeacher?: () => void;
   preselectedExamId?: string;
   onSelectExam?: (examId: string) => void;
 }
@@ -47,6 +51,8 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
   onEditQuestion,
   onDeleteQuestion,
   onEditExam,
+  onCopyExam,
+  onOpenCopyFromOtherTeacher,
   preselectedExamId,
   onSelectExam
 }) => {
@@ -179,6 +185,28 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
           )}
 
           <div className="flex items-center gap-1.5 flex-wrap">
+            {onOpenCopyFromOtherTeacher && (
+              <button
+                type="button"
+                onClick={onOpenCopyFromOtherTeacher}
+                className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Salin paket ujian & kisi-kisi soal yang dibuat oleh guru/pengampu lain"
+              >
+                <Users className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Salin dari Pengampu Lain</span>
+              </button>
+            )}
+            {onCopyExam && currentExam && (
+              <button
+                type="button"
+                onClick={() => onCopyExam(currentExam)}
+                className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Salin / duplikat paket ujian ini beserta seluruh butir soalnya"
+              >
+                <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Copy Paket</span>
+              </button>
+            )}
             {onEditExam && currentExam && (
               <button
                 type="button"
@@ -468,6 +496,13 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
                         alt={`Gambar Soal #${idx + 1}`}
                         className="max-h-48 w-auto object-contain rounded-lg"
                       />
+                    </div>
+                  )}
+
+                  {q.instructions && (
+                    <div className="mb-2.5 p-2 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-950 font-normal">
+                      <span className="font-bold text-amber-800 mr-1.5">[Petunjuk / Instruksi]:</span>
+                      <span className="whitespace-pre-line">{q.instructions}</span>
                     </div>
                   )}
 

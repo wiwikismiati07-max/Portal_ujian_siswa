@@ -19,11 +19,21 @@ import {
   syncExamToSupabase,
   deleteExamFromSupabase,
   syncQuestionToSupabase,
+  syncQuestionsBatchToSupabase,
   deleteQuestionFromSupabase,
   syncSubmissionToSupabase,
+  deleteSubmissionFromSupabase,
   clearAllExamsInSupabase,
   notifyDataUpdated
 } from './supabaseSync';
+import {
+  isExamDeleted,
+  isQuestionDeleted,
+  isSubmissionDeleted,
+  markExamDeleted,
+  markQuestionDeleted,
+  markSubmissionDeleted
+} from './tombstones';
 
 export const INITIAL_APP_LINKS: AppLink[] = [
   {
@@ -246,18 +256,41 @@ export const updateUserCredentials = (
   return { success: true, message: 'Kredensial berhasil diperbarui!', updatedUser: user };
 };
 
-export const deleteUser = async (userId: string): Promise<void> => {
-  const users = getAllUsers().filter(u => u.id !== userId);
-  saveUsers(users, false);
-  await deleteUserFromSupabase(userId);
-  notifyDataUpdated();
-};
-
 import {
   cleanAndDeduplicateUsers,
   mergeImportedUsers,
-  DeduplicationResult
+  DeduplicationResult,
+  isSameTeacher
 } from './userDeduplication';
+
+export const deleteUser = async (userId: string): Promise<void> => {
+  const currentUsers = getAllUsers();
+  const userToDelete = currentUsers.find(u => u.id === userId);
+  const users = currentUsers.filter(u => u.id !== userId);
+  saveUsers(users, false);
+  await deleteUserFromSupabase(userId);
+
+  // If deleted user was a teacher (guru), clean up their exams and associated questions
+  if (userToDelete && userToDelete.role === 'guru') {
+    const allExams = getAllExams();
+    const isExDeleted = (e: Exam) =>
+      e.teacherId === userId ||
+      (userToDelete.name && isSameTeacher({ id: e.teacherId, name: e.teacherName }, userToDelete));
+    const examsToDelete = allExams.filter(isExDeleted);
+    if (examsToDelete.length > 0) {
+      const remainingExams = allExams.filter(e => !isExDeleted(e));
+      saveExams(remainingExams, false);
+      const deletedExamIds = new Set(examsToDelete.map(e => e.id));
+      const remainingQuestions = getAllQuestions().filter(q => !deletedExamIds.has(q.examId));
+      saveQuestions(remainingQuestions, false);
+      for (const ex of examsToDelete) {
+        deleteExamFromSupabase(ex.id).catch(() => {});
+      }
+    }
+  }
+
+  notifyDataUpdated();
+};
 
 // Direct Deduplicate Users across all records
 export const deduplicateUsersDirect = async (): Promise<{
@@ -424,16 +457,21 @@ export const overwriteAllSubjects = (newSubjects: Subject[]): void => {
 // --- EXAMS ---
 export const getAllExams = (): Exam[] => {
   if (memoryExamsCache !== null) {
-    return memoryExamsCache;
+    return memoryExamsCache.filter(e => !isExamDeleted(e.id));
   }
   const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, []);
-  memoryExamsCache = stored;
-  return stored;
+  const clean = stored.filter(e => !isExamDeleted(e.id));
+  if (clean.length !== stored.length) {
+    setStored(STORAGE_KEYS.EXAMS, clean);
+  }
+  memoryExamsCache = clean;
+  return clean;
 };
 
 export const saveExams = (exams: Exam[], syncToDb = true): void => {
-  memoryExamsCache = exams;
-  setStored(STORAGE_KEYS.EXAMS, exams);
+  const clean = exams.filter(e => !isExamDeleted(e.id));
+  memoryExamsCache = clean;
+  setStored(STORAGE_KEYS.EXAMS, clean);
   notifyDataUpdated();
 };
 
@@ -455,6 +493,15 @@ export const updateExam = async (updated: Exam): Promise<void> => {
 };
 
 export const deleteExam = async (examId: string): Promise<void> => {
+  const allQs = getAllQuestions().filter(q => q.examId === examId);
+  const allSubs = getAllSubmissions().filter(s => s.examId === examId);
+  const qIds = allQs.map(q => q.id);
+  const sIds = allSubs.map(s => s.id);
+
+  // 1. Mark exam and its child items permanently deleted in tombstone registry (local & Supabase)
+  await markExamDeleted(examId, qIds, sIds);
+
+  // 2. Filter local storage and memory caches immediately
   const exams = getAllExams().filter(e => e.id !== examId);
   memoryExamsCache = exams;
   setStored(STORAGE_KEYS.EXAMS, exams);
@@ -468,7 +515,136 @@ export const deleteExam = async (examId: string): Promise<void> => {
   setStored(STORAGE_KEYS.SUBMISSIONS, submissions);
 
   notifyDataUpdated();
+
+  // 3. Delete from Supabase in background / cloud
   await deleteExamFromSupabase(examId);
+};
+
+export interface CopyExamOptions {
+  newTitle?: string;
+  targetClasses?: string[];
+  targetTeacherId?: string;
+  targetTeacherName?: string;
+  targetSubjectId?: string;
+  targetSubjectName?: string;
+  durationMinutes?: number;
+  passingScore?: number;
+  uploadDate?: string;
+  instructions?: string;
+}
+
+export const copyExamWithQuestionsDirect = async (
+  sourceExamId: string,
+  optionsOrTitle?: CopyExamOptions | string,
+  legacyTargetClasses?: string[]
+): Promise<{ success: boolean; newExam?: Exam; copiedQuestionsCount: number; error?: string }> => {
+  try {
+    const allExams = getAllExams();
+    const sourceExam = allExams.find(e => e.id === sourceExamId && !isExamDeleted(e.id));
+    if (!sourceExam) {
+      return { success: false, copiedQuestionsCount: 0, error: 'Paket ujian sumber tidak ditemukan' };
+    }
+
+    // Parse options
+    const opts: CopyExamOptions = typeof optionsOrTitle === 'string'
+      ? { newTitle: optionsOrTitle, targetClasses: legacyTargetClasses }
+      : (optionsOrTitle || {});
+
+    // Generate unique ID for the new exam
+    const newExamId = `exam_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const finalTitle = (opts.newTitle && opts.newTitle.trim().length > 0)
+      ? opts.newTitle.trim()
+      : `${sourceExam.title} (Salinan)`;
+
+    const finalTargetClasses = opts.targetClasses && opts.targetClasses.length > 0
+      ? opts.targetClasses
+      : [...sourceExam.targetClasses];
+
+    const newExam: Exam = {
+      ...sourceExam,
+      id: newExamId,
+      title: finalTitle,
+      teacherId: opts.targetTeacherId || sourceExam.teacherId,
+      teacherName: opts.targetTeacherName || sourceExam.teacherName,
+      subjectId: opts.targetSubjectId || sourceExam.subjectId,
+      subjectName: opts.targetSubjectName || sourceExam.subjectName,
+      targetClasses: finalTargetClasses,
+      durationMinutes: opts.durationMinutes !== undefined ? opts.durationMinutes : sourceExam.durationMinutes,
+      passingScore: opts.passingScore !== undefined ? opts.passingScore : sourceExam.passingScore,
+      instructions: opts.instructions !== undefined ? opts.instructions : sourceExam.instructions,
+      createdAt: new Date().toISOString().split('T')[0],
+      uploadDate: opts.uploadDate || sourceExam.uploadDate || new Date().toISOString()
+    };
+
+    // Find and clone all questions belonging to sourceExamId (excluding any deleted ones)
+    const allQuestions = getAllQuestions();
+    const rawSourceQuestions = allQuestions.filter(
+      q => q.examId === sourceExamId && !isQuestionDeleted(q.id, q.examId)
+    );
+
+    // Deduplicate source questions by unique ID and content to prevent duplication
+    const seenIds = new Set<string>();
+    const seenPrompts = new Set<string>();
+    const sourceQuestions: Question[] = [];
+    for (const q of rawSourceQuestions) {
+      const promptKey = `${q.type}_${q.prompt.trim()}`;
+      if (seenIds.has(q.id) || seenPrompts.has(promptKey)) {
+        continue;
+      }
+      seenIds.add(q.id);
+      seenPrompts.add(promptKey);
+      sourceQuestions.push(q);
+    }
+
+    const copiedQuestions: Question[] = sourceQuestions.map((q, idx) => ({
+      ...q,
+      id: `q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+      examId: newExamId,
+      options: q.options ? [...q.options] : undefined,
+      optionImages: q.optionImages ? [...q.optionImages] : undefined,
+      correctMulti: q.correctMulti ? [...q.correctMulti] : undefined,
+      trueFalseItems: q.trueFalseItems
+        ? q.trueFalseItems.map(tf => ({ ...tf, id: `tf_${Math.random().toString(36).substring(2, 7)}` }))
+        : undefined,
+      matchingPairs: q.matchingPairs ? [...q.matchingPairs] : undefined,
+      matchingData: q.matchingData ? JSON.parse(JSON.stringify(q.matchingData)) : undefined,
+      caseKeywords: q.caseKeywords ? [...q.caseKeywords] : undefined
+    }));
+
+    // Save locally
+    const updatedExams = [newExam, ...allExams.filter(e => !isExamDeleted(e.id))];
+    memoryExamsCache = updatedExams;
+    setStored(STORAGE_KEYS.EXAMS, updatedExams);
+
+    const updatedQuestions = [
+      ...allQuestions.filter(q => !isQuestionDeleted(q.id, q.examId) && !copiedQuestions.some(cq => cq.id === q.id)),
+      ...copiedQuestions
+    ];
+    memoryQuestionsCache = updatedQuestions;
+    setStored(STORAGE_KEYS.QUESTIONS, updatedQuestions);
+
+    notifyDataUpdated();
+
+    // Sync to Supabase in background
+    syncExamToSupabase(newExam).catch(err => console.warn('Supabase copy exam sync error:', err));
+    if (copiedQuestions.length > 0) {
+      syncQuestionsBatchToSupabase(copiedQuestions).catch(err =>
+        console.warn('Supabase copy questions sync error:', err)
+      );
+    }
+
+    return {
+      success: true,
+      newExam,
+      copiedQuestionsCount: copiedQuestions.length
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      copiedQuestionsCount: 0,
+      error: err?.message || 'Gagal menyalin paket ujian'
+    };
+  }
 };
 
 export const clearAllExamsDirect = async (): Promise<{ success: boolean; error?: string }> => {
@@ -486,16 +662,21 @@ export const clearAllExamsDirect = async (): Promise<{ success: boolean; error?:
 // --- QUESTIONS ---
 export const getAllQuestions = (): Question[] => {
   if (memoryQuestionsCache !== null) {
-    return memoryQuestionsCache;
+    return memoryQuestionsCache.filter(q => !isQuestionDeleted(q.id, q.examId) && !isExamDeleted(q.examId));
   }
   const stored = getStored<Question[]>(STORAGE_KEYS.QUESTIONS, []);
-  memoryQuestionsCache = stored;
-  return stored;
+  const clean = stored.filter(q => !isQuestionDeleted(q.id, q.examId) && !isExamDeleted(q.examId));
+  if (clean.length !== stored.length) {
+    setStored(STORAGE_KEYS.QUESTIONS, clean);
+  }
+  memoryQuestionsCache = clean;
+  return clean;
 };
 
 export const saveQuestions = (questions: Question[], syncToDb = true): void => {
-  memoryQuestionsCache = questions;
-  setStored(STORAGE_KEYS.QUESTIONS, questions);
+  const clean = questions.filter(q => !isQuestionDeleted(q.id, q.examId) && !isExamDeleted(q.examId));
+  memoryQuestionsCache = clean;
+  setStored(STORAGE_KEYS.QUESTIONS, clean);
   notifyDataUpdated();
 };
 
@@ -521,26 +702,38 @@ export const updateQuestion = async (updated: Question): Promise<{ success: bool
 };
 
 export const deleteQuestion = async (questionId: string): Promise<void> => {
+  // 1. Mark question permanently deleted in tombstone registry (local & Supabase)
+  await markQuestionDeleted(questionId);
+
+  // 2. Remove from local caches and storage
   const questions = getAllQuestions().filter(q => q.id !== questionId);
   memoryQuestionsCache = questions;
   setStored(STORAGE_KEYS.QUESTIONS, questions);
-  await deleteQuestionFromSupabase(questionId);
+
   notifyDataUpdated();
+
+  // 3. Delete from Supabase
+  await deleteQuestionFromSupabase(questionId);
 };
 
 // --- SUBMISSIONS & REKAP ---
 export const getAllSubmissions = (): ExamSubmission[] => {
   if (memorySubmissionsCache !== null) {
-    return memorySubmissionsCache;
+    return memorySubmissionsCache.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
   }
   const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, []);
-  memorySubmissionsCache = stored;
-  return stored;
+  const clean = stored.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+  if (clean.length !== stored.length) {
+    setStored(STORAGE_KEYS.SUBMISSIONS, clean);
+  }
+  memorySubmissionsCache = clean;
+  return clean;
 };
 
 export const saveSubmissions = (submissions: ExamSubmission[], syncToDb = true): void => {
-  memorySubmissionsCache = submissions;
-  setStored(STORAGE_KEYS.SUBMISSIONS, submissions);
+  const clean = submissions.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+  memorySubmissionsCache = clean;
+  setStored(STORAGE_KEYS.SUBMISSIONS, clean);
   notifyDataUpdated();
 };
 
@@ -558,6 +751,57 @@ export const saveSingleSubmission = (submission: ExamSubmission): void => {
   }
   saveSubmissions(updated, true);
   syncSubmissionToSupabase(submission).catch(() => {});
+};
+
+export const resetStudentSubmission = async (
+  submissionId: string
+): Promise<{ success: boolean; message: string }> => {
+  const allSubs = getAllSubmissions();
+  const targetSub = allSubs.find(s => s.id === submissionId);
+  if (!targetSub) {
+    return { success: false, message: 'Data pengerjaan siswa tidak ditemukan' };
+  }
+
+  // Record tombstone so sync never revives reset submission
+  await markSubmissionDeleted(submissionId);
+
+  const nextSubs = allSubs.filter(s => s.id !== submissionId);
+  saveSubmissions(nextSubs, false);
+  await deleteSubmissionFromSupabase(submissionId);
+  notifyDataUpdated();
+
+  return {
+    success: true,
+    message: `Hasil remedial siswa "${targetSub.studentName}" berhasil direset. Siswa kini dapat mengerjakan ujian ulang.`
+  };
+};
+
+export const resetMultipleStudentSubmissions = async (
+  submissionIds: string[]
+): Promise<{ success: boolean; count: number; message: string }> => {
+  if (submissionIds.length === 0) {
+    return { success: true, count: 0, message: 'Tidak ada data remedial yang dipilih.' };
+  }
+  
+  for (const id of submissionIds) {
+    await markSubmissionDeleted(id);
+  }
+
+  const idSet = new Set(submissionIds);
+  const allSubs = getAllSubmissions();
+  const nextSubs = allSubs.filter(s => !idSet.has(s.id));
+  saveSubmissions(nextSubs, false);
+
+  for (const id of submissionIds) {
+    deleteSubmissionFromSupabase(id).catch(() => {});
+  }
+  notifyDataUpdated();
+
+  return {
+    success: true,
+    count: submissionIds.length,
+    message: `${submissionIds.length} data pengerjaan remedial berhasil direset.`
+  };
 };
 
 // Calculate automated grading for student submission

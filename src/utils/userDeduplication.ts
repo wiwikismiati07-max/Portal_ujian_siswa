@@ -13,6 +13,25 @@ export const normalizeName = (name?: string): string => {
     .trim();
 };
 
+export const isSameTeacher = (
+  t1?: { id?: string; name?: string } | null,
+  t2?: { id?: string; name?: string } | null
+): boolean => {
+  if (!t1 || !t2) return false;
+  if (t1.id && t2.id && t1.id === t2.id) return true;
+  const n1 = normalizeName(t1.name);
+  const n2 = normalizeName(t2.name);
+  if (!n1 || !n2) return false;
+  if (n1 === n2) return true;
+  // Robust substring match for titles e.g. "Wiwik Ismiati, S.Pd." vs "Wiwik Ismiati"
+  const minLen = Math.min(n1.length, n2.length);
+  const maxLen = Math.max(n1.length, n2.length);
+  if (minLen >= 5 && (n1.includes(n2) || n2.includes(n1)) && minLen / maxLen >= 0.5) {
+    return true;
+  }
+  return false;
+};
+
 export const normalizeUsername = (username?: string): string => {
   if (!username) return '';
   return username

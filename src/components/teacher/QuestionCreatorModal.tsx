@@ -51,6 +51,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
     setCurrentExam(exam);
   }, [exam]);
   const [type, setType] = useState<QuestionType>(initialQuestion?.type || 'single_choice');
+  const [instructions, setInstructions] = useState(initialQuestion?.instructions || '');
   const [prompt, setPrompt] = useState(initialQuestion?.prompt || '');
   const [points, setPoints] = useState<number>(initialQuestion?.points || 20);
   const [explanation, setExplanation] = useState(initialQuestion?.explanation || '');
@@ -329,6 +330,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
       examId: currentExam.id,
       type,
       prompt: prompt.trim(),
+      instructions: instructions.trim() || undefined,
       points: Number(points) || 10,
       imageUrl: imageUrl.trim() || undefined,
       explanation: explanation.trim() || undefined
@@ -381,6 +383,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
 
     if (actionType === 'add_more') {
       setPrompt('');
+      setInstructions('');
       setImageUrl('');
       setExplanation('');
       setOptions(['', '', '', '']);
@@ -652,11 +655,34 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
             </div>
           )}
 
-          {/* Prompt + Image Inserter + Arabic Keyboard Toolbar */}
+          {/* Instruksi Soal (Petunjuk Pengerjaan) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-700">
+                Instruksi Soal <span className="text-slate-400 font-normal text-[11px]">(Petunjuk Pengerjaan / Opsional)</span>
+              </label>
+            </div>
+            <textarea
+              rows={2}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              onFocus={(e) => {
+                focusedElementRef.current = e.target;
+                setActiveFieldName('Instruksi Soal');
+              }}
+              dir={isRtlMode ? 'rtl' : 'ltr'}
+              placeholder="Contoh: Bacalah setiap pernyataan berikut dengan teliti. Berilah tanda B jika benar dan S jika salah..."
+              className={`w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none leading-relaxed ${
+                isRtlMode ? 'font-arabic text-base' : ''
+              }`}
+            />
+          </div>
+
+          {/* Pertanyaan Soal + Image Inserter + Arabic Keyboard Toolbar */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="block text-xs font-semibold text-slate-700">
-                Pertanyaan / Instruksi Soal <span className="text-rose-500">*</span>
+                Pertanyaan Soal <span className="text-rose-500">*</span>
               </label>
 
               {/* Action Toolbar */}
@@ -700,7 +726,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
                 setActiveFieldName('Pertanyaan Soal');
               }}
               dir={isRtlMode ? 'rtl' : 'ltr'}
-              placeholder="Ketikkan teks pertanyaan soal..."
+              placeholder="Ketikkan teks pertanyaan atau butir soal yang diujikan..."
               required
               className={`w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none leading-relaxed ${
                 isRtlMode ? 'font-arabic text-base' : ''
@@ -1008,7 +1034,7 @@ export const QuestionCreatorModal: React.FC<QuestionCreatorModalProps> = ({
 
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                 <p className="text-xs text-slate-500 font-medium">
-                  Soal atau pernyataan ditulis pada kolom <strong>"Pertanyaan / Instruksi Soal"</strong> di atas. Tentukan kunci jawaban yang benar di bawah ini:
+                  Soal atau pernyataan ditulis pada kolom <strong>"Pertanyaan Soal"</strong> di atas (dan gunakan kolom "Instruksi Soal" untuk petunjuk pengerjaan jika diperlukan). Tentukan kunci jawaban yang benar di bawah ini:
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

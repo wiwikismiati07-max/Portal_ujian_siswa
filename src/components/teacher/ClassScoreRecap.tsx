@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
-import { getAllUsers } from '../../utils/storage';
+import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions } from '../../utils/storage';
 import { pullFromSupabase } from '../../utils/supabaseSync';
+import { ConfirmModal } from '../ConfirmModal';
 import {
   Printer,
   Search,
@@ -29,7 +30,8 @@ import {
   PieChart,
   BookOpen,
   GraduationCap,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
@@ -62,6 +64,75 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [printDocMode, setPrintDocMode] = useState<'rekap' | 'analisis'>('rekap');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  // Reset Remedial Modal Confirmation State
+  const [resetModalState, setResetModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    targetSubmissions: ExamSubmission[];
+    isBulk: boolean;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    targetSubmissions: [],
+    isBulk: false,
+    isLoading: false
+  });
+
+  const handlePromptReset = (sub: ExamSubmission) => {
+    setResetModalState({
+      isOpen: true,
+      title: 'Reset Remedial / Ujian Siswa?',
+      message: `Apakah Anda yakin ingin mereset pengerjaan remedial siswa "${sub.studentName}" untuk paket "${sub.examTitle}"? Data nilai dan pengerjaan sebelumnya akan dihapus sehingga siswa dapat masuk kembali dan mengerjakan ulang ujian.`,
+      targetSubmissions: [sub],
+      isBulk: false,
+      isLoading: false
+    });
+  };
+
+  const handlePromptBulkReset = (remedials: ExamSubmission[]) => {
+    if (remedials.length === 0) return;
+    setResetModalState({
+      isOpen: true,
+      title: `Reset ${remedials.length} Siswa Remedial?`,
+      message: `Apakah Anda yakin ingin mereset pengerjaan seluruh ${remedials.length} siswa remedial ini? Seluruh siswa ini akan dapat mengerjakan ulang ujian remedial dari akun/dashboard siswa masing-masing.`,
+      targetSubmissions: remedials,
+      isBulk: true,
+      isLoading: false
+    });
+  };
+
+  const handleConfirmReset = async () => {
+    if (resetModalState.targetSubmissions.length === 0) return;
+    setResetModalState(prev => ({ ...prev, isLoading: true }));
+    try {
+      if (resetModalState.isBulk) {
+        const ids = resetModalState.targetSubmissions.map(s => s.id);
+        const res = await resetMultipleStudentSubmissions(ids);
+        if (res.success) {
+          setSyncStatusMsg(`Berhasil mereset ${ids.length} siswa remedial untuk ujian ulang!`);
+        } else {
+          setSyncStatusMsg(res.message || 'Gagal mereset data siswa.');
+        }
+      } else {
+        const sub = resetModalState.targetSubmissions[0];
+        const res = await resetStudentSubmission(sub.id);
+        if (res.success) {
+          setSyncStatusMsg(`Berhasil mereset remedial untuk siswa "${sub.studentName}". Siswa dapat langsung mengulang ujian!`);
+        } else {
+          setSyncStatusMsg(res.message || 'Gagal mereset data siswa.');
+        }
+      }
+    } catch (err: any) {
+      setSyncStatusMsg(`Terjadi kesalahan: ${err?.message || 'Gagal mereset'}`);
+    } finally {
+      setResetModalState(prev => ({ ...prev, isOpen: false, isLoading: false }));
+      setTimeout(() => setSyncStatusMsg(null), 6000);
+    }
+  };
 
   const [allUsers, setAllUsers] = useState<User[]>(getAllUsers());
 
@@ -270,6 +341,13 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       isKlasikalTuntas
     };
   }, [filteredSubmissions, currentExam]);
+
+  // List of submissions that are submitted and remedial (score < KKM or failed)
+  const remedialSubmissions = useMemo(() => {
+    return filteredSubmissions.filter(
+      s => s.submittedAt && !s.passed && s.id && !s.id.startsWith('unsubmitted_')
+    );
+  }, [filteredSubmissions]);
 
   return (
     <div className="space-y-6">
@@ -706,6 +784,17 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap text-xs">
+            {remedialSubmissions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handlePromptBulkReset(remedialSubmissions)}
+                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Reset seluruh siswa remedial pada filter ini agar bisa ujian ulang"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                <span>Reset Remedial ({remedialSubmissions.length} Siswa)</span>
+              </button>
+            )}
             {scoreFilter !== 'all' && (
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                 scoreFilter === 'zero' ? 'bg-rose-100 text-rose-800' :
@@ -920,14 +1009,36 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-center no-print">
-                        <button
-                          type="button"
-                          onClick={() => setInspectionSubmission(sub)}
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Detail</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setInspectionSubmission(sub)}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                            title="Lihat rincian lembar jawaban siswa"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Detail</span>
+                          </button>
+                          {!isNotSubmitted && sub.id && !sub.id.startsWith('unsubmitted_') && (
+                            <button
+                              type="button"
+                              onClick={() => handlePromptReset(sub)}
+                              className={`px-2 py-1 rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-2xs ${
+                                !sub.passed || isZero
+                                  ? 'bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 border border-amber-300'
+                                  : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}
+                              title={
+                                !sub.passed || isZero
+                                  ? 'Reset remedial agar siswa dapat mengulang ujian kembali'
+                                  : 'Reset pengerjaan agar siswa dapat mengulang ujian kembali'
+                              }
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Reset {!sub.passed || isZero ? 'Remedial' : 'Ujian'}</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1424,7 +1535,21 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="pt-4 border-t border-slate-200 flex justify-end">
+            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              {inspectionSubmission && inspectionSubmission.id && !inspectionSubmission.id.startsWith('unsubmitted_') ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const subToReset = inspectionSubmission;
+                    setInspectionSubmission(null);
+                    handlePromptReset(subToReset);
+                  }}
+                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Reset Remedial / Ujian Ulang</span>
+                </button>
+              ) : <div></div>}
               <button
                 type="button"
                 onClick={() => setInspectionSubmission(null)}
@@ -1648,6 +1773,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           teacherNip={teacher?.nipOrNis || '19831116 200904 2 003'}
         />
       </PrintPreviewModal>
+
+      {/* Reset Remedial / Retake Confirmation Dialog */}
+      <ConfirmModal
+        isOpen={resetModalState.isOpen}
+        title={resetModalState.title}
+        message={resetModalState.message}
+        confirmLabel="Ya, Reset untuk Ujian Ulang"
+        cancelLabel="Batal"
+        isDanger={true}
+        isLoading={resetModalState.isLoading}
+        onConfirm={handleConfirmReset}
+        onCancel={() => setResetModalState(prev => ({ ...prev, isOpen: false }))}
+      />
 
     </div>
   );

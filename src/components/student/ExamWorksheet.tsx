@@ -774,6 +774,14 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               </div>
             )}
 
+            {/* Question Instructions if present */}
+            {currentQ.instructions && (
+              <div className="mb-4 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs sm:text-sm text-amber-950 leading-relaxed">
+                <span className="font-bold text-amber-800 block mb-0.5">Petunjuk / Instruksi Soal:</span>
+                <span className="whitespace-pre-line">{currentQ.instructions}</span>
+              </div>
+            )}
+
             {/* Question Prompt */}
             <div className="text-sm sm:text-base text-slate-900 leading-relaxed font-medium mb-5">
               {currentQ.prompt}

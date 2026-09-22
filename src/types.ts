@@ -63,6 +63,7 @@ export interface Question {
   examId: string;
   type: QuestionType;
   prompt: string;
+  instructions?: string; // Petunjuk pengerjaan khusus butir soal (opsional)
   points: number; // e.g. 20
   options?: string[]; // For single_choice & multiple_choice (e.g. ["A...", "B..."])
   correctSingle?: number; // index 0..4 for single choice
