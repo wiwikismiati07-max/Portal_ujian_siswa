@@ -529,6 +529,11 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               </span>
             </div>
 
+            <div className="pb-1 text-[11px] text-slate-600 flex items-center justify-between">
+              <span>Guru Pengampu / Pembuat Soal:</span>
+              <strong className="text-slate-800 font-bold">{exam.teacherName || '-'}</strong>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
               <div>
                 <span className="text-slate-400 block">Waktu Masuk / Login:</span>
@@ -681,7 +686,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
                 {exam.title}
               </h1>
               <span className="text-[11px] text-slate-500 font-medium block truncate">
-                {exam.subjectName} • {student.name} ({student.classGroup || 'Umum'})
+                {exam.subjectName} • Pengampu: <strong className="text-slate-700 font-bold">{exam.teacherName || 'Guru'}</strong> • {student.name} ({student.classGroup || 'Umum'})
               </span>
             </div>
           </div>

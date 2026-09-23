@@ -19,7 +19,8 @@ import {
   Sparkles,
   Search,
   GraduationCap,
-  ArrowRight
+  ArrowRight,
+  UserCheck
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -34,6 +35,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
   const [selectedSubjectName, setSelectedSubjectName] = useState<string | null>(null);
   const [selectedExamForModal, setSelectedExamForModal] = useState<Exam | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -61,17 +63,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     return isStudentEligibleForExam(e.targetClasses, studentClass);
   });
 
-  // Collect all unique subjects available
-  const allSubjectNamesSet = new Set<string>();
-  subjects.forEach(s => allSubjectNamesSet.add(s.name));
-  availableExams.forEach(e => {
-    if (e.subjectName) allSubjectNamesSet.add(e.subjectName);
-  });
-  const allSubjectNamesList = Array.from(allSubjectNamesSet);
-
   // Check submissions by this student
-  const mySubmissions = submissions.filter(s => s.studentId === student.id);
+  const mySubmissions = submissions.filter(
+    s => s.studentId === student.id && s.submittedAt && !s.id.startsWith('unsub_') && !s.id.startsWith('unsubmitted_')
+  );
   const myCompletedExamIds = new Set(mySubmissions.map(s => s.examId));
+
+  // Split available exams into pending (Belum Dikerjakan) and completed (Sudah Selesai)
+  const pendingExams = availableExams.filter(e => !myCompletedExamIds.has(e.id));
+  const completedExams = availableExams.filter(e => myCompletedExamIds.has(e.id));
+
+  // Only subjects that have exams for this student
+  // Pending subjects: only subjects that currently have exams that need to be taken
+  const pendingSubjectNames = Array.from(
+    new Set(pendingExams.map(e => e.subjectName).filter(Boolean))
+  );
+  // Completed subjects: subjects where student has finished at least 1 exam
+  const completedSubjectNames = Array.from(
+    new Set(completedExams.map(e => e.subjectName).filter(Boolean))
+  );
+
+  const currentSubjectNamesList = activeTab === 'pending' ? pendingSubjectNames : completedSubjectNames;
 
   // Compute stats
   const completedCount = mySubmissions.length;
@@ -100,8 +112,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     return 'Selamat Malam';
   };
 
-  // Filtered exams based on selected subject or search query
-  const displayedExams = availableExams.filter(e => {
+  // Filtered exams based on current active tab (pending vs completed), selected subject, or search query
+  const currentExamPool = activeTab === 'pending' ? pendingExams : completedExams;
+  const displayedExams = currentExamPool.filter(e => {
     if (selectedSubjectName && e.subjectName !== selectedSubjectName) {
       return false;
     }
@@ -162,20 +175,42 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
           </div>
 
           {/* Quick Stats Bento Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 shrink-0">
-            <div className="bg-white p-4 rounded-2xl border border-indigo-100 text-center min-w-[120px] shadow-xs">
-              <span className="text-xs text-slate-500 font-bold block mb-1">Ujian Selesai</span>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
+            <div
+              onClick={() => { setActiveTab('pending'); setSelectedSubjectName(null); }}
+              className={`p-3.5 sm:p-4 rounded-2xl border text-center min-w-[100px] sm:min-w-[110px] shadow-xs cursor-pointer transition-all ${
+                activeTab === 'pending'
+                  ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20'
+                  : 'bg-white border-indigo-100 hover:bg-slate-50'
+              }`}
+            >
+              <span className="text-[11px] text-slate-500 font-bold block mb-1">Ujian Tersedia</span>
               <div className="flex items-center justify-center gap-1.5">
-                <FileCheck className="w-5 h-5 text-emerald-600" />
-                <span className="text-2xl font-extrabold text-slate-900">{completedCount}</span>
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
+                <span className="text-xl sm:text-2xl font-extrabold text-indigo-700">{pendingExams.length}</span>
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-indigo-100 text-center min-w-[120px] shadow-xs">
-              <span className="text-xs text-slate-500 font-bold block mb-1">Rata-rata Nilai</span>
+            <div
+              onClick={() => { setActiveTab('completed'); setSelectedSubjectName(null); }}
+              className={`p-3.5 sm:p-4 rounded-2xl border text-center min-w-[100px] sm:min-w-[110px] shadow-xs cursor-pointer transition-all ${
+                activeTab === 'completed'
+                  ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20'
+                  : 'bg-white border-indigo-100 hover:bg-slate-50'
+              }`}
+            >
+              <span className="text-[11px] text-slate-500 font-bold block mb-1">Ujian Selesai</span>
               <div className="flex items-center justify-center gap-1.5">
-                <Award className="w-5 h-5 text-amber-500" />
-                <span className="text-2xl font-extrabold text-amber-600">{avgScore}%</span>
+                <FileCheck className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
+                <span className="text-xl sm:text-2xl font-extrabold text-slate-900">{completedCount}</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-indigo-100 text-center min-w-[100px] sm:min-w-[110px] shadow-xs">
+              <span className="text-[11px] text-slate-500 font-bold block mb-1">Rata-rata Nilai</span>
+              <div className="flex items-center justify-center gap-1.5">
+                <Award className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
+                <span className="text-xl sm:text-2xl font-extrabold text-amber-600">{avgScore}%</span>
               </div>
             </div>
           </div>
@@ -199,90 +234,198 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
       {/* MAIN NAVIGATION CONTENT */}
       {!selectedSubjectName ? (
-        /* STEP 1: DISPLAY ALL AVAILABLE SUBJECTS (SEMUA MATA PELAJARAN) */
+        /* STEP 1: DISPLAY ONLY SUBJECTS WITH EXAMS FOR THIS STUDENT */
         <div className="space-y-5 animate-in fade-in duration-300">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                 <BookOpen className="w-6 h-6 text-indigo-600" />
-                <span>Semua Mata Pelajaran</span>
+                <span>
+                  {activeTab === 'pending'
+                    ? `Mata Pelajaran Ujian Tersedia (${pendingSubjectNames.length} Mapel)`
+                    : `Riwayat Ujian Selesai (${completedSubjectNames.length} Mapel)`}
+                </span>
               </h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Silakan pilih mata pelajaran untuk melihat Daftar Paket Soal Active untuk kelas <strong className="text-slate-800">{studentClass}</strong>
+                {activeTab === 'pending'
+                  ? `Hanya menampilkan mata pelajaran yang memiliki paket ujian aktif untuk kelas ${studentClass} yang belum dikerjakan.`
+                  : `Daftar mata pelajaran dan hasil penilaian ujian yang telah Anda selesaikan.`}
               </p>
             </div>
 
-            {/* Quick Search */}
-            <div className="relative w-full sm:w-64">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari mata pelajaran..."
-                className="w-full pl-9 pr-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-medium"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Tab Navigation Pill */}
+              <div className="inline-flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('pending')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'pending'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Ujian Tersedia ({pendingExams.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('completed')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'completed'
+                      ? 'bg-white text-emerald-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ujian Selesai ({completedExams.length})</span>
+                </button>
+              </div>
+
+              {/* Quick Search */}
+              <div className="relative w-full sm:w-56">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Cari mata pelajaran..."
+                  className="w-full pl-9 pr-3.5 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-medium"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              </div>
             </div>
           </div>
 
-          {/* Subjects Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {allSubjectNamesList
-              .filter(name => !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()))
-              .map((subjectName, idx) => {
-                const subjectObj = subjects.find(s => s.name === subjectName);
-                const activeExamCount = availableExams.filter(e => e.subjectName === subjectName).length;
-                const theme = getSubjectTheme(idx);
-
-                return (
-                  <div
-                    key={subjectName}
-                    onClick={() => setSelectedSubjectName(subjectName)}
-                    className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-lg hover:border-indigo-300 transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group card-hover-effect relative overflow-hidden"
-                  >
-                    {/* Top Accent Gradient Bar */}
-                    <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${theme.bg}`}></div>
-
-                    <div className="space-y-4 pt-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.bg} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0`}>
-                          <GraduationCap className="w-6 h-6" />
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${activeExamCount > 0 ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-slate-100 text-slate-500'}`}>
-                          {activeExamCount > 0 ? `✨ ${activeExamCount} Paket Ujian Active` : 'Belum Ada Ujian'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                          {subjectObj?.code || `MAPEL-${idx + 1}`}
-                        </span>
-                        <h3 className="text-lg font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight leading-snug mt-0.5">
-                          {subjectName}
-                        </h3>
-                        {subjectObj?.teacherName && (
-                          <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
-                            <span>Pengampu:</span>
-                            <strong className="text-slate-700">{subjectObj.teacherName}</strong>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                        <span>Buka Paket Soal</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </span>
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-transform" />
-                    </div>
+          {/* Subjects Grid or Empty States */}
+          {currentSubjectNamesList.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-xs text-center">
+              {activeTab === 'pending' ? (
+                <>
+                  <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-3.5 text-emerald-600 border border-emerald-100">
+                    <CheckCircle2 className="w-8 h-8" />
                   </div>
-                );
-              })}
-          </div>
+                  <h3 className="text-lg font-extrabold text-slate-900">
+                    Tidak Ada Ujian yang Perlu Dikerjakan
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                    {completedExams.length > 0
+                      ? `Seluruh paket ujian yang dijadwalkan untuk kelas ${studentClass} telah selesai Anda kerjakan. Mata pelajaran yang sudah selesai disembunyikan agar tampilan tetap rapi.`
+                      : `Saat ini belum ada paket soal ujian aktif yang dijadwalkan untuk kelas ${studentClass}.`}
+                  </p>
+                  {completedExams.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('completed')}
+                      className="mt-5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
+                    >
+                      <FileCheck className="w-4 h-4" />
+                      <span>Lihat Riwayat & Nilai Ujian Selesai ({completedExams.length})</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3.5 text-slate-400 border border-slate-200">
+                    <FileCheck className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-extrabold text-slate-800">
+                    Belum Ada Riwayat Ujian Selesai
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    Anda belum menyelesaikan paket ujian apapun. Silakan buka tab &quot;Ujian Tersedia&quot; untuk memulai ujian Anda.
+                  </p>
+                  {pendingExams.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('pending')}
+                      className="mt-5 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
+                    >
+                      <Clock className="w-4 h-4" />
+                      <span>Buka Ujian Tersedia ({pendingExams.length})</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {currentSubjectNamesList
+                .filter(name => !searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((subjectName, idx) => {
+                  const subjectObj = subjects.find(s => s.name === subjectName);
+                  const examCountForThis = (activeTab === 'pending' ? pendingExams : completedExams).filter(
+                    e => e.subjectName === subjectName
+                  ).length;
+                  const theme = getSubjectTheme(idx);
+
+                  // Extract actual teacher(s) who created/assigned exams for this subject in the student's class
+                  const examsForThisSubject = availableExams.filter(
+                    e => e.subjectName.trim().toLowerCase() === subjectName.trim().toLowerCase() ||
+                         (subjectObj && e.subjectId === subjectObj.id)
+                  );
+                  const examTeachers = Array.from(
+                    new Set(examsForThisSubject.map(e => e.teacherName?.trim()).filter(Boolean))
+                  ) as string[];
+                  const displayTeacherName = examTeachers.length > 0
+                    ? examTeachers.join(', ')
+                    : (subjectObj?.teacherName || '');
+
+                  return (
+                    <div
+                      key={subjectName}
+                      onClick={() => setSelectedSubjectName(subjectName)}
+                      className="bg-white rounded-3xl border border-slate-200/90 shadow-xs hover:shadow-lg hover:border-indigo-300 transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group card-hover-effect relative overflow-hidden"
+                    >
+                      {/* Top Accent Gradient Bar */}
+                      <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${theme.bg}`}></div>
+
+                      <div className="space-y-4 pt-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.bg} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0`}>
+                            <GraduationCap className="w-6 h-6" />
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${
+                            activeTab === 'pending'
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          }`}>
+                            {activeTab === 'pending'
+                              ? `⚡ ${examCountForThis} Paket Tersedia`
+                              : `✅ ${examCountForThis} Paket Selesai`}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                            {subjectObj?.code || `MAPEL-${idx + 1}`}
+                          </span>
+                          <h3 className="text-lg font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors tracking-tight leading-snug mt-0.5">
+                            {subjectName}
+                          </h3>
+                          {displayTeacherName && (
+                            <p className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+                              <span>Pengampu:</span>
+                              <strong className="text-slate-700 font-bold">{displayTeacherName}</strong>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                          <span>{activeTab === 'pending' ? 'Kerjakan Paket Soal' : 'Lihat Hasil Nilai'}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </span>
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       ) : (
-        /* STEP 2: DISPLAY ACTIVE EXAM PACKAGES FOR THE SELECTED SUBJECT */
+        /* STEP 2: DISPLAY ACTIVE OR COMPLETED EXAM PACKAGES FOR THE SELECTED SUBJECT */
         <div className="space-y-5 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
             <div className="flex items-center gap-3">
@@ -292,11 +435,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                 className="p-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
               >
                 <ChevronLeft className="w-5 h-5" />
-                <span>Kembali ke Semua Mapel</span>
+                <span>Kembali ke Daftar Mapel</span>
               </button>
               <div>
                 <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider block">
-                  Daftar Paket Soal Active
+                  {activeTab === 'pending' ? 'Paket Ujian Belum Dikerjakan' : 'Riwayat Hasil Ujian Selesai'}
                 </span>
                 <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
                   Mata Pelajaran: {selectedSubjectName}
@@ -304,13 +447,33 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSelectedSubjectName(null)}
-              className="text-xs text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer"
-            >
-              Lihat Semua Mapel Lain
-            </button>
+            {/* Quick Toggle Inside Subject View */}
+            <div className="inline-flex p-1 bg-slate-100 rounded-2xl border border-slate-200 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab('pending')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'pending'
+                    ? 'bg-white text-indigo-700 shadow-xs font-extrabold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Belum Dikerjakan ({pendingExams.filter(e => e.subjectName === selectedSubjectName).length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('completed')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'completed'
+                    ? 'bg-white text-emerald-700 shadow-xs font-extrabold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Selesai ({completedExams.filter(e => e.subjectName === selectedSubjectName).length})</span>
+              </button>
+            </div>
           </div>
 
           {displayedExams.length === 0 ? (
@@ -318,9 +481,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-slate-400">
                 <BookOpen className="w-8 h-8" />
               </div>
-              <h3 className="text-base font-extrabold text-slate-700">Belum Ada Paket Soal Active</h3>
+              <h3 className="text-base font-extrabold text-slate-700">
+                {activeTab === 'pending' ? 'Tidak Ada Paket Soal yang Perlu Dikerjakan' : 'Belum Ada Ujian yang Selesai'}
+              </h3>
               <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Saat ini belum ada jadwal ujian aktif khusus untuk mata pelajaran <strong>{selectedSubjectName}</strong> di kelas Anda.
+                {activeTab === 'pending'
+                  ? `Seluruh paket ujian pada mata pelajaran ${selectedSubjectName} telah Anda selesaikan! Hasil ujian dapat dilihat pada tab Selesai.`
+                  : `Anda belum menyelesaikan paket soal untuk mata pelajaran ${selectedSubjectName}.`}
               </p>
               <button
                 type="button"
@@ -372,6 +539,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
                       {/* Detailed Schedule Info */}
                       <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/80 space-y-1.5 text-xs">
+                        <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                          <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="text-[11px]">
+                            <strong>Guru Pengampu:</strong> {exam.teacherName || 'Guru Pengampu'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 text-indigo-950 font-semibold">
                           <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span className="text-[11px]">
@@ -476,6 +649,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
               <div className="flex justify-between">
                 <span className="text-slate-500">Mata Pelajaran:</span>
                 <span className="font-semibold text-slate-800">{selectedExamForModal.subjectName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Guru Pengampu / Pembuat Soal:</span>
+                <span className="font-bold text-indigo-700">{selectedExamForModal.teacherName || '-'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Durasi Waktu:</span>
