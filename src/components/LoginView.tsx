@@ -470,35 +470,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </button>
                 </div>
 
-                {/* Direct 1-Click Fast Access Option */}
-                <div className="pt-2 border-t border-slate-100">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
-                    Atau Masuk Langsung Tanpa Password (1-Klik Mode)
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDirectOneClickLogin('siswa')}
-                      className="py-2 px-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all text-center border border-indigo-200/60 cursor-pointer"
-                    >
-                      🚀 Demo Siswa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDirectOneClickLogin('guru')}
-                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all text-center border border-emerald-200/60 cursor-pointer"
-                    >
-                      🚀 Demo Guru
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDirectOneClickLogin('admin')}
-                      className="py-2 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all text-center border border-rose-200/60 cursor-pointer"
-                    >
-                      🚀 Demo Admin
-                    </button>
-                  </div>
-                </div>
+
               </div>
             ) : (
               /* STEP 2: Smooth Login Form Screen (Revealed after role click) */
