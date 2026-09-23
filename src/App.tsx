@@ -23,7 +23,6 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { SupabaseModal } from './components/SupabaseModal';
 import { SupabaseSyncBanner } from './components/SupabaseSyncBanner';
 import { ConfirmModal } from './components/ConfirmModal';
-import { Dashboard3DLauncher } from './components/Dashboard3DLauncher';
 import { AlertCircle } from 'lucide-react';
 
 export default function App() {
@@ -107,102 +106,7 @@ export default function App() {
     setActiveQuestions([]);
   };
 
-  const [teacherInitialTab, setTeacherInitialTab] = useState<'bank_soal' | 'rekap' | 'paket_ujian' | 'berita_acara'>('bank_soal');
-
-  const handleSelectInternalRoute = (route: string) => {
-    const allUsers = getAllUsers();
-    if (route === 'internal:siswa_jadwal') {
-      if (currentUser?.role === 'siswa') {
-        setActiveExam(null);
-      } else {
-        const studentUser = allUsers.find(u => u.role === 'siswa') || {
-          id: 'user_siswa_1',
-          username: 'ahmad_siswa',
-          password: 'siswa123',
-          name: 'Ahmad Fauzi Ramadhan',
-          role: 'siswa',
-          nipOrNis: '20241001',
-          classGroup: 'X-IPA-1'
-        };
-        setLoggedInUser(studentUser as User);
-        setCurrentUser(studentUser as User);
-        setActiveExam(null);
-      }
-    } else if (route === 'internal:guru_kelola_paket') {
-      setTeacherInitialTab('paket_ujian');
-      if (currentUser?.role !== 'guru') {
-        const teacherUser = allUsers.find(u => u.role === 'guru') || {
-          id: 'user_guru_2',
-          username: 'siti_guru',
-          password: 'guru123',
-          name: 'Siti Rahmawati, S.Pd., M.Si.',
-          role: 'guru',
-          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-        };
-        setLoggedInUser(teacherUser as User);
-        setCurrentUser(teacherUser as User);
-      }
-      setActiveExam(null);
-    } else if (route === 'internal:guru_bank_soal' || route === 'internal:portal' || route === 'internal:input_data') {
-      setTeacherInitialTab('bank_soal');
-      if (currentUser?.role !== 'guru') {
-        const teacherUser = allUsers.find(u => u.role === 'guru') || {
-          id: 'user_guru_2',
-          username: 'siti_guru',
-          password: 'guru123',
-          name: 'Siti Rahmawati, S.Pd., M.Si.',
-          role: 'guru',
-          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-        };
-        setLoggedInUser(teacherUser as User);
-        setCurrentUser(teacherUser as User);
-      }
-      setActiveExam(null);
-    } else if (route === 'internal:guru_rekap_nilai') {
-      setTeacherInitialTab('rekap');
-      if (currentUser?.role !== 'guru') {
-        const teacherUser = allUsers.find(u => u.role === 'guru') || {
-          id: 'user_guru_2',
-          username: 'siti_guru',
-          password: 'guru123',
-          name: 'Siti Rahmawati, S.Pd., M.Si.',
-          role: 'guru',
-          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-        };
-        setLoggedInUser(teacherUser as User);
-        setCurrentUser(teacherUser as User);
-      }
-      setActiveExam(null);
-    } else if (route === 'internal:guru_berita_acara') {
-      setTeacherInitialTab('berita_acara');
-      if (currentUser?.role !== 'guru') {
-        const teacherUser = allUsers.find(u => u.role === 'guru') || {
-          id: 'user_guru_2',
-          username: 'siti_guru',
-          password: 'guru123',
-          name: 'Siti Rahmawati, S.Pd., M.Si.',
-          role: 'guru',
-          subjectName: 'Ilmu Pengetahuan Alam (IPA)'
-        };
-        setLoggedInUser(teacherUser as User);
-        setCurrentUser(teacherUser as User);
-      }
-      setActiveExam(null);
-    } else if (route === 'internal:admin_management') {
-      if (currentUser?.role !== 'admin') {
-        const adminUser = allUsers.find(u => u.role === 'admin') || {
-          id: 'user_admin_1',
-          username: 'admin',
-          password: 'admin123',
-          name: 'Administrator CBT',
-          role: 'admin'
-        };
-        setLoggedInUser(adminUser as User);
-        setCurrentUser(adminUser as User);
-      }
-      setActiveExam(null);
-    }
-  };
+  const [teacherInitialTab] = useState<'bank_soal' | 'rekap' | 'paket_ujian' | 'berita_acara'>('bank_soal');
 
   const handleUserUpdated = (updatedUser: User) => {
     setLoggedInUser(updatedUser);
@@ -224,24 +128,16 @@ export default function App() {
     );
   }
 
-  // 2. DASHBOARD & PORTAL APLIKASI CBT DENGAN FILTER ROLE OTOMATIS
-  // - Guru: Hanya Menu Guru & Menu Utama
-  // - Siswa: Hanya Menu Siswa
-  // - Admin: Tampilkan Semua Menu
+  // 2. DASHBOARD CBT DENGAN TAMPILAN BERSIH
   return (
-    <Dashboard3DLauncher
-      currentUser={currentUser}
-      onSelectInternalRoute={handleSelectInternalRoute}
-      isExamActive={false}
-    >
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
-        {/* Supabase Realtime Setup Notification Banner */}
-        {!activeExam && (
-          <SupabaseSyncBanner
-            status={supabaseStatus}
-            onOpenModal={() => setIsSupabaseModalOpen(true)}
-          />
-        )}
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
+      {/* Supabase Realtime Setup Notification Banner */}
+      {!activeExam && (
+        <SupabaseSyncBanner
+          status={supabaseStatus}
+          onOpenModal={() => setIsSupabaseModalOpen(true)}
+        />
+      )}
 
         {/* Universal Top Navbar (Hidden completely during active exam to lock screen) */}
         {!activeExam && (
@@ -331,6 +227,5 @@ export default function App() {
           </footer>
         )}
       </div>
-    </Dashboard3DLauncher>
   );
 }
