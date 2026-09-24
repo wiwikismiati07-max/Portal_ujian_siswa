@@ -1,6 +1,6 @@
 import React from 'react';
 import { User } from '../types';
-import { LogOut, KeyRound, Shield, GraduationCap, UserCheck, BookOpen, Database } from 'lucide-react';
+import { LogOut, KeyRound, Shield, GraduationCap, UserCheck, BookOpen, Database, PhoneCall } from 'lucide-react';
 import { SupabaseStatus } from '../utils/supabaseSync';
 import { PWAInstallButton } from './pwa/PWAInstallButton';
 
@@ -12,6 +12,8 @@ interface NavbarProps {
   isExamLockActive?: boolean;
   supabaseStatus?: SupabaseStatus;
   onOpenSupabaseModal?: () => void;
+  onOpenManualBook?: () => void;
+  onOpenHotline?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,6 +23,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isExamLockActive = false,
   supabaseStatus = 'connected',
   onOpenSupabaseModal,
+  onOpenManualBook,
+  onOpenHotline,
 }) => {
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -126,6 +130,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ? 'bg-amber-500 ring-2 ring-amber-300'
                     : 'bg-slate-400'
                 }`} />
+              </button>
+            )}
+
+            {/* Manual Book Tutorial Button */}
+            {onOpenManualBook && !isExamLockActive && (
+              <button
+                type="button"
+                onClick={onOpenManualBook}
+                title="Buku Panduan & Tutorial Portal Ujian"
+                className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold border border-indigo-200 bg-indigo-50/90 text-indigo-700 hover:bg-indigo-100 transition-all cursor-pointer shadow-2xs"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="hidden md:inline">Panduan</span>
+              </button>
+            )}
+
+            {/* Hotline Bantuan SMPN 7 Button */}
+            {onOpenHotline && !isExamLockActive && (
+              <button
+                type="button"
+                onClick={onOpenHotline}
+                title="Hotline & Layanan Bantuan SMPN 7 Pasuruan"
+                className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold border border-emerald-200 bg-emerald-50/90 text-emerald-800 hover:bg-emerald-100 transition-all cursor-pointer shadow-2xs"
+              >
+                <PhoneCall className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="hidden lg:inline">Hotline</span>
               </button>
             )}
 

@@ -23,7 +23,9 @@ import { AdminDashboard } from './components/admin/AdminDashboard';
 import { SupabaseModal } from './components/SupabaseModal';
 import { SupabaseSyncBanner } from './components/SupabaseSyncBanner';
 import { ConfirmModal } from './components/ConfirmModal';
-import { AlertCircle } from 'lucide-react';
+import { ManualBookModal } from './components/common/ManualBookModal';
+import { HotlineModal } from './components/common/HotlineModal';
+import { AlertCircle, BookOpen, PhoneCall } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setLoggedInUser] = useState<User | null>(null);
@@ -31,6 +33,8 @@ export default function App() {
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isManualBookOpen, setIsManualBookOpen] = useState(false);
+  const [isHotlineOpen, setIsHotlineOpen] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>(getSupabaseStatus().status);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [appAlert, setAppAlert] = useState<string | null>(null);
@@ -148,6 +152,8 @@ export default function App() {
             isExamLockActive={false}
             supabaseStatus={supabaseStatus}
             onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+            onOpenManualBook={() => setIsManualBookOpen(true)}
+            onOpenHotline={() => setIsHotlineOpen(true)}
           />
         )}
 
@@ -194,6 +200,22 @@ export default function App() {
           onCancel={() => setIsLogoutConfirmOpen(false)}
         />
 
+        {/* Manual Book & Tutorial SPANJU Modal */}
+        <ManualBookModal
+          isOpen={isManualBookOpen}
+          onClose={() => setIsManualBookOpen(false)}
+          onOpenHotline={() => {
+            setIsManualBookOpen(false);
+            setIsHotlineOpen(true);
+          }}
+        />
+
+        {/* Hotline & Bantuan Resmi SMPN 7 Pasuruan Modal */}
+        <HotlineModal
+          isOpen={isHotlineOpen}
+          onClose={() => setIsHotlineOpen(false)}
+        />
+
         {/* Floating Notice Banner */}
         {appAlert && (
           <div className="fixed top-20 right-4 sm:right-8 z-50 animate-in fade-in slide-in-from-top duration-200">
@@ -213,16 +235,46 @@ export default function App() {
 
         {/* Footer (No print) */}
         {!activeExam && (
-          <footer className="py-6 border-t border-slate-200 bg-white text-center text-xs text-slate-400 no-print">
-            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700">PORTAL UJIAN SISWA SPANJU</span>
-                <span>•</span>
-                <span>Sistem Computer-Based Test (CBT) Terintegrasi</span>
+          <footer className="py-6 border-t border-slate-200 bg-white text-xs text-slate-500 no-print">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
+                <span className="font-extrabold text-slate-800">PORTAL UJIAN SISWA SPANJU</span>
+                <span className="hidden sm:inline text-slate-300">•</span>
+                <span className="text-slate-600">UPT SMP Negeri 7 Pasuruan</span>
+                <span className="hidden sm:inline text-slate-300">•</span>
+                <span className="text-[11px] text-slate-400">Media Pembelajaran & Asesmen Terpadu</span>
               </div>
-              <div className="text-[11px] text-slate-400">
-                Mendukung Soal AKM, Kurikulum Merdeka, & Pilihan Ganda Kompleks
+
+              {/* Hotline Details & Quick Buttons */}
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setIsManualBookOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl border border-indigo-200 transition-colors cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Manual Book</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsHotlineOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 transition-colors cursor-pointer"
+                >
+                  <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Hotline: (0343) 426845 / 085168700953</span>
+                </button>
               </div>
+            </div>
+
+            {/* School Official Contact Bar */}
+            <div className="max-w-7xl mx-auto px-4 mt-3 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
+              <p>
+                Hotline : (0343) 426845 / 085168700953 , Pos-el smp7pas@yahoo.co.id , Laman www.smpn7pasuruan.sch.id
+              </p>
+              <p>
+                Jl. Simpang Slamet Riyadi No. 2, Kota Pasuruan, Jawa Timur
+              </p>
             </div>
           </footer>
         )}

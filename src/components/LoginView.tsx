@@ -22,8 +22,11 @@ import {
   ChevronRight,
   BookOpen,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  PhoneCall
 } from 'lucide-react';
+import { ManualBookModal } from './common/ManualBookModal';
+import { HotlineModal } from './common/HotlineModal';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
@@ -37,6 +40,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showManualBook, setShowManualBook] = useState(false);
+  const [showHotlineModal, setShowHotlineModal] = useState(false);
 
   // Carousel Slider State
   const [activeSlide, setActiveSlide] = useState(0);
@@ -470,6 +475,26 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </button>
                 </div>
 
+                {/* Quick Access: Manual Book & Hotline SMPN 7 on Step 1 */}
+                <div className="pt-2 grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowManualBook(true)}
+                    className="py-2.5 px-3 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs group"
+                  >
+                    <BookOpen className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+                    <span>Manual Book</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowHotlineModal(true)}
+                    className="py-2.5 px-3 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs group"
+                  >
+                    <PhoneCall className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                    <span>Hotline SMPN 7</span>
+                  </button>
+                </div>
 
               </div>
             ) : (
@@ -648,6 +673,27 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       </>
                     )}
                   </button>
+
+                  {/* DUA KOTAK MERAH (MANUAL BOOK & HOTLINE SMPN 7) SESUAI INSTRUKSI */}
+                  <div className="pt-2 grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualBook(true)}
+                      className="py-2.5 px-3 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs group"
+                    >
+                      <BookOpen className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+                      <span>Manual Book</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowHotlineModal(true)}
+                      className="py-2.5 px-3 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs group"
+                    >
+                      <PhoneCall className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                      <span>Hotline SMPN 7</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -656,6 +702,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
 
       </div>
+
+      {/* Manual Book Modal Tutorial SPANJU */}
+      <ManualBookModal
+        isOpen={showManualBook}
+        onClose={() => setShowManualBook(false)}
+        onOpenHotline={() => {
+          setShowManualBook(false);
+          setShowHotlineModal(true);
+        }}
+      />
+
+      {/* Hotline & Kontak Resmi SMPN 7 Modal */}
+      <HotlineModal
+        isOpen={showHotlineModal}
+        onClose={() => setShowHotlineModal(false)}
+      />
     </div>
   );
 };
