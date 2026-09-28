@@ -792,6 +792,78 @@ export const broadcastCbtEvent = (action: string, data?: any) => {
 // EXPLICIT TRANSACTION DIRECT SYNC HELPERS
 // ==========================================
 
+export const mapSubmissionToScoreRecapDb = (s: ExamSubmission, userMap?: Map<string, User>) => {
+  const user = userMap ? userMap.get(s.studentId) : undefined;
+  const studentName = user?.name || s.studentName || 'Siswa CBT';
+  const studentClass = user?.classGroup || s.studentClass || '-';
+  const studentNis = user?.nipOrNis || s.studentNipOrNis || '-';
+  const pct = typeof s.percentage === 'number' ? s.percentage : 0;
+  
+  let predikat = 'D (Perlu Bimbingan)';
+  if (pct >= 90) predikat = 'A (Sangat Baik)';
+  else if (pct >= 80) predikat = 'B (Baik)';
+  else if (pct >= 75) predikat = 'C (Cukup)';
+
+  const status = pct >= 75 ? 'TUNTAS' : 'REMEDIAL';
+
+  return {
+    id: `rekap_${s.studentId}_${s.examId}`,
+    student_id: s.studentId,
+    student_name: studentName,
+    student_nip_or_nis: studentNis,
+    student_nisn: studentNis,
+    student_class: studentClass,
+    academic_year: '2025/2026',
+    semester: 'Ganjil',
+    subject_id: null,
+    subject_name: s.subjectName || 'Mata Pelajaran',
+    exam_id: s.examId,
+    exam_title: s.examTitle || 'Ujian CBT',
+    earned_score: typeof s.earnedScore === 'number' ? s.earnedScore : 0,
+    total_score: typeof s.totalScore === 'number' ? s.totalScore : 100,
+    nilai_akhir: pct,
+    kkm: 75,
+    status_kelulusan: status,
+    predikat: predikat,
+    violation_count: s.violationCount || 0,
+    catatan_integritas: (s.violationCount || 0) === 0 ? 'Tertib (0 Pelanggaran)' : `${s.violationCount}x Pelanggaran Integritas`,
+    submitted_at: s.submittedAt ? new Date(s.submittedAt).toISOString() : new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+};
+
+export const syncScoreRecapToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+  try {
+    const exams = getAllExams().filter(e => !isExamDeleted(e.id));
+    const cleanExamIds = new Set(exams.map(e => e.id));
+    const submissions = getAllSubmissions().filter(
+      s => !isSubmissionDeleted(s.id, s.examId) && cleanExamIds.has(s.examId)
+    );
+    const users = getAllUsers();
+    const userMap = new Map<string, User>(users.map(u => [u.id, u]));
+
+    if (submissions.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    // Deduplicate by id so upsert never sends duplicate primary keys in the same chunk
+    const recapMap = new Map<string, any>();
+    for (const s of submissions) {
+      const row = mapSubmissionToScoreRecapDb(s, userMap);
+      const existing = recapMap.get(row.id);
+      if (!existing || (row.nilai_akhir > existing.nilai_akhir)) {
+        recapMap.set(row.id, row);
+      }
+    }
+    const recapRows = Array.from(recapMap.values());
+    await upsertInChunks('cbt_rekap_nilai_siswa', recapRows);
+    return { success: true, count: recapRows.length };
+  } catch (err: any) {
+    console.warn('Error syncing score recap to Supabase:', err);
+    return { success: false, count: 0, error: err.message || 'Gagal menyimpan ke tabel cbt_rekap_nilai_siswa' };
+  }
+};
+
 export const syncSubmissionToSupabase = async (submission: ExamSubmission): Promise<boolean> => {
   try {
     let syncSuccess = false;
@@ -1198,6 +1270,14 @@ export const uploadAllLocalToSupabase = async (
 
     if (onProgress) onProgress(`Menyimpan ${submissions.length} hasil ujian siswa...`);
     if (submissions.length > 0) await upsertInChunks('cbt_submissions', submissions.map(s => mapSubmissionToDb(s)));
+
+    // Sinkronkan juga ke tabel rekap nilai siswa semua mata pelajaran (cbt_rekap_nilai_siswa)
+    try {
+      if (onProgress) onProgress(`Menyinkronkan rekapitulasi nilai siswa semua mapel...`);
+      await syncScoreRecapToSupabase();
+    } catch (rekapErr) {
+      console.warn('Non-blocking: Gagal sync ke cbt_rekap_nilai_siswa:', rekapErr);
+    }
 
     setStatus('connected', 'Semua data berhasil disimpan & disinkronkan ke Supabase!');
     broadcastCbtEvent('full_sync_completed');

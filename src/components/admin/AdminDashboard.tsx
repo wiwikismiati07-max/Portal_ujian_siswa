@@ -17,7 +17,7 @@ import {
 import { cleanAndDeduplicateUsers } from '../../utils/userDeduplication';
 import { ExcelManager } from '../teacher/ExcelManager';
 import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
-import { SUPABASE_SETUP_SQL } from '../../utils/supabaseClient';
+import { SUPABASE_SETUP_SQL, SUPABASE_REKAP_NILAI_SQL, SUPABASE_REKAP_NILAI_TABLE_SQL } from '../../utils/supabaseClient';
 import { ConfirmModal } from '../ConfirmModal';
 import { DEFAULT_CLASSES } from '../../utils/classHelper';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
@@ -71,6 +71,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showExcelImport, setShowExcelImport] = useState(false);
   const [showSqlModal, setShowSqlModal] = useState(false);
+  const [sqlTab, setSqlTab] = useState<'rekap_table' | 'rekap_views' | 'setup'>('rekap_table');
   const [copiedSql, setCopiedSql] = useState(false);
   const [isPrintUsersModalOpen, setIsPrintUsersModalOpen] = useState(false);
 
@@ -360,8 +361,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     });
   };
 
+  const currentSql =
+    sqlTab === 'rekap_table'
+      ? SUPABASE_REKAP_NILAI_TABLE_SQL
+      : sqlTab === 'rekap_views'
+      ? SUPABASE_REKAP_NILAI_SQL
+      : SUPABASE_SETUP_SQL;
+
   const handleCopySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SETUP_SQL);
+    navigator.clipboard.writeText(currentSql);
     setCopiedSql(true);
     setTimeout(() => setCopiedSql(false), 2500);
   };
@@ -874,19 +882,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             </div>
 
             <div className="my-4 flex-1 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-mono text-slate-500">PostgreSQL / Supabase DDL</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSqlTab('rekap_table')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      sqlTab === 'rekap_table'
+                        ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    📋 Tabel Rekap Nilai Siswa (Semua Mapel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSqlTab('rekap_views')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      sqlTab === 'rekap_views'
+                        ? 'bg-white text-emerald-700 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    📊 View Analisis Ketuntasan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSqlTab('setup')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      sqlTab === 'setup'
+                        ? 'bg-white text-emerald-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🛠️ Struktur Database (DDL)
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleCopySql}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer shrink-0"
                 >
                   {copiedSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedSql ? 'Tersalin ke Clipboard!' : 'Salin Semua SQL'}</span>
+                  <span>
+                    {copiedSql
+                      ? 'Tersalin ke Clipboard!'
+                      : sqlTab === 'rekap_table'
+                      ? 'Salin SQL Tabel Rekap Nilai'
+                      : sqlTab === 'rekap_views'
+                      ? 'Salin SQL View Analisis'
+                      : 'Salin Struktur SQL'}
+                  </span>
                 </button>
               </div>
+
+              <div className="mb-2 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs">
+                {sqlTab === 'rekap_table' ? (
+                  <span>
+                    Skrip ini membuat tabel <code>cbt_rekap_nilai_siswa</code> lengkap (semua mapel & siswa), pemicu realtime (*trigger*) otomatis dari pengumpulan ujian, migrasi nilai lama, serta <strong>buku rapor ledger semua mata pelajaran (<code>v_rekap_ledger_semua_mapel</code>)</strong>.
+                  </span>
+                ) : sqlTab === 'rekap_views' ? (
+                  <span>
+                    Skrip ini membuat View di Supabase/PostgreSQL untuk rekap nilai per kelas (<code>v_rekap_nilai_lengkap</code>), analisis statistik ketuntasan (<code>v_rekap_statistik_kelas</code>), daftar remedial (<code>v_siswa_remedial</code>), dan siswa belum ujian (<code>v_siswa_belum_ujian</code>).
+                  </span>
+                ) : (
+                  <span>
+                    Skrip ini membuat seluruh tabel dasar (<code>cbt_users</code>, <code>cbt_subjects</code>, <code>cbt_exams</code>, <code>cbt_questions</code>, <code>cbt_submissions</code>, <code>cbt_rekap_nilai_siswa</code>) beserta kebijakan RLS.
+                  </span>
+                )}
+              </div>
+
               <pre className="p-4 bg-slate-900 text-slate-200 font-mono text-xs rounded-2xl overflow-y-auto flex-1 border border-slate-800 leading-relaxed select-all">
-                {SUPABASE_SETUP_SQL}
+                {currentSql}
               </pre>
             </div>
 

@@ -21,9 +21,17 @@ import {
   uploadAllLocalToSupabase,
   pullFromSupabase,
   syncAllLocalQuestionsToSupabase,
+  syncScoreRecapToSupabase,
   SupabaseStatus
 } from '../utils/supabaseSync';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SETUP_SQL, SUPABASE_QUESTIONS_TABLE_SQL } from '../utils/supabaseClient';
+import {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  SUPABASE_SETUP_SQL,
+  SUPABASE_QUESTIONS_TABLE_SQL,
+  SUPABASE_REKAP_NILAI_SQL,
+  SUPABASE_REKAP_NILAI_TABLE_SQL
+} from '../utils/supabaseClient';
 import {
   getAllUsers,
   getAllExams,
@@ -44,8 +52,9 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
   const [status, setStatus] = useState<SupabaseStatus>(getSupabaseStatus().status);
   const [statusMsg, setStatusMsg] = useState<string>(getSupabaseStatus().message);
   const [activeTab, setActiveTab] = useState<'status' | 'sql'>('status');
-  const [sqlMode, setSqlMode] = useState<'questions' | 'all'>('questions');
+  const [sqlMode, setSqlMode] = useState<'rekap_table' | 'questions' | 'rekap_views' | 'all'>('rekap_table');
   const [isSyncingQuestions, setIsSyncingQuestions] = useState(false);
+  const [isSyncingRecap, setIsSyncingRecap] = useState(false);
 
   // Stats
   const [counts, setCounts] = useState({
@@ -75,7 +84,14 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  const currentSql = sqlMode === 'questions' ? SUPABASE_QUESTIONS_TABLE_SQL : SUPABASE_SETUP_SQL;
+  const currentSql =
+    sqlMode === 'rekap_table'
+      ? SUPABASE_REKAP_NILAI_TABLE_SQL
+      : sqlMode === 'questions'
+      ? SUPABASE_QUESTIONS_TABLE_SQL
+      : sqlMode === 'rekap_views'
+      ? SUPABASE_REKAP_NILAI_SQL
+      : SUPABASE_SETUP_SQL;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(currentSql);
@@ -96,6 +112,22 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
       updateCounts();
     } finally {
       setIsSyncingQuestions(false);
+    }
+  };
+
+  const handleSyncRecapOnly = async () => {
+    setIsSyncingRecap(true);
+    setUploadMessage(null);
+    try {
+      const res = await syncScoreRecapToSupabase();
+      if (res.success) {
+        setUploadMessage(`Berhasil menyinkronkan ${res.count} baris rekap nilai siswa semua mapel ke tabel cbt_rekap_nilai_siswa di Supabase!`);
+      } else {
+        setUploadMessage(`Gagal menyinkronkan rekap: ${res.error || 'Pastikan tabel cbt_rekap_nilai_siswa sudah dibuat di Supabase.'}`);
+      }
+      updateCounts();
+    } finally {
+      setIsSyncingRecap(false);
     }
   };
 
@@ -298,19 +330,32 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                   </div>
                 </div>
                 <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSyncQuestionsOnly}
-                    disabled={isSyncingQuestions || isUploading}
-                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
-                    title="Unggah butir soal lokal langsung ke tabel cbt_questions di Supabase"
-                  >
-                    <UploadCloud className={`w-4 h-4 text-indigo-600 ${isSyncingQuestions ? '' : ''}`} />
-                    <span>{isSyncingQuestions ? 'Mengunggah Soal...' : 'Sinkronkan Butir Soal ke Supabase'}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSyncRecapOnly}
+                      disabled={isSyncingRecap || isUploading}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
+                      title="Sinkronkan data rekap nilai siswa semua mapel langsung ke tabel cbt_rekap_nilai_siswa di Supabase"
+                    >
+                      <UploadCloud className="w-4 h-4 text-emerald-600" />
+                      <span>{isSyncingRecap ? 'Mengunggah Rekap...' : 'Sinkronkan Tabel Rekap Nilai ke Supabase'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSyncQuestionsOnly}
+                      disabled={isSyncingQuestions || isUploading}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
+                      title="Unggah butir soal lokal langsung ke tabel cbt_questions di Supabase"
+                    >
+                      <UploadCloud className="w-4 h-4 text-indigo-600" />
+                      <span>{isSyncingQuestions ? 'Mengunggah Soal...' : 'Sinkronkan Butir Soal'}</span>
+                    </button>
+                  </div>
 
                   <div className="text-[11px] text-slate-500">
-                    Pastikan tabel <code>cbt_questions</code> sudah dibuat di SQL Editor.
+                    Pastikan tabel <code>cbt_rekap_nilai_siswa</code> sudah dibuat di SQL Editor.
                   </div>
                 </div>
               </div>
@@ -323,9 +368,31 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
             </>
           ) : (
             <div className="space-y-4">
-              {/* Tab Selector: Questions vs Full Schema */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3 gap-2">
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+              {/* Tab Selector: Rekap Table vs Questions vs Views vs Full Schema */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-200 pb-3 gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSqlMode('rekap_table')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      sqlMode === 'rekap_table'
+                        ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    📋 Tabel Rekap Nilai Siswa (Semua Mapel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSqlMode('rekap_views')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      sqlMode === 'rekap_views'
+                        ? 'bg-white text-emerald-700 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    📊 View Analisis & Ketuntasan
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSqlMode('questions')}
@@ -335,42 +402,64 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Tabel Bank Soal (cbt_questions)
+                    📝 Tabel Bank Soal
                   </button>
                   <button
                     type="button"
                     onClick={() => setSqlMode('all')}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       sqlMode === 'all'
-                        ? 'bg-white text-indigo-700 shadow-2xs'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-bold'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Semua Tabel (Lengkap)
+                    🛠️ Semua Tabel (DDL Lengkap)
                   </button>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleCopySql}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs shrink-0"
                 >
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Tersalin!' : sqlMode === 'questions' ? 'Salin SQL Bank Soal' : 'Salin Semua SQL'}
+                  {copied
+                    ? 'Tersalin!'
+                    : sqlMode === 'rekap_table'
+                    ? 'Salin SQL Tabel Rekap Nilai'
+                    : sqlMode === 'rekap_views'
+                    ? 'Salin SQL View Analisis'
+                    : sqlMode === 'questions'
+                    ? 'Salin SQL Bank Soal'
+                    : 'Salin Semua SQL'}
                 </button>
               </div>
 
               <div className="text-xs text-slate-600 bg-amber-50 p-3 rounded-xl border border-amber-200">
                 <strong className="text-amber-900 font-semibold block mb-0.5">
-                  {sqlMode === 'questions' ? '📌 Petunjuk Tabel Bank Soal:' : '📌 Petunjuk Database Lengkap:'}
+                  {sqlMode === 'rekap_table'
+                    ? '📌 Petunjuk Tabel Rekap Nilai Siswa Semua Mata Pelajaran:'
+                    : sqlMode === 'rekap_views'
+                    ? '📌 Petunjuk SQL Rekap Nilai & Analisis Siswa:'
+                    : sqlMode === 'questions'
+                    ? '📌 Petunjuk Tabel Bank Soal:'
+                    : '📌 Petunjuk Database Lengkap:'}
                 </strong>
-                {sqlMode === 'questions' ? (
+                {sqlMode === 'rekap_table' ? (
+                  <span>
+                    Skrip ini membuat tabel fisik <code>cbt_rekap_nilai_siswa</code> lengkap (NISN, kelas, mapel, nilai, KKM, predikat A/B/C/D, catatan integritas), <strong>trigger otomatis</strong> yang menyinkronkan hasil ujian setiap saat ke tabel rekap, migrasi data yang sudah ada, serta <strong>buku rapor ledger semua mata pelajaran (<code>v_rekap_ledger_semua_mapel</code>)</strong>.
+                  </span>
+                ) : sqlMode === 'rekap_views' ? (
+                  <span>
+                    Skrip ini membuat View di PostgreSQL/Supabase: <code>v_rekap_nilai_lengkap</code> (rekap nilai per kelas & mapel), <code>v_rekap_statistik_kelas</code> (analisis ketuntasan & rata-rata), <code>v_siswa_remedial</code> (daftar siswa remedial), dan <code>v_siswa_belum_ujian</code> (monitoring siswa belum submit berdasarkan master data).
+                  </span>
+                ) : sqlMode === 'questions' ? (
                   <span>
                     Skrip ini membuat tabel <code>cbt_questions</code>, menambahkan kolom migrasi (pilihan ganda, PG kompleks, benar/salah, menjodohkan, studi kasus), indeks <code>exam_id</code>, dan hak akses RLS publik.
                   </span>
                 ) : (
                   <span>
-                    Skrip lengkap mencakup 5 tabel: <code>cbt_users</code>, <code>cbt_subjects</code>, <code>cbt_exams</code>, <code>cbt_questions</code>, dan <code>cbt_submissions</code> beserta sinkronisasi Realtime.
+                    Skrip lengkap mencakup 6 tabel: <code>cbt_users</code>, <code>cbt_subjects</code>, <code>cbt_exams</code>, <code>cbt_questions</code>, <code>cbt_submissions</code>, dan <code>cbt_rekap_nilai_siswa</code> beserta sinkronisasi Realtime.
                   </span>
                 )}
               </div>

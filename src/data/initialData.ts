@@ -19,56 +19,6 @@ export const INITIAL_USERS: User[] = [
     nipOrNis: '198607212010012015',
     subjectName: 'Ilmu Pengetahuan Alam (IPA)',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user_siswa_1',
-    username: 'ahmad_siswa',
-    password: 'siswa123',
-    name: 'Ahmad Fauzi Ramadhan',
-    role: 'siswa',
-    nipOrNis: '20241001',
-    classGroup: 'X-IPA-1',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user_siswa_2',
-    username: 'dewi_siswa',
-    password: 'siswa123',
-    name: 'Dewi Lestari Kusuma',
-    role: 'siswa',
-    nipOrNis: '20241002',
-    classGroup: 'X-IPA-1',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user_siswa_3',
-    username: 'budi_siswa',
-    password: 'siswa123',
-    name: 'Budi Pratama Wijaya',
-    role: 'siswa',
-    nipOrNis: '20241003',
-    classGroup: 'X-IPA-1',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user_siswa_4',
-    username: 'rina_siswa',
-    password: 'siswa123',
-    name: 'Rina Wulandari Putri',
-    role: 'siswa',
-    nipOrNis: '20241004',
-    classGroup: 'X-IPA-2',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'user_siswa_5',
-    username: 'farhan_siswa',
-    password: 'siswa123',
-    name: 'Farhan Maulana Hakim',
-    role: 'siswa',
-    nipOrNis: '20241005',
-    classGroup: 'X-IPA-2',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80'
   }
 ];
 

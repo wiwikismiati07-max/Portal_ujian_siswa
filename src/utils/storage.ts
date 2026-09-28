@@ -196,7 +196,11 @@ export const getAllUsers = (): User[] => {
       u.id !== 'user_guru_1' &&
       u.username !== 'budi_guru' &&
       u.nipOrNis !== '198305142008011012' &&
-      !u.name?.toLowerCase().includes('budi santoso, s.kom')
+      !u.name?.toLowerCase().includes('budi santoso, s.kom') &&
+      !u.name?.toLowerCase().includes('budi pratama wijaya') &&
+      !['user_siswa_1', 'user_siswa_2', 'user_siswa_3', 'user_siswa_4', 'user_siswa_5'].includes(u.id) &&
+      u.classGroup !== 'X-IPA-1' &&
+      u.classGroup !== 'X-IPA-2'
   );
   if (clean.length !== stored.length) {
     setStored(STORAGE_KEYS.USERS, clean);

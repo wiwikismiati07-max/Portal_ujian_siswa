@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   FileText,
   Printer,
@@ -80,9 +80,20 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
     return allUsers.filter(u => u.role === 'siswa' && u.classGroup && currentExam.targetClasses.includes(u.classGroup));
   }, [allUsers, currentExam]);
 
-  // Default computed counts
-  const totalRegistered = Math.max(targetClassStudents.length, examSubmissions.length, 32);
-  const totalAttended = examSubmissions.length > 0 ? examSubmissions.length : Math.max(totalRegistered - 1, 31);
+  // Actual attended count from submitted exams
+  const attendedStudentIds = useMemo(() => {
+    return new Set(examSubmissions.map(s => s.studentId).filter(Boolean));
+  }, [examSubmissions]);
+
+  // Real computed counts strictly based on master data & actual submissions
+  const totalRegistered = useMemo(() => {
+    if (targetClassStudents.length > 0) return targetClassStudents.length;
+    return examSubmissions.length;
+  }, [targetClassStudents.length, examSubmissions.length]);
+
+  const totalAttended = useMemo(() => {
+    return examSubmissions.length;
+  }, [examSubmissions.length]);
 
   // Default formatted date string
   const todayDateStr = useMemo(() => {
@@ -135,16 +146,15 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
   const [customRegisteredCount, setCustomRegisteredCount] = useState<number>(totalRegistered);
   const [customPresentCount, setCustomPresentCount] = useState<number>(totalAttended);
 
-  // Absent students list
-  const [absentList, setAbsentList] = useState<AbsentStudent[]>([
-    {
-      id: 'absent_1',
-      name: 'Budi Pratama Wijaya',
-      classGroup: currentExam?.targetClasses?.[0] || 'VII-A',
-      reason: 'Sakit',
-      notes: 'Surat dokter terlampir'
-    }
-  ]);
+  // Synchronize counts whenever exam changes
+  useEffect(() => {
+    setCustomRegisteredCount(totalRegistered);
+    setCustomPresentCount(totalAttended);
+    setAbsentList([]);
+  }, [currentExam?.id, totalRegistered, totalAttended]);
+
+  // Absent students list - strictly empty by default, no fake/unmatched mock names
+  const [absentList, setAbsentList] = useState<AbsentStudent[]>([]);
 
   const [newAbsentName, setNewAbsentName] = useState('');
   const [newAbsentClass, setNewAbsentClass] = useState(currentExam?.targetClasses?.[0] || 'VII-A');
@@ -173,10 +183,13 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
 
   const handleAddAbsent = () => {
     if (!newAbsentName.trim()) return;
+    const found = targetClassStudents.find(
+      s => s.name.toLowerCase() === newAbsentName.trim().toLowerCase()
+    );
     const item: AbsentStudent = {
       id: `absent_${Date.now()}`,
-      name: newAbsentName.trim(),
-      classGroup: newAbsentClass,
+      name: found ? found.name : newAbsentName.trim(),
+      classGroup: found?.classGroup || newAbsentClass,
       reason: newAbsentReason,
       notes: newAbsentNotes.trim() || '-'
     };
@@ -389,13 +402,30 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
               <div className="mt-3 p-3 bg-slate-100/70 border border-slate-200 rounded-xl space-y-2">
                 <p className="text-[11px] font-bold text-slate-700">Tambah Siswa Tidak Hadir:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nama Lengkap Siswa"
-                    value={newAbsentName}
-                    onChange={(e) => setNewAbsentName(e.target.value)}
-                    className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      list="master-students-datalist"
+                      placeholder="Pilih / Ketik Nama Siswa Sesuai Master Data"
+                      value={newAbsentName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewAbsentName(val);
+                        const match = targetClassStudents.find(s => s.name.toLowerCase() === val.toLowerCase());
+                        if (match?.classGroup) {
+                          setNewAbsentClass(match.classGroup);
+                        }
+                      }}
+                      className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 w-full"
+                    />
+                    <datalist id="master-students-datalist">
+                      {targetClassStudents.map(st => (
+                        <option key={st.id} value={st.name}>
+                          {st.name} ({st.classGroup || 'Siswa'})
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
                   <select
                     value={newAbsentReason}
                     onChange={(e) => setNewAbsentReason(e.target.value as any)}
