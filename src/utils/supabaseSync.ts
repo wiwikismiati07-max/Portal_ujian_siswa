@@ -909,6 +909,16 @@ export const syncSubmissionToSupabase = async (submission: ExamSubmission): Prom
       }
     }
 
+    // Direct simultaneous push to cbt_rekap_nilai_siswa so recap is immediate
+    try {
+      const users = getAllUsers();
+      const userMap = new Map<string, User>(users.map(u => [u.id, u]));
+      const recapRow = mapSubmissionToScoreRecapDb(submission, userMap);
+      await supabase.from('cbt_rekap_nilai_siswa').upsert(recapRow as any);
+    } catch (recapErr) {
+      console.warn('Direct simultaneous push to cbt_rekap_nilai_siswa failed (fallback will handle):', recapErr);
+    }
+
     // Always backup to cbt_sync_store table as safety net
     try {
       await supabase.from('cbt_sync_store').upsert({
@@ -925,6 +935,36 @@ export const syncSubmissionToSupabase = async (submission: ExamSubmission): Prom
   } catch (err) {
     console.warn('Network error syncing submission:', err);
     return false;
+  }
+};
+
+export const saveExamDraftToSupabase = async (
+  studentId: string,
+  examId: string,
+  draftData: any
+): Promise<void> => {
+  try {
+    await supabase.from('cbt_sync_store').upsert({
+      key: `draft_${examId}_${studentId}`,
+      value: {
+        ...draftData,
+        updated_at: new Date().toISOString()
+      },
+      updated_at: new Date().toISOString()
+    });
+  } catch {
+    // Non-blocking draft auto-save
+  }
+};
+
+export const clearExamDraftFromSupabase = async (
+  studentId: string,
+  examId: string
+): Promise<void> => {
+  try {
+    await supabase.from('cbt_sync_store').delete().eq('key', `draft_${examId}_${studentId}`);
+  } catch {
+    // Non-blocking
   }
 };
 

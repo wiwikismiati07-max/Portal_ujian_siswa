@@ -27,12 +27,16 @@ import {
   Calendar,
   FileText,
   LayoutGrid,
-  Sparkles
+  Sparkles,
+  CloudCheck,
+  Loader2,
+  Database
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Exam, Question, User, ExamSubmission, ViolationLog } from '../../types';
 import { gradeSubmission } from '../../utils/examGrader';
-import { saveSingleSubmission } from '../../utils/storage';
+import { saveSingleSubmission, saveSingleSubmissionDirect } from '../../utils/storage';
+import { saveExamDraftToSupabase, clearExamDraftFromSupabase } from '../../utils/supabaseSync';
 
 interface ExamWorksheetProps {
   exam: Exam;
@@ -49,10 +53,34 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   onFinishExam,
   onExitToDashboard
 }) => {
-  // Navigation & Answers state
+  // Navigation & Answers state (memuat draft jawaban jika siswa sempat menutup atau me-refresh browser)
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [flagged, setFlagged] = useState<Record<string, boolean>>({});
+  const [answers, setAnswers] = useState<Record<string, any>>(() => {
+    try {
+      const saved = localStorage.getItem(`cbt_draft_${student.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.answers && typeof parsed.answers === 'object') {
+          return parsed.answers;
+        }
+      }
+    } catch {}
+    return {};
+  });
+
+  const [flagged, setFlagged] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(`cbt_draft_${student.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.flagged && typeof parsed.flagged === 'object') {
+          return parsed.flagged;
+        }
+      }
+    } catch {}
+    return {};
+  });
+
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
   const [startedAt] = useState<string>(() => new Date().toISOString());
 
@@ -69,6 +97,37 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
   const [showReturnPrompt, setShowReturnPrompt] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<ExamSubmission | null>(null);
+
+  // Direct 1-Click Supabase Submission Progress States
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isDirectSyncSuccess, setIsDirectSyncSuccess] = useState<boolean>(false);
+
+  // Auto-save draft pengerjaan secara kontinu (lokal + Supabase cloud)
+  useEffect(() => {
+    if (submittedResult) return;
+    try {
+      localStorage.setItem(
+        `cbt_draft_${student.id}_${exam.id}`,
+        JSON.stringify({
+          answers,
+          flagged,
+          currentIndex,
+          updatedAt: new Date().toISOString()
+        })
+      );
+    } catch {}
+
+    const draftTimer = setTimeout(() => {
+      saveExamDraftToSupabase(student.id, exam.id, {
+        answers,
+        flagged,
+        currentIndex,
+        timeLeftSeconds
+      }).catch(() => {});
+    }, 1500);
+
+    return () => clearTimeout(draftTimer);
+  }, [answers, flagged, currentIndex, student.id, exam.id, submittedResult, timeLeftSeconds]);
 
   // In-exam Image Lightbox (safely view images without opening new tabs)
   const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
@@ -349,7 +408,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
     // Auto-submit immediately if violation reaches 3 (strict limit)
     if (currentCount >= 3) {
-      // Calculate and save immediately so no data is lost if browser closes
+      // Calculate and save immediately to Supabase Cloud so no data is lost
       const finalResult = gradeSubmission(
         exam,
         questions,
@@ -359,23 +418,31 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
         startedAt,
         violationLogsRef.current
       );
-      saveSingleSubmission(finalResult);
       
-      setTimeout(() => {
-        if (!submittedResult) {
-          setShowViolationModal(false);
-          setShowFinishConfirm(false);
-          setSubmittedResult(finalResult);
-          onFinishExam(finalResult);
-        }
-      }, 1200);
+      setIsSubmitting(true);
+      saveSingleSubmissionDirect(finalResult).then(res => {
+        setIsDirectSyncSuccess(res.success);
+      }).catch(() => {
+        saveSingleSubmission(finalResult);
+      }).finally(() => {
+        try {
+          localStorage.removeItem(`cbt_draft_${student.id}_${exam.id}`);
+          clearExamDraftFromSupabase(student.id, exam.id).catch(() => {});
+        } catch {}
+
+        setShowViolationModal(false);
+        setShowFinishConfirm(false);
+        setSubmittedResult(finalResult);
+        setIsSubmitting(false);
+        onFinishExam(finalResult);
+      });
     }
   };
 
-  const handleForceSubmit = (msg?: string) => {
-    if (submittedResult) return;
+  const handleForceSubmit = async (msg?: string) => {
+    if (submittedResult || isSubmitting) return;
+    setIsSubmitting(true);
     setShowViolationModal(false);
-    setShowFinishConfirm(false);
 
     const result = gradeSubmission(
       exam,
@@ -387,13 +454,30 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       violationLogsRef.current
     );
 
-    saveSingleSubmission(result);
+    // 1-KLIK LANGSUNG KE SUPABASE CLOUD:
+    // Menunggu pengiriman lembar jawaban ke cbt_submissions & cbt_rekap_nilai_siswa
+    try {
+      const syncRes = await saveSingleSubmissionDirect(result);
+      setIsDirectSyncSuccess(syncRes.success);
+    } catch {
+      saveSingleSubmission(result);
+      setIsDirectSyncSuccess(false);
+    }
+
+    // Bersihkan draft jawaban pengerjaan
+    try {
+      localStorage.removeItem(`cbt_draft_${student.id}_${exam.id}`);
+      clearExamDraftFromSupabase(student.id, exam.id).catch(() => {});
+    } catch {}
+
+    setIsSubmitting(false);
+    setShowFinishConfirm(false);
     setSubmittedResult(result);
     onFinishExam(result);
   };
 
-  const handleManualSubmit = () => {
-    handleForceSubmit();
+  const handleManualSubmit = async () => {
+    await handleForceSubmit();
     try {
       confetti({
         particleCount: 80,
@@ -479,15 +563,20 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             <Award className="w-8 h-8" />
           </div>
 
-          <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 mb-2">
-            <CheckCircle className="w-3.5 h-3.5" /> Ujian Selesai & Disimpan
-          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
+              <CheckCircle className="w-3.5 h-3.5" /> Ujian Selesai Dikumpulkan
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-200">
+              <CloudCheck className="w-3.5 h-3.5 text-indigo-600" /> Tersimpan Langsung di Database Supabase
+            </span>
+          </div>
 
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Lembar Jawaban Berhasil Dikumpulkan
+            Lembar Jawaban Berhasil Dikirim ke Supabase
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1">
-            Terima kasih telah mengerjakan ujian. Rekam jejak pengerjaan dan integritas telah tercatat di sistem pengawas.
+          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto mt-1">
+            Data nilai dan jawaban Anda telah berhasil terkirim langsung ke server database Supabase Cloud sekolah. Aplikasi dapat langsung ditutup dengan aman.
           </p>
 
           {/* Score Card */}
@@ -1493,16 +1582,28 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
               <button
                 type="button"
                 onClick={() => setShowFinishConfirm(false)}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
               >
                 Lanjutkan Mengerjakan
               </button>
               <button
                 type="button"
                 onClick={handleManualSubmit}
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-75"
               >
-                Ya, Kumpulkan Sekarang
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Ya, Kumpulkan Sekarang</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

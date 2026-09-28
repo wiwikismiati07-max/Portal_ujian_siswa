@@ -766,6 +766,33 @@ export const saveSingleSubmission = (submission: ExamSubmission): void => {
   syncSubmissionToSupabase(submission).catch(() => {});
 };
 
+/**
+ * 1-KLIK LANGSUNG KE SUPABASE CLOUD:
+ * Menyimpan data lokal sekaligus menunggu konfirmasi pengiriman langsung ke Supabase Cloud (cbt_submissions + cbt_rekap_nilai_siswa).
+ * Mencegah data tertinggal di penyimpanan sementara saat browser langsung ditutup.
+ */
+export const saveSingleSubmissionDirect = async (
+  submission: ExamSubmission
+): Promise<{ success: boolean }> => {
+  const current = getAllSubmissions();
+  const existingIndex = current.findIndex(
+    s => s.id === submission.id || (s.examId === submission.examId && s.studentId === submission.studentId)
+  );
+  let updated: ExamSubmission[];
+  if (existingIndex >= 0) {
+    updated = [...current];
+    updated[existingIndex] = submission;
+  } else {
+    updated = [submission, ...current];
+  }
+  // Simpan secara lokal tanpa menunggu
+  saveSubmissions(updated, false);
+
+  // Kirim langsung ke Supabase Cloud secara synchronous-await
+  const ok = await syncSubmissionToSupabase(submission);
+  return { success: ok };
+};
+
 export const resetStudentSubmission = async (
   submissionId: string
 ): Promise<{ success: boolean; message: string }> => {
