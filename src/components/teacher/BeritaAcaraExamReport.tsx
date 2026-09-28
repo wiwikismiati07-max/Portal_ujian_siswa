@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   FileText,
   Printer,
@@ -19,21 +19,34 @@ import {
   Info,
   Settings,
   X,
-  Check
+  Check,
+  Database,
+  Cloud,
+  CloudCheck,
+  RefreshCw,
+  Code2,
+  ExternalLink,
+  Sparkles,
+  UserX
 } from 'lucide-react';
-import { Exam, ExamSubmission, User } from '../../types';
-import { getAllExams, getAllSubmissions, getAllUsers } from '../../utils/storage';
+import { Exam, ExamSubmission, User, AbsentStudent, BeritaAcaraExam } from '../../types';
+import {
+  getAllExams,
+  getAllSubmissions,
+  getAllUsers,
+  saveBeritaAcara,
+  getAllBeritaAcara,
+  deleteBeritaAcara
+} from '../../utils/storage';
+import {
+  saveBeritaAcaraToSupabase,
+  fetchBeritaAcaraListFromSupabase,
+  fetchSingleBeritaAcaraFromSupabase
+} from '../../utils/supabaseSync';
+import { SUPABASE_BERITA_ACARA_TABLE_SQL } from '../../utils/supabaseClient';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
 import { PrintPreviewModal } from '../common/PrintPreviewModal';
-
-interface AbsentStudent {
-  id: string;
-  name: string;
-  classGroup: string;
-  reason: 'Sakit' | 'Izin' | 'Tanpa Keterangan';
-  notes?: string;
-}
 
 interface BeritaAcaraExamReportProps {
   teacher: User;
@@ -80,11 +93,6 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
     return allUsers.filter(u => u.role === 'siswa' && u.classGroup && currentExam.targetClasses.includes(u.classGroup));
   }, [allUsers, currentExam]);
 
-  // Actual attended count from submitted exams
-  const attendedStudentIds = useMemo(() => {
-    return new Set(examSubmissions.map(s => s.studentId).filter(Boolean));
-  }, [examSubmissions]);
-
   // Real computed counts strictly based on master data & actual submissions
   const totalRegistered = useMemo(() => {
     if (targetClassStudents.length > 0) return targetClassStudents.length;
@@ -111,53 +119,29 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
     return d.toISOString().slice(0, 10);
   }, []);
 
-  // Popup Modal State for Data Pelaksanaan Ujian
+  // Modal States
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // Form States for Berita Acara
   const [eventDateIso, setEventDateIso] = useState<string>(todayIsoStr);
   const [eventDate, setEventDate] = useState<string>(todayDateStr);
   const [sessionTime, setSessionTime] = useState<string>('07.30 - 09.30 WIB');
-  const [sessionName, setSessionName] = useState<string>('Sesi 1');
+  const [sessionName, setSessionName] = useState<string>('Sesi 1 (Pagi)');
   const [roomLocation, setRoomLocation] = useState<string>('Laboratorium Komputer CBT 1');
   const [proctorName, setProctorName] = useState<string>(teacher.name || 'WIWIK ISMIATI, S.Pd');
   const [proctorNip, setProctorNip] = useState<string>(teacher.nipOrNis || '19831116 200904 2 003');
+  const [headmasterName, setHeadmasterName] = useState<string>('NUR FADILAH, S.Pd,.MPd');
+  const [headmasterNip, setHeadmasterNip] = useState<string>('19860410 201001 2 030');
 
-  // Handle calendar date change -> formats to Indonesian date string e.g. "Senin, 20 September 2026"
-  const handleDateChange = (isoVal: string) => {
-    setEventDateIso(isoVal);
-    if (!isoVal) return;
-    try {
-      const parts = isoVal.split('-');
-      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      const formatted = d.toLocaleDateString('id-ID', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-      setEventDate(formatted);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Manual adjustment of registered & present if needed
+  // Counts
   const [customRegisteredCount, setCustomRegisteredCount] = useState<number>(totalRegistered);
   const [customPresentCount, setCustomPresentCount] = useState<number>(totalAttended);
-
-  // Synchronize counts whenever exam changes
-  useEffect(() => {
-    setCustomRegisteredCount(totalRegistered);
-    setCustomPresentCount(totalAttended);
-    setAbsentList([]);
-  }, [currentExam?.id, totalRegistered, totalAttended]);
-
-  // Absent students list - strictly empty by default, no fake/unmatched mock names
   const [absentList, setAbsentList] = useState<AbsentStudent[]>([]);
 
   const [newAbsentName, setNewAbsentName] = useState('');
-  const [newAbsentClass, setNewAbsentClass] = useState(currentExam?.targetClasses?.[0] || 'VII-A');
+  const [newAbsentClass, setNewAbsentClass] = useState(currentExam?.targetClasses?.[0] || '8A');
   const [newAbsentReason, setNewAbsentReason] = useState<'Sakit' | 'Izin' | 'Tanpa Keterangan'>('Sakit');
   const [newAbsentNotes, setNewAbsentNotes] = useState('');
 
@@ -177,9 +161,120 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
   const [technicalIssues, setTechnicalIssues] = useState<string>('Jaringan internet, server lokal, dan suplai listrik PLN normal dan stabil.');
   const [proctorAction, setProctorAction] = useState<string>('Pengawasan dilakukan secara ketat melalui monitor pengawas dan pendampingan ruang ujian.');
 
-  // Print Preview Modal
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  // Supabase sync states
+  const [isSavingToSupabase, setIsSavingToSupabase] = useState(false);
+  const [supabaseSaveSuccess, setSupabaseSaveSuccess] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
+  const [copiedSqlNotification, setCopiedSqlNotification] = useState(false);
+
+  // Synchronize counts whenever exam changes
+  useEffect(() => {
+    setCustomRegisteredCount(totalRegistered);
+    setCustomPresentCount(totalAttended);
+  }, [currentExam?.id, totalRegistered, totalAttended]);
+
+  // Auto-load Berita Acara for this exam if already saved in Supabase or local storage
+  const loadSavedBeritaAcara = useCallback(async () => {
+    if (!currentExam) return;
+    const allLocal = getAllBeritaAcara();
+    const existingLocal = allLocal.find(b => b.examId === currentExam.id);
+
+    if (existingLocal) {
+      setEventDateIso(existingLocal.eventDateIso || todayIsoStr);
+      setEventDate(existingLocal.eventDate || todayDateStr);
+      setSessionTime(existingLocal.sessionTime || '07.30 - 09.30 WIB');
+      setSessionName(existingLocal.sessionName || 'Sesi 1 (Pagi)');
+      setRoomLocation(existingLocal.roomLocation || 'Laboratorium Komputer CBT 1');
+      setProctorName(existingLocal.proctorName || teacher.name || 'WIWIK ISMIATI, S.Pd');
+      setProctorNip(existingLocal.proctorNip || teacher.nipOrNis || '19831116 200904 2 003');
+      setHeadmasterName(existingLocal.headmasterName || 'NUR FADILAH, S.Pd,.MPd');
+      setHeadmasterNip(existingLocal.headmasterNip || '19860410 201001 2 030');
+      setCustomRegisteredCount(existingLocal.totalRegistered ?? totalRegistered);
+      setCustomPresentCount(existingLocal.totalPresent ?? totalAttended);
+      setAbsentList(existingLocal.absentStudents || []);
+      setConditionNotes(existingLocal.conditionNotes || defaultConditionNotes);
+      setTechnicalIssues(existingLocal.technicalIssues || 'Jaringan internet, server lokal, dan suplai listrik PLN normal dan stabil.');
+      setProctorAction(existingLocal.proctorAction || 'Pengawasan dilakukan secara ketat melalui monitor pengawas dan pendampingan ruang ujian.');
+      setLastSavedAt(existingLocal.updatedAt || null);
+    }
+
+    // Try fetching from remote Supabase
+    try {
+      const remoteList = await fetchBeritaAcaraListFromSupabase(currentExam.id);
+      if (remoteList && remoteList.length > 0) {
+        const remote = remoteList[0];
+        setEventDateIso(remote.eventDateIso || todayIsoStr);
+        setEventDate(remote.eventDate || todayDateStr);
+        setSessionTime(remote.sessionTime || '07.30 - 09.30 WIB');
+        setSessionName(remote.sessionName || 'Sesi 1 (Pagi)');
+        setRoomLocation(remote.roomLocation || 'Laboratorium Komputer CBT 1');
+        setProctorName(remote.proctorName || teacher.name || 'WIWIK ISMIATI, S.Pd');
+        setProctorNip(remote.proctorNip || teacher.nipOrNis || '19831116 200904 2 003');
+        setHeadmasterName(remote.headmasterName || 'NUR FADILAH, S.Pd,.MPd');
+        setHeadmasterNip(remote.headmasterNip || '19860410 201001 2 030');
+        setCustomRegisteredCount(remote.totalRegistered ?? totalRegistered);
+        setCustomPresentCount(remote.totalPresent ?? totalAttended);
+        setAbsentList(remote.absentStudents || []);
+        setConditionNotes(remote.conditionNotes || defaultConditionNotes);
+        setTechnicalIssues(remote.technicalIssues || 'Jaringan internet, server lokal, dan suplai listrik PLN normal dan stabil.');
+        setProctorAction(remote.proctorAction || 'Pengawasan dilakukan secara ketat melalui monitor pengawas dan pendampingan ruang ujian.');
+        setLastSavedAt(remote.updatedAt || null);
+      }
+    } catch {
+      // Non-blocking
+    }
+  }, [currentExam, todayIsoStr, todayDateStr, teacher, totalRegistered, totalAttended, defaultConditionNotes]);
+
+  useEffect(() => {
+    loadSavedBeritaAcara();
+  }, [loadSavedBeritaAcara]);
+
+  // Handle calendar date change -> formats to Indonesian date string e.g. "Senin, 28 September 2026"
+  const handleDateChange = (isoVal: string) => {
+    setEventDateIso(isoVal);
+    if (!isoVal) return;
+    try {
+      const parts = isoVal.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      const formatted = d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      setEventDate(formatted);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Auto-detect absent students (students in roster who did not submit exam)
+  const handleAutoDetectAbsent = () => {
+    if (!currentExam) return;
+    const submittedStudentIds = new Set(examSubmissions.map(s => s.studentId).filter(Boolean));
+    const submittedStudentNames = new Set(examSubmissions.map(s => s.studentName.trim().toUpperCase()));
+
+    const missingStudents = targetClassStudents.filter(s => {
+      return !submittedStudentIds.has(s.id) && !submittedStudentNames.has(s.name.trim().toUpperCase());
+    });
+
+    if (missingStudents.length === 0) {
+      alert('Semua siswa yang terdaftar telah mengikuti ujian (0 siswa absen).');
+      return;
+    }
+
+    const newAbsentItems: AbsentStudent[] = missingStudents.map(st => ({
+      id: `absent_${st.id}_${Date.now()}`,
+      name: st.name,
+      classGroup: st.classGroup || currentExam.targetClasses?.[0] || '8A',
+      reason: 'Tanpa Keterangan',
+      notes: 'Belum mengikuti ujian pada jadwal yang ditentukan'
+    }));
+
+    setAbsentList(newAbsentItems);
+    setCustomPresentCount(Math.max(0, customRegisteredCount - newAbsentItems.length));
+  };
 
   const handleAddAbsent = () => {
     if (!newAbsentName.trim()) return;
@@ -202,11 +297,72 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
     setAbsentList(prev => prev.filter(a => a.id !== id));
   };
 
+  // 1-Click Save to Supabase
+  const handleSaveToSupabase = async () => {
+    if (!currentExam) return;
+    setIsSavingToSupabase(true);
+    setSupabaseSaveSuccess(false);
+
+    const beritaAcaraId = `ba_${currentExam.id}_${sessionName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
+    const calculatedPercentage =
+      customRegisteredCount > 0 ? Number(((customPresentCount / customRegisteredCount) * 100).toFixed(2)) : 100;
+
+    const dataToSave: BeritaAcaraExam = {
+      id: beritaAcaraId,
+      examId: currentExam.id,
+      examTitle: currentExam.title,
+      subjectName: currentExam.subjectName,
+      targetClasses: currentExam.targetClasses || [],
+      academicYear: '2025/2026',
+      semester: 'Ganjil',
+      eventDateIso,
+      eventDate,
+      sessionTime,
+      sessionName,
+      roomLocation,
+      proctorName,
+      proctorNip,
+      headmasterName,
+      headmasterNip,
+      totalRegistered: customRegisteredCount,
+      totalPresent: customPresentCount,
+      totalAbsent: absentList.length,
+      attendancePercentage: calculatedPercentage,
+      absentStudents: absentList,
+      conditionNotes,
+      technicalIssues,
+      proctorAction,
+      status: 'final',
+      createdBy: teacher.name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const res = await saveBeritaAcara(dataToSave, true);
+      if (res.success) {
+        setSupabaseSaveSuccess(true);
+        setLastSavedAt(new Date().toISOString());
+        setTimeout(() => setSupabaseSaveSuccess(false), 3500);
+      }
+    } catch (err) {
+      console.error('Error saving Berita Acara to Supabase:', err);
+    } finally {
+      setIsSavingToSupabase(false);
+    }
+  };
+
   const handleCopySummary = () => {
     const summary = `BERITA ACARA KEGIATAN UJIAN\nUPT SMP NEGERI 7 PASURUAN\nMata Pelajaran: ${currentExam?.subjectName || '-'}\nPaket Ujian: ${currentExam?.title || '-'}\nHari/Tanggal: ${eventDate}\nWaktu/Sesi: ${sessionTime} (${sessionName})\nRuang: ${roomLocation}\nJumlah Peserta Terdaftar: ${customRegisteredCount}\nJumlah Hadir: ${customPresentCount}\nJumlah Tidak Hadir: ${absentList.length}\nPengawas: ${proctorName}\nStatus: ${conditionNotes}`;
     navigator.clipboard.writeText(summary);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2500);
+  };
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_BERITA_ACARA_TABLE_SQL);
+    setCopiedSqlNotification(true);
+    setTimeout(() => setCopiedSqlNotification(false), 3000);
   };
 
   return (
@@ -215,12 +371,15 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
       {/* Top Banner & Control Bar */}
       <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-purple-800/40 flex flex-col lg:flex-row lg:items-center justify-between gap-5 no-print">
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-500/30 text-purple-200 border border-purple-400/30 tracking-wider">
               Dokumen Kedinasan CBT
             </span>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 tracking-wider">
               Format Resmi A4
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 tracking-wider flex items-center gap-1">
+              <Database className="w-3 h-3 text-indigo-300" /> Database Supabase Cloud
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
@@ -228,272 +387,150 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
             <span>Berita Acara Kegiatan Ujian Siswa</span>
           </h2>
           <p className="text-xs sm:text-sm text-purple-200/90 mt-1 max-w-2xl leading-relaxed">
-            Formulir resmi pencatatan jalannya asesmen, kehadiran peserta, catatan insiden integritas, serta pengesahan bertanda tangan digital touchscreen/mouse untuk UPT SMP Negeri 7 Pasuruan.
+            Pencatatan resmi jalannya asesmen, kehadiran peserta didik, catatan insiden integritas, dan pengesahan bertanda tangan digital tersimpan otomatis di database Supabase Cloud.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Tombol Simpan ke Database Supabase */}
+          <button
+            type="button"
+            onClick={handleSaveToSupabase}
+            disabled={isSavingToSupabase}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+              supabaseSaveSuccess
+                ? 'bg-emerald-600 text-white shadow-emerald-500/30'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+            }`}
+          >
+            {isSavingToSupabase ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Menyimpan ke Supabase...</span>
+              </>
+            ) : supabaseSaveSuccess ? (
+              <>
+                <CloudCheck className="w-4 h-4" />
+                <span>Tersimpan di Supabase!</span>
+              </>
+            ) : (
+              <>
+                <Database className="w-4 h-4" />
+                <span>Simpan ke Database Supabase</span>
+              </>
+            )}
+          </button>
+
+          {/* Tombol Coding SQL Database Supabase */}
+          <button
+            type="button"
+            onClick={() => setIsSqlModalOpen(true)}
+            className="px-3.5 py-2.5 bg-purple-600/80 hover:bg-purple-600 text-white rounded-xl text-xs font-extrabold border border-purple-400/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Code2 className="w-4 h-4 text-purple-200" />
+            <span>Coding SQL Supabase</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsConfigModalOpen(true)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer shadow-md"
+            className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer shadow-md"
           >
             <Settings className="w-4 h-4" />
-            <span>⚙️ Atur Data Pelaksanaan Ujian</span>
+            <span>⚙️ Atur Pelaksanaan</span>
           </button>
 
           <button
             type="button"
             onClick={handleCopySummary}
-            className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/15 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+            className="px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/15 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Copy className="w-4 h-4 text-purple-300" />
-            <span>{copiedNotification ? 'Tersalin!' : 'Salin Ringkasan'}</span>
+            <span>{copiedNotification ? 'Disalin!' : 'Salin Teks'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsPrintModalOpen(true)}
-            className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-900/30 hover:shadow-emerald-900/50"
+            className="px-4 py-2.5 bg-white text-purple-950 hover:bg-purple-50 active:scale-95 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-md"
           >
-            <Printer className="w-4 h-4" />
-            <span>Cetak / Simpan PDF (A4)</span>
+            <Printer className="w-4 h-4 text-purple-700" />
+            <span>Cetak Berita Acara</span>
           </button>
         </div>
       </div>
 
-      {/* Quick Status Card Summary & Absent Students Management (No Print) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print">
-        
-        {/* Left Col: Info Ringkas Konfigurasi Aktif */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-indigo-600" />
-              <span>Ringkasan Data Pelaksanaan</span>
-            </h3>
-            <button
-              type="button"
-              onClick={() => setIsConfigModalOpen(true)}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-            >
-              Ubah Data
-            </button>
+      {/* Info Status Sinkronisasi Supabase */}
+      <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs no-print">
+        <div className="flex items-center gap-2.5 text-purple-900">
+          <div className="w-8 h-8 rounded-xl bg-purple-200 text-purple-800 flex items-center justify-center shrink-0">
+            <Cloud className="w-4 h-4" />
           </div>
-
-          <div className="space-y-2.5 text-xs text-slate-700">
-            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Paket Ujian</span>
-              <p className="font-bold text-slate-900 truncate">{currentExam?.title || '-'}</p>
-              <p className="text-[11px] text-indigo-600">{currentExam?.subjectName || '-'}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Sesi / Waktu</span>
-                <p className="font-bold text-slate-900">{sessionName}</p>
-                <p className="text-[11px] text-slate-600">{sessionTime}</p>
-              </div>
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Hari, Tanggal</span>
-                <p className="font-bold text-slate-900 truncate">{eventDate}</p>
-              </div>
-            </div>
-
-            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Pengawas Ruang</span>
-              <p className="font-bold text-slate-900">{proctorName}</p>
-              <p className="text-[11px] font-mono text-slate-500">NIP. {proctorNip}</p>
-            </div>
-          </div>
-
-          <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 leading-relaxed">
-            <span className="font-bold flex items-center gap-1 text-indigo-800 mb-0.5">
-              <Info className="w-3.5 h-3.5" /> Tanda Tangan Digital Touchscreen
-            </span>
-            Pengawas dan Kepala Sekolah dapat langsung membubuhkan tanda tangan dengan sentuhan jari di layar HP maupun laptop pada lembar pratinjau di bawah.
-          </div>
-        </div>
-
-        {/* Right 2 Cols: Kehadiran & Siswa Tidak Hadir */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Users className="w-4 h-4 text-purple-600" />
-                <span>Statistik Kehadiran Peserta Ujian</span>
-              </h3>
-              <span className="text-[11px] font-bold px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md border border-purple-200">
-                Otomatis
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 text-center mb-4">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Terdaftar</p>
-                <input
-                  type="number"
-                  value={customRegisteredCount}
-                  onChange={(e) => setCustomRegisteredCount(Number(e.target.value) || 0)}
-                  className="text-lg font-extrabold text-slate-800 w-full text-center bg-transparent border-b border-dashed border-slate-300 focus:outline-hidden"
-                />
-                <p className="text-[10px] text-slate-400">siswa</p>
-              </div>
-
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <p className="text-[10px] text-emerald-700 font-bold uppercase">Hadir</p>
-                <input
-                  type="number"
-                  value={customPresentCount}
-                  onChange={(e) => setCustomPresentCount(Number(e.target.value) || 0)}
-                  className="text-lg font-extrabold text-emerald-700 w-full text-center bg-transparent border-b border-dashed border-emerald-300 focus:outline-hidden"
-                />
-                <p className="text-[10px] text-emerald-600">siswa</p>
-              </div>
-
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
-                <p className="text-[10px] text-rose-700 font-bold uppercase">Absen</p>
-                <p className="text-lg font-extrabold text-rose-700">
-                  {absentList.length}
-                </p>
-                <p className="text-[10px] text-rose-600">siswa</p>
-              </div>
-            </div>
-
-            {/* Daftar Siswa Tidak Hadir */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center justify-between">
-                <span>Rincian Siswa Tidak Hadir ({absentList.length}):</span>
-              </h4>
-
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {absentList.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic p-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    Nihil (Semua siswa hadir lengkap).
-                  </p>
-                ) : (
-                  absentList.map((st, idx) => (
-                    <div
-                      key={st.id}
-                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-800 truncate">
-                          {idx + 1}. {st.name} <span className="font-normal text-slate-500">({st.classGroup})</span>
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          Status: <strong className="text-rose-600">{st.reason}</strong> &bull; {st.notes}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAbsent(st.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer shrink-0"
-                        title="Hapus dari daftar absen"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Form Tambah Siswa Tidak Hadir */}
-              <div className="mt-3 p-3 bg-slate-100/70 border border-slate-200 rounded-xl space-y-2">
-                <p className="text-[11px] font-bold text-slate-700">Tambah Siswa Tidak Hadir:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      list="master-students-datalist"
-                      placeholder="Pilih / Ketik Nama Siswa Sesuai Master Data"
-                      value={newAbsentName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setNewAbsentName(val);
-                        const match = targetClassStudents.find(s => s.name.toLowerCase() === val.toLowerCase());
-                        if (match?.classGroup) {
-                          setNewAbsentClass(match.classGroup);
-                        }
-                      }}
-                      className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 w-full"
-                    />
-                    <datalist id="master-students-datalist">
-                      {targetClassStudents.map(st => (
-                        <option key={st.id} value={st.name}>
-                          {st.name} ({st.classGroup || 'Siswa'})
-                        </option>
-                      ))}
-                    </datalist>
-                  </div>
-                  <select
-                    value={newAbsentReason}
-                    onChange={(e) => setNewAbsentReason(e.target.value as any)}
-                    className="text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5"
-                  >
-                    <option value="Sakit">Sakit</option>
-                    <option value="Izin">Izin</option>
-                    <option value="Tanpa Keterangan">Tanpa Keterangan</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Keterangan (opsional)"
-                    value={newAbsentNotes}
-                    onChange={(e) => setNewAbsentNotes(e.target.value)}
-                    className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddAbsent}
-                  disabled={!newAbsentName.trim()}
-                  className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambahkan Siswa</span>
-                </button>
-              </div>
-            </div>
+            <p className="font-bold text-slate-900">
+              Penyimpanan Database Cloud: <span className="text-purple-700 font-extrabold">cbt_berita_acara</span>
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {lastSavedAt
+                ? `Terakhir disinkronkan ke Supabase: ${new Date(lastSavedAt).toLocaleString('id-ID')}`
+                : 'Data siap disimpan dan disinkronkan langsung ke cloud database.'}
+            </p>
           </div>
         </div>
-
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleAutoDetectAbsent}
+            className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <UserX className="w-3.5 h-3.5 text-purple-700" />
+            <span>Auto-Deteksi Siswa Belum Ujian</span>
+          </button>
+        </div>
       </div>
 
-      {/* DOCUMENT PREVIEW CARD (WYSIWYG Standar Format Cetak A4) */}
-      <div className="bg-white rounded-2xl border border-slate-300 p-6 sm:p-10 shadow-md max-w-4xl mx-auto font-serif text-black leading-relaxed">
+      {/* ========================================================= */}
+      {/* TAMPILAN LEMBAR DOKUMEN BERITA ACARA RESMI (FORMAT A4) */}
+      {/* ========================================================= */}
+      <div className="bg-white p-6 sm:p-10 rounded-3xl border border-slate-200 shadow-xl max-w-4xl mx-auto font-serif text-slate-900 leading-relaxed print:p-0 print:border-none print:shadow-none">
         
-        {/* Kop Surat Resmi */}
+        {/* Kop Surat Resmi SMPN 7 Pasuruan */}
         <OfficialLetterhead
           judulDokumen="BERITA ACARA PELAKSANAAN KEGIATAN ASESMEN / UJIAN SISWA"
+          subJudulDokumen="TAHUN AJARAN 2025/2026 - SEMESTER GANJIL"
+          isPrintOnly={false}
+          showExamMetadata={false}
         />
 
         {/* Paragraf Pembuka */}
-        <div className="text-xs sm:text-sm text-justify space-y-2 mt-4">
-          <p>
-            Pada hari ini <strong>{eventDate}</strong>, bertempat di <strong>UPT SMP Negeri 7 Pasuruan</strong>, telah diselenggarakan kegiatan Asesmen Berbasis Komputer / Penilaian Sumatif Semester dengan rincian data sebagai berikut:
-          </p>
-        </div>
+        <p className="text-xs sm:text-sm text-justify my-3 indent-6">
+          Pada hari ini <strong className="font-bold">{eventDate}</strong>, telah dilaksanakan Kegiatan Asesmen Sumatif / Ujian Berbasis Komputer dan Smartphone (CBT) di lingkungan UPT SMP Negeri 7 Pasuruan dengan rincian pelaksanaan sebagai berikut:
+        </p>
 
-        {/* Tabel Identitas Pelaksanaan */}
-        <div className="my-4">
-          <table className="w-full text-xs sm:text-sm border-collapse border border-black table-fixed">
+        {/* Tabel Informasi Kegiatan Ujian */}
+        <div className="my-3">
+          <table className="w-full text-xs sm:text-sm border-collapse border border-black">
             <tbody>
               <tr>
                 <td className="p-2 border border-black font-bold w-[30%] bg-slate-50">1. Mata Pelajaran</td>
-                <td className="p-2 border border-black w-[70%] font-semibold">{currentExam?.subjectName || '-'}</td>
+                <td className="p-2 border border-black w-[70%] font-bold text-slate-900">
+                  {currentExam?.subjectName || 'SEMUA MATA PELAJARAN'}
+                </td>
               </tr>
               <tr>
-                <td className="p-2 border border-black font-bold bg-slate-50">2. Judul / Paket Ujian</td>
-                <td className="p-2 border border-black">{currentExam?.title || '-'}</td>
+                <td className="p-2 border border-black font-bold bg-slate-50">2. Paket Soal / Ujian</td>
+                <td className="p-2 border border-black font-semibold">
+                  {currentExam?.title || 'Ujian Sumatif CBT'}
+                </td>
               </tr>
               <tr>
-                <td className="p-2 border border-black font-bold bg-slate-50">3. Tingkat / Rombel</td>
+                <td className="p-2 border border-black font-bold bg-slate-50">3. Rombongan Belajar (Kelas)</td>
                 <td className="p-2 border border-black font-semibold">
                   {currentExam?.targetClasses?.join(', ') || 'Semua Rombel Terdaftar'}
                 </td>
               </tr>
               <tr>
-                <td className="p-2 border border-black font-bold bg-slate-50">4. Hari, Tanggal</td>
+                <td className="p-2 border border-black font-bold bg-slate-50">4. Hari, Tanggal Pelaksanaan</td>
                 <td className="p-2 border border-black">{eventDate}</td>
               </tr>
               <tr>
@@ -593,15 +630,17 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
         <OfficialReportSignature
           teacherName={proctorName}
           teacherNip={proctorNip}
-          headmasterName="NUR FADILAH, S.Pd,.MPd"
-          headmasterNip="19860410 201001 2 030"
+          headmasterName={headmasterName}
+          headmasterNip={headmasterNip}
           location="Pasuruan"
           dateStr={eventDate}
         />
 
       </div>
 
-      {/* ================= POPUP MODAL: ATUR DATA PELAKSANAAN UJIAN ================= */}
+      {/* ========================================================= */}
+      {/* POPUP MODAL 1: ATUR DATA PELAKSANAAN UJIAN               */}
+      {/* ========================================================= */}
       {isConfigModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 no-print">
           <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
@@ -612,7 +651,7 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
                 <Settings className="w-5 h-5 text-purple-300" />
                 <div>
                   <h3 className="text-base font-bold">Konfigurasi Data Pelaksanaan Ujian</h3>
-                  <p className="text-xs text-purple-200">Ubah paket, sesi, waktu (jam analog), tanggal, dan pengawas ruang</p>
+                  <p className="text-xs text-purple-200">Ubah paket, sesi, waktu, tanggal, pengawas & daftar ketidakhadiran</p>
                 </div>
               </div>
               <button
@@ -669,42 +708,21 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
                 </div>
               </div>
 
-              {/* 3. Waktu Pelaksanaan (Jam) + Jam Analog */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    3. Waktu Pelaksanaan (Jam &amp; Durasi):
-                  </label>
-                  <input
-                    type="text"
-                    value={sessionTime}
-                    onChange={(e) => setSessionTime(e.target.value)}
-                    className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
-                    placeholder="Contoh: 07.30 - 09.30 WIB"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">Durasi ujian: {currentExam?.durationMinutes || 90} menit.</p>
-                </div>
-
-                {/* Jam Analog Widget Preview */}
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full border-2 border-indigo-600 bg-white relative flex items-center justify-center shadow-inner shrink-0">
-                    <div className="absolute w-0.5 h-5 bg-slate-800 top-3 left-[31px] origin-bottom rounded-full rotate-45"></div>
-                    <div className="absolute w-0.5 h-6 bg-indigo-600 top-2 left-[31px] origin-bottom rounded-full rotate-90"></div>
-                    <div className="w-2 h-2 rounded-full bg-rose-600 z-10"></div>
-                    <span className="absolute text-[7px] font-bold top-0.5 text-slate-600">12</span>
-                    <span className="absolute text-[7px] font-bold bottom-0.5 text-slate-600">6</span>
-                    <span className="absolute text-[7px] font-bold right-1 text-slate-600">3</span>
-                    <span className="absolute text-[7px] font-bold left-1 text-slate-600">9</span>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">Simulasi Jam Ujian</p>
-                    <p className="text-[11px] text-indigo-600 font-semibold">{sessionTime}</p>
-                    <p className="text-[10px] text-slate-500">Berjalan sesuai standar CBT</p>
-                  </div>
-                </div>
+              {/* 3. Waktu Pelaksanaan */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  3. Waktu Pelaksanaan (Jam &amp; Durasi):
+                </label>
+                <input
+                  type="text"
+                  value={sessionTime}
+                  onChange={(e) => setSessionTime(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
+                  placeholder="Contoh: 07.30 - 09.30 WIB"
+                />
               </div>
 
-              {/* 4. Hari & Tanggal Pelaksanaan (Bentuk Kalender) */}
+              {/* 4. Hari & Tanggal Pelaksanaan */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
                   4. Hari &amp; Tanggal Pelaksanaan (Pilih Kalender):
@@ -717,7 +735,7 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
                     className="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
                   />
                   <div className="flex-1 p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900 font-semibold truncate">
-                    Hasil Format Resmi: {eventDate}
+                    Format: {eventDate}
                   </div>
                 </div>
               </div>
@@ -749,10 +767,10 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
                 </div>
               </div>
 
-              {/* Ruangan */}
+              {/* 6. Ruangan */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Ruang Ujian / Laboratorium:
+                  6. Ruang Ujian / Laboratorium:
                 </label>
                 <input
                   type="text"
@@ -762,17 +780,85 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
                 />
               </div>
 
+              {/* 7. Input Tambah Siswa Tidak Hadir */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800">
+                    7. Daftar Peserta Didik Tidak Hadir:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAutoDetectAbsent}
+                    className="text-[11px] text-purple-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <UserX className="w-3 h-3" /> Auto-Isi Siswa Belum Ujian
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <input
+                    type="text"
+                    value={newAbsentName}
+                    onChange={(e) => setNewAbsentName(e.target.value)}
+                    placeholder="Nama Siswa..."
+                    className="sm:col-span-2 text-xs bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-800"
+                  />
+                  <select
+                    value={newAbsentReason}
+                    onChange={(e: any) => setNewAbsentReason(e.target.value)}
+                    className="text-xs bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-slate-800"
+                  >
+                    <option value="Sakit">Sakit</option>
+                    <option value="Izin">Izin</option>
+                    <option value="Tanpa Keterangan">Tanpa Keterangan</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddAbsent}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah
+                  </button>
+                </div>
+
+                {absentList.length > 0 && (
+                  <div className="space-y-1.5 mt-2">
+                    {absentList.map(a => (
+                      <div key={a.id} className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200 text-xs">
+                        <div>
+                          <span className="font-bold text-slate-800">{a.name}</span>
+                          <span className="text-slate-500 ml-2">({a.classGroup})</span>
+                          <span className="ml-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            {a.reason}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAbsent(a.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             </div>
 
             {/* Footer Modal */}
             <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
               <button
                 type="button"
-                onClick={() => setIsConfigModalOpen(false)}
+                onClick={() => {
+                  setIsConfigModalOpen(false);
+                  handleSaveToSupabase();
+                }}
                 className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-md flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                <span>Simpan &amp; Terapkan ke Berita Acara</span>
+                <span>Simpan &amp; Terapkan ke Supabase</span>
               </button>
             </div>
 
@@ -780,7 +866,82 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
         </div>
       )}
 
-      {/* Print Preview Modal Integration */}
+      {/* ========================================================= */}
+      {/* POPUP MODAL 2: CODING SQL DATABASE SUPABASE              */}
+      {/* ========================================================= */}
+      {isSqlModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 no-print">
+          <div className="bg-slate-900 text-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-300">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Coding SQL Database Supabase</h3>
+                  <p className="text-xs text-slate-400">Skrip DDL &amp; RLS Tabel Berita Acara Kegiatan Ujian (cbt_berita_acara)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSqlModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body Modal */}
+            <div className="p-6 space-y-4 overflow-y-auto text-xs">
+              <div className="bg-indigo-950/60 border border-indigo-500/30 rounded-2xl p-4 text-indigo-200 flex items-start gap-3">
+                <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold text-white text-sm">Petunjuk Penggunaan SQL di Supabase:</p>
+                  <p className="text-xs text-indigo-200/90 leading-relaxed">
+                    1. Buka dashboard proyek Supabase Anda di menu <strong>SQL Editor</strong>.
+                  </p>
+                  <p className="text-xs text-indigo-200/90 leading-relaxed">
+                    2. Klik tombol <strong>"Salin Seluruh Skrip SQL"</strong> di bawah, lalu tempel (paste) dan klik <strong>Run</strong>.
+                  </p>
+                  <p className="text-xs text-indigo-200/90 leading-relaxed">
+                    3. Skrip ini sudah mencakup pembuatan tabel, pengindeksan, Row Level Security (RLS) akses publik, dan publikasi Realtime.
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative">
+                <pre className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-purple-300 font-mono text-[11px] overflow-x-auto max-h-80 leading-relaxed select-all">
+                  {SUPABASE_BERITA_ACARA_TABLE_SQL}
+                </pre>
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-slate-800 border-t border-slate-700">
+              <span className="text-[11px] text-slate-400">
+                Tabel Target: <code className="text-purple-300 font-mono">public.cbt_berita_acara</code>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>{copiedSqlNotification ? 'Skrip SQL Berhasil Disalin!' : 'Salin Seluruh Skrip SQL'}</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* PRINT PREVIEW MODAL INTEGRATION                           */}
+      {/* ========================================================= */}
       <PrintPreviewModal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
@@ -788,15 +949,16 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
         title={`Berita Acara Pelaksanaan Ujian - ${currentExam?.subjectName || 'CBT'}`}
       >
         <div className="font-serif text-black leading-relaxed">
-          <OfficialLetterhead judulDokumen="BERITA ACARA PELAKSANAAN KEGIATAN ASESMEN / UJIAN SISWA" />
+          <OfficialLetterhead
+            judulDokumen="BERITA ACARA PELAKSANAAN KEGIATAN ASESMEN / UJIAN SISWA"
+            subJudulDokumen="TAHUN AJARAN 2025/2026 - SEMESTER GANJIL"
+          />
 
-          <div className="text-xs sm:text-sm text-justify space-y-2 mt-4">
-            <p>
-              Pada hari ini <strong>{eventDate}</strong>, bertempat di <strong>UPT SMP Negeri 7 Pasuruan</strong>, telah diselenggarakan kegiatan Asesmen Berbasis Komputer / Penilaian Sumatif dengan rincian data sebagai berikut:
-            </p>
-          </div>
+          <p className="text-xs sm:text-sm text-justify my-2 indent-6">
+            Pada hari ini <strong>{eventDate}</strong>, telah dilaksanakan Kegiatan Asesmen Sumatif / Ujian Berbasis Komputer dan Smartphone (CBT) di lingkungan UPT SMP Negeri 7 Pasuruan dengan rincian sebagai berikut:
+          </p>
 
-          <table className="w-full text-xs sm:text-sm border-collapse border border-black my-4 table-fixed">
+          <table className="w-full text-xs sm:text-sm border-collapse border border-black my-2">
             <tbody>
               <tr>
                 <td className="p-2 border border-black font-bold w-[30%] bg-slate-50">Mata Pelajaran</td>
@@ -897,8 +1059,8 @@ export const BeritaAcaraExamReport: React.FC<BeritaAcaraExamReportProps> = ({
           <OfficialReportSignature
             teacherName={proctorName}
             teacherNip={proctorNip}
-            headmasterName="NUR FADILAH, S.Pd,.MPd"
-            headmasterNip="19860410 201001 2 030"
+            headmasterName={headmasterName}
+            headmasterNip={headmasterNip}
             location="Pasuruan"
             dateStr={eventDate}
           />

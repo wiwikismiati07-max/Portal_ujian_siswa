@@ -1,5 +1,5 @@
 import { supabase, SUPABASE_SETUP_SQL } from './supabaseClient';
-import { User, Subject, Exam, Question, ExamSubmission } from '../types';
+import { User, Subject, Exam, Question, ExamSubmission, BeritaAcaraExam, AbsentStudent } from '../types';
 import {
   getAllUsers,
   saveUsers,
@@ -287,6 +287,71 @@ export const mapSubmissionFromDb = (row: any): ExamSubmission => {
     evaluatedAnswers
   };
 };
+
+export const mapBeritaAcaraToDb = (b: BeritaAcaraExam) => ({
+  id: b.id,
+  exam_id: b.examId,
+  exam_title: b.examTitle,
+  subject_name: b.subjectName,
+  target_classes: b.targetClasses || [],
+  academic_year: b.academicYear || '2025/2026',
+  semester: b.semester || 'Ganjil',
+  event_date_iso: b.eventDateIso,
+  event_date: b.eventDate,
+  session_time: b.sessionTime,
+  session_name: b.sessionName,
+  room_location: b.roomLocation,
+  proctor_name: b.proctorName,
+  proctor_nip: b.proctorNip || null,
+  headmaster_name: b.headmasterName || 'NUR FADILAH, S.Pd,.MPd',
+  headmaster_nip: b.headmasterNip || '19860410 201001 2 030',
+  total_registered: b.totalRegistered || 0,
+  total_present: b.totalPresent || 0,
+  total_absent: b.totalAbsent || 0,
+  attendance_percentage: b.attendancePercentage || 0,
+  absent_students: b.absentStudents || [],
+  condition_notes: b.conditionNotes || '',
+  technical_issues: b.technicalIssues || '',
+  proctor_action: b.proctorAction || '',
+  signature_proctor: b.signatureProctor || null,
+  signature_headmaster: b.signatureHeadmaster || null,
+  status: b.status || 'final',
+  created_by: b.createdBy || null,
+  updated_at: new Date().toISOString()
+});
+
+export const mapBeritaAcaraFromDb = (row: any): BeritaAcaraExam => ({
+  id: row.id,
+  examId: row.exam_id,
+  examTitle: row.exam_title,
+  subjectName: row.subject_name,
+  targetClasses: Array.isArray(row.target_classes) ? row.target_classes : [],
+  academicYear: row.academic_year || '2025/2026',
+  semester: row.semester || 'Ganjil',
+  eventDateIso: row.event_date_iso || '',
+  eventDate: row.event_date || '',
+  sessionTime: row.session_time || '',
+  sessionName: row.session_name || '',
+  roomLocation: row.room_location || '',
+  proctorName: row.proctor_name || '',
+  proctorNip: row.proctor_nip || undefined,
+  headmasterName: row.headmaster_name || 'NUR FADILAH, S.Pd,.MPd',
+  headmasterNip: row.headmaster_nip || '19860410 201001 2 030',
+  totalRegistered: Number(row.total_registered) || 0,
+  totalPresent: Number(row.total_present) || 0,
+  totalAbsent: Number(row.total_absent) || 0,
+  attendancePercentage: Number(row.attendance_percentage) || 0,
+  absentStudents: Array.isArray(row.absent_students) ? row.absent_students : [],
+  conditionNotes: row.condition_notes || '',
+  technicalIssues: row.technical_issues || '',
+  proctorAction: row.proctor_action || '',
+  signatureProctor: row.signature_proctor || undefined,
+  signatureHeadmaster: row.signature_headmaster || undefined,
+  status: row.status || 'final',
+  createdBy: row.created_by || undefined,
+  createdAt: row.created_at || undefined,
+  updatedAt: row.updated_at || undefined
+});
 
 // ==========================================
 // CHUNKING HELPER FOR BULK OPERATIONS
@@ -965,6 +1030,128 @@ export const clearExamDraftFromSupabase = async (
     await supabase.from('cbt_sync_store').delete().eq('key', `draft_${examId}_${studentId}`);
   } catch {
     // Non-blocking
+  }
+};
+
+// ==========================================
+// BERITA ACARA KEGIATAN UJIAN SYNC HELPERS
+// ==========================================
+export const saveBeritaAcaraToSupabase = async (
+  beritaAcara: BeritaAcaraExam
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const dbRow = mapBeritaAcaraToDb(beritaAcara);
+    let syncSuccess = false;
+
+    // 1. Simpan ke tabel primer public.cbt_berita_acara
+    const { error: primaryErr } = await supabase
+      .from('cbt_berita_acara')
+      .upsert(dbRow as any);
+
+    if (!primaryErr) {
+      syncSuccess = true;
+    } else {
+      console.warn('Gagal simpan langsung ke cbt_berita_acara (mencoba fallback store):', primaryErr.message);
+    }
+
+    // 2. Simpan juga ke cbt_sync_store sebagai safety net / instant fallback
+    try {
+      await supabase.from('cbt_sync_store').upsert({
+        key: `berita_acara_${beritaAcara.id}`,
+        value: beritaAcara,
+        updated_at: new Date().toISOString()
+      });
+      syncSuccess = true;
+    } catch (storeErr) {
+      console.warn('Gagal backup ke cbt_sync_store:', storeErr);
+    }
+
+    broadcastCbtEvent('berita_acara_saved', { id: beritaAcara.id, examId: beritaAcara.examId });
+    return { success: syncSuccess };
+  } catch (err: any) {
+    console.error('Error saving Berita Acara to Supabase:', err);
+    return { success: false, error: err?.message || 'Gagal menyimpan Berita Acara ke Supabase' };
+  }
+};
+
+export const fetchBeritaAcaraListFromSupabase = async (
+  examId?: string
+): Promise<BeritaAcaraExam[]> => {
+  try {
+    // Coba ambil dari cbt_berita_acara
+    let query = supabase.from('cbt_berita_acara').select('*').order('updated_at', { ascending: false });
+    if (examId) {
+      query = query.eq('exam_id', examId);
+    }
+    const { data, error } = await query;
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data.map(mapBeritaAcaraFromDb);
+    }
+
+    // Fallback: Ambil dari cbt_sync_store
+    const { data: storeRows, error: storeErr } = await supabase
+      .from('cbt_sync_store')
+      .select('key, value')
+      .like('key', 'berita_acara_%');
+
+    if (!storeErr && Array.isArray(storeRows)) {
+      const parsed: BeritaAcaraExam[] = storeRows
+        .map(r => r.value)
+        .filter(v => v && typeof v === 'object' && v.id)
+        .filter(v => (examId ? v.examId === examId : true));
+      return parsed;
+    }
+
+    return [];
+  } catch (err) {
+    console.warn('Error fetching Berita Acara from Supabase:', err);
+    return [];
+  }
+};
+
+export const fetchSingleBeritaAcaraFromSupabase = async (
+  id: string
+): Promise<BeritaAcaraExam | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('cbt_berita_acara')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!error && data) {
+      return mapBeritaAcaraFromDb(data);
+    }
+
+    // Fallback ke sync_store
+    const { data: storeRow } = await supabase
+      .from('cbt_sync_store')
+      .select('value')
+      .eq('key', `berita_acara_${id}`)
+      .maybeSingle();
+
+    if (storeRow && storeRow.value) {
+      return storeRow.value as BeritaAcaraExam;
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Error fetching single Berita Acara:', err);
+    return null;
+  }
+};
+
+export const deleteBeritaAcaraFromSupabase = async (id: string): Promise<boolean> => {
+  try {
+    await supabase.from('cbt_berita_acara').delete().eq('id', id);
+    try {
+      await supabase.from('cbt_sync_store').delete().eq('key', `berita_acara_${id}`);
+    } catch {}
+    broadcastCbtEvent('berita_acara_deleted', { id });
+    return true;
+  } catch (err) {
+    console.warn('Error deleting Berita Acara from Supabase:', err);
+    return false;
   }
 };
 

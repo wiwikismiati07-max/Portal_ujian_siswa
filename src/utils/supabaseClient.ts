@@ -190,6 +190,44 @@ CREATE INDEX IF NOT EXISTS idx_cbt_rekap_student_class ON public.cbt_rekap_nilai
 CREATE INDEX IF NOT EXISTS idx_cbt_rekap_subject_name ON public.cbt_rekap_nilai_siswa(subject_name);
 CREATE INDEX IF NOT EXISTS idx_cbt_rekap_exam_id ON public.cbt_rekap_nilai_siswa(exam_id);
 
+-- 8. TABEL BERITA ACARA KEGIATAN UJIAN SISWA
+CREATE TABLE IF NOT EXISTS public.cbt_berita_acara (
+  id TEXT PRIMARY KEY,
+  exam_id TEXT NOT NULL,
+  exam_title TEXT NOT NULL,
+  subject_name TEXT NOT NULL,
+  target_classes JSONB DEFAULT '[]'::jsonb,
+  academic_year TEXT DEFAULT '2025/2026',
+  semester TEXT DEFAULT 'Ganjil',
+  event_date_iso TEXT,
+  event_date TEXT,
+  session_time TEXT,
+  session_name TEXT,
+  room_location TEXT,
+  proctor_name TEXT NOT NULL,
+  proctor_nip TEXT,
+  headmaster_name TEXT DEFAULT 'NUR FADILAH, S.Pd,.MPd',
+  headmaster_nip TEXT DEFAULT '19860410 201001 2 030',
+  total_registered INTEGER DEFAULT 0,
+  total_present INTEGER DEFAULT 0,
+  total_absent INTEGER DEFAULT 0,
+  attendance_percentage NUMERIC(5,2) DEFAULT 100.00,
+  absent_students JSONB DEFAULT '[]'::jsonb,
+  condition_notes TEXT,
+  technical_issues TEXT,
+  proctor_action TEXT,
+  signature_proctor TEXT,
+  signature_headmaster TEXT,
+  status TEXT DEFAULT 'final',
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_exam_id ON public.cbt_berita_acara(exam_id);
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_event_date ON public.cbt_berita_acara(event_date_iso);
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_proctor ON public.cbt_berita_acara(proctor_name);
+
 -- ====================================================================
 -- ROW LEVEL SECURITY (RLS) & AKSES PUBLIK (ANON)
 -- ====================================================================
@@ -200,6 +238,7 @@ ALTER TABLE public.cbt_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_sync_store ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_rekap_nilai_siswa ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cbt_berita_acara ENABLE ROW LEVEL SECURITY;
 
 DO $$ 
 BEGIN
@@ -211,6 +250,7 @@ BEGIN
   DROP POLICY IF EXISTS "cbt_submissions_all" ON public.cbt_submissions;
   DROP POLICY IF EXISTS "cbt_sync_store_all" ON public.cbt_sync_store;
   DROP POLICY IF EXISTS "cbt_rekap_nilai_siswa_all" ON public.cbt_rekap_nilai_siswa;
+  DROP POLICY IF EXISTS "cbt_berita_acara_all" ON public.cbt_berita_acara;
 
   -- Buat policy baru yang mengizinkan semua transaksi CBT
   CREATE POLICY "cbt_users_all" ON public.cbt_users FOR ALL USING (true) WITH CHECK (true);
@@ -220,6 +260,7 @@ BEGIN
   CREATE POLICY "cbt_submissions_all" ON public.cbt_submissions FOR ALL USING (true) WITH CHECK (true);
   CREATE POLICY "cbt_sync_store_all" ON public.cbt_sync_store FOR ALL USING (true) WITH CHECK (true);
   CREATE POLICY "cbt_rekap_nilai_siswa_all" ON public.cbt_rekap_nilai_siswa FOR ALL USING (true) WITH CHECK (true);
+  CREATE POLICY "cbt_berita_acara_all" ON public.cbt_berita_acara FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ====================================================================
@@ -288,6 +329,15 @@ BEGIN
     WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_rekap_nilai_siswa'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_rekap_nilai_siswa;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_berita_acara'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_berita_acara;
   END IF;
 END $$;
 `;
@@ -790,6 +840,83 @@ LEFT JOIN public.cbt_rekap_nilai_siswa r ON u.id = r.student_id
 WHERE u.role = 'siswa'
 GROUP BY u.id, u.nip_or_nis, u.name, u.class_group
 ORDER BY u.class_group ASC, u.name ASC;
+`;
+
+// ====================================================================
+// SKRIP SQL KHUSUS: TABEL BERITA ACARA KEGIATAN UJIAN SISWA (cbt_berita_acara)
+// ====================================================================
+export const SUPABASE_BERITA_ACARA_TABLE_SQL = `-- ====================================================================
+-- SKRIP STRUKTUR TABEL SUPABASE: BERITA ACARA KEGIATAN UJIAN SISWA
+-- Jalankan skrip ini di Supabase Dashboard -> SQL Editor
+-- Link: https://supabase.com/dashboard/project/omuhzeuzxfincumsnjrd/sql
+-- ====================================================================
+
+-- 1. Buat Tabel cbt_berita_acara jika belum ada
+CREATE TABLE IF NOT EXISTS public.cbt_berita_acara (
+  id TEXT PRIMARY KEY,
+  exam_id TEXT NOT NULL,
+  exam_title TEXT NOT NULL,
+  subject_name TEXT NOT NULL,
+  target_classes JSONB DEFAULT '[]'::jsonb,
+  academic_year TEXT DEFAULT '2025/2026',
+  semester TEXT DEFAULT 'Ganjil',
+  event_date_iso TEXT,
+  event_date TEXT,
+  session_time TEXT,
+  session_name TEXT,
+  room_location TEXT,
+  proctor_name TEXT NOT NULL,
+  proctor_nip TEXT,
+  headmaster_name TEXT DEFAULT 'NUR FADILAH, S.Pd,.MPd',
+  headmaster_nip TEXT DEFAULT '19860410 201001 2 030',
+  total_registered INTEGER DEFAULT 0,
+  total_present INTEGER DEFAULT 0,
+  total_absent INTEGER DEFAULT 0,
+  attendance_percentage NUMERIC(5,2) DEFAULT 100.00,
+  absent_students JSONB DEFAULT '[]'::jsonb,
+  condition_notes TEXT,
+  technical_issues TEXT,
+  proctor_action TEXT,
+  signature_proctor TEXT,
+  signature_headmaster TEXT,
+  status TEXT DEFAULT 'final',
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Tambahkan kolom jika tabel sudah pernah dibuat sebelumnya
+ALTER TABLE IF EXISTS public.cbt_berita_acara ADD COLUMN IF NOT EXISTS target_classes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.cbt_berita_acara ADD COLUMN IF NOT EXISTS absent_students JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.cbt_berita_acara ADD COLUMN IF NOT EXISTS signature_proctor TEXT;
+ALTER TABLE IF EXISTS public.cbt_berita_acara ADD COLUMN IF NOT EXISTS signature_headmaster TEXT;
+
+-- 3. Indeks Pencarian Cepat
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_exam_id ON public.cbt_berita_acara(exam_id);
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_event_date ON public.cbt_berita_acara(event_date_iso);
+CREATE INDEX IF NOT EXISTS idx_cbt_berita_acara_proctor ON public.cbt_berita_acara(proctor_name);
+
+-- 4. Aktifkan Row Level Security (RLS) & Kebijakan Akses Penuh
+ALTER TABLE public.cbt_berita_acara ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+  DROP POLICY IF EXISTS "cbt_berita_acara_all" ON public.cbt_berita_acara;
+  CREATE POLICY "cbt_berita_acara_all" ON public.cbt_berita_acara FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- 5. Tambahkan ke Realtime Publication
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr
+    JOIN pg_class pc ON pr.prrelid = pc.oid
+    JOIN pg_publication p ON pr.prpubid = p.oid
+    WHERE p.pubname = 'supabase_realtime' AND pc.relname = 'cbt_berita_acara'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cbt_berita_acara;
+  END IF;
+END $$;
 `;
 
 

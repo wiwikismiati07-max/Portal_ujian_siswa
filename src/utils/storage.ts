@@ -1,4 +1,4 @@
-import { User, Subject, Exam, Question, ExamSubmission, ViolationLog, AppLink } from '../types';
+import { User, Subject, Exam, Question, ExamSubmission, ViolationLog, AppLink, BeritaAcaraExam } from '../types';
 import { getMatchingData } from './matchingHelper';
 import {
   INITIAL_USERS,
@@ -24,6 +24,9 @@ import {
   syncSubmissionToSupabase,
   deleteSubmissionFromSupabase,
   clearAllExamsInSupabase,
+  saveBeritaAcaraToSupabase,
+  fetchBeritaAcaraListFromSupabase,
+  deleteBeritaAcaraFromSupabase,
   notifyDataUpdated
 } from './supabaseSync';
 import {
@@ -122,7 +125,8 @@ const STORAGE_KEYS = {
   EXAMS: 'cbt_exams_v2',
   QUESTIONS: 'cbt_questions_v2',
   SUBMISSIONS: 'cbt_submissions_v2',
-  APP_LINKS: 'cbt_app_links_v5'
+  APP_LINKS: 'cbt_app_links_v5',
+  BERITA_ACARA: 'cbt_berita_acara_v2'
 };
 
 // Safe storage access helper with memory cache fallback if localStorage fails
@@ -1110,4 +1114,56 @@ export const importAppLinksJSON = (jsonString: string): AppLink[] => {
     console.error('Failed to import app links:', err);
     throw new Error(err.message || 'Gagal membaca file JSON backup.');
   }
+};
+
+// ==========================================
+// BERITA ACARA KEGIATAN UJIAN STORAGE HELPERS
+// ==========================================
+export const getAllBeritaAcara = (): BeritaAcaraExam[] => {
+  return getStored<BeritaAcaraExam[]>(STORAGE_KEYS.BERITA_ACARA, []);
+};
+
+export const saveAllBeritaAcara = (items: BeritaAcaraExam[]): void => {
+  setStored(STORAGE_KEYS.BERITA_ACARA, items);
+  notifyDataUpdated();
+};
+
+export const saveBeritaAcara = async (
+  beritaAcara: BeritaAcaraExam,
+  syncToRemote = true
+): Promise<{ success: boolean; error?: string }> => {
+  const current = getAllBeritaAcara();
+  const existingIndex = current.findIndex(b => b.id === beritaAcara.id);
+  let updated: BeritaAcaraExam[];
+
+  if (existingIndex >= 0) {
+    updated = [...current];
+    updated[existingIndex] = { ...beritaAcara, updatedAt: new Date().toISOString() };
+  } else {
+    updated = [beritaAcara, ...current];
+  }
+
+  saveAllBeritaAcara(updated);
+
+  if (syncToRemote) {
+    return await saveBeritaAcaraToSupabase(beritaAcara);
+  }
+  return { success: true };
+};
+
+export const getBeritaAcaraById = (id: string): BeritaAcaraExam | undefined => {
+  const all = getAllBeritaAcara();
+  return all.find(b => b.id === id);
+};
+
+export const getBeritaAcaraByExam = (examId: string, sessionName?: string): BeritaAcaraExam | undefined => {
+  const all = getAllBeritaAcara();
+  return all.find(b => b.examId === examId && (sessionName ? b.sessionName === sessionName : true));
+};
+
+export const deleteBeritaAcara = async (id: string): Promise<boolean> => {
+  const current = getAllBeritaAcara();
+  const updated = current.filter(b => b.id !== id);
+  saveAllBeritaAcara(updated);
+  return await deleteBeritaAcaraFromSupabase(id);
 };

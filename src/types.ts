@@ -147,3 +147,44 @@ export interface ExamSubmission {
     }
   >;
 }
+
+export interface AbsentStudent {
+  id: string;
+  name: string;
+  classGroup: string;
+  reason: 'Sakit' | 'Izin' | 'Tanpa Keterangan';
+  notes?: string;
+}
+
+export interface BeritaAcaraExam {
+  id: string;
+  examId: string;
+  examTitle: string;
+  subjectName: string;
+  targetClasses: string[];
+  academicYear?: string;
+  semester?: string;
+  eventDateIso: string; // YYYY-MM-DD
+  eventDate: string; // "Senin, 28 September 2026"
+  sessionTime: string; // "07.30 - 09.30 WIB"
+  sessionName: string; // "Sesi 1 (Pagi)"
+  roomLocation: string; // "Laboratorium Komputer CBT 1"
+  proctorName: string;
+  proctorNip?: string;
+  headmasterName?: string;
+  headmasterNip?: string;
+  totalRegistered: number;
+  totalPresent: number;
+  totalAbsent: number;
+  attendancePercentage: number;
+  absentStudents: AbsentStudent[];
+  conditionNotes: string;
+  technicalIssues: string;
+  proctorAction: string;
+  signatureProctor?: string; // Base64 TTD digital pengawas
+  signatureHeadmaster?: string; // Base64 TTD digital kepala sekolah
+  status?: 'draft' | 'final' | 'verified';
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
