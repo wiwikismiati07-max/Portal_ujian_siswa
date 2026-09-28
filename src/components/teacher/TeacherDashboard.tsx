@@ -142,14 +142,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   const [searchSubjectQuery, setSearchSubjectQuery] = useState('');
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
     if (!selectedSubjectName) {
       const defaultSubj = activeTeacher.subjectName || allSubjectNamesList[0] || 'Ilmu Pengetahuan Alam (IPA)';
       setSelectedSubjectName(defaultSubj);
     }
-  }, [initialTab, activeTeacher, allSubjectNamesList]);
+  }, [activeTeacher, allSubjectNamesList]);
 
   // Confirm Modal state
   const [confirmDialog, setConfirmDialog] = useState<{
