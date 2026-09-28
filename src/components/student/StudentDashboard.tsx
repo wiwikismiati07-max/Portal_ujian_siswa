@@ -3,6 +3,13 @@ import { User, Exam, ExamSubmission, Subject } from '../../types';
 import { getAllExams, getAllSubmissions, getQuestionsByExamId, getAllSubjects } from '../../utils/storage';
 import { isStudentEligibleForExam } from '../../utils/classHelper';
 import {
+  formatWibDate,
+  formatWibTime,
+  formatWibDateTime,
+  isWibExamReady,
+  formatWibCountdown
+} from '../../utils/wibHelper';
+import {
   BookOpen,
   Clock,
   CheckCircle2,
@@ -59,58 +66,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
   // Helper: check whether an exam is ready to be taken based on teacher's locked upload release date
   const isExamReady = (exam: Exam, now: number = currentTime): boolean => {
-    const targetDateStr = exam.uploadDate || exam.createdAt;
-    if (!targetDateStr) return false;
-    const releaseTime = new Date(targetDateStr).getTime();
-    if (isNaN(releaseTime)) return false;
-    return now >= releaseTime;
+    return isWibExamReady(exam.uploadDate || exam.createdAt, now);
   };
 
-  // Helper: format remaining countdown until exam release
-  const formatCountdown = (dateStr: string, now: number): string => {
-    const target = new Date(dateStr).getTime();
-    if (isNaN(target)) return '0 detik';
-    const diff = target - now;
-    if (diff <= 0) return 'Waktu rilis telah tiba';
-    const totalSeconds = Math.floor(diff / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    if (days > 0) return `${days} hari ${hours} jam lagi`;
-    if (hours > 0) return `${hours} jam ${minutes} menit lagi`;
-    if (minutes > 0) return `${minutes} menit ${seconds} dtk lagi`;
-    return `${seconds} detik lagi`;
+  // Helper: format remaining countdown until exam release in WIB
+  const formatCountdown = (dateStr: string, now: number = currentTime): string => {
+    return formatWibCountdown(dateStr, now);
   };
 
   const formatScheduleDate = (dateStr?: string): string => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return '-';
-      return d.toLocaleDateString('id-ID', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-    } catch {
-      return '-';
-    }
+    return formatWibDate(dateStr);
   };
 
   const formatScheduleTime = (dateStr?: string): string => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return '-';
-      const hours = String(d.getHours()).padStart(2, '0');
-      const minutes = String(d.getMinutes()).padStart(2, '0');
-      return `${hours}:${minutes} WIB`;
-    } catch {
-      return '-';
-    }
+    return formatWibTime(dateStr);
   };
 
   // Filter exams that are active and targeted to this student's class

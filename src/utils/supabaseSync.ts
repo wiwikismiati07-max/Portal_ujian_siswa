@@ -448,23 +448,51 @@ export const pullFromSupabase = async (): Promise<void> => {
       .limit(500);
     if (!examsError && dbExams) {
       const existingLocal = getAllExams();
+      
+      // Also pull backup exams from cbt_sync_store to guarantee uploadDate is never lost
+      const syncStoreExams: Record<string, any> = {};
+      try {
+        const { data: storeRows } = await supabase
+          .from('cbt_sync_store')
+          .select('key, value')
+          .like('key', 'exam_%');
+        if (storeRows && storeRows.length > 0) {
+          for (const row of storeRows) {
+            const rawKey = row.key.replace(/^exam_/, '');
+            if (row.value && row.value.id) {
+              syncStoreExams[row.value.id] = row.value;
+            }
+            syncStoreExams[rawKey] = row.value;
+          }
+        }
+      } catch {}
+
       // Filter out deleted or stale mock exams
       const cleanExams = dbExams
         .map(row => {
           const mapped = mapExamFromDb(row);
-          // Preserve local uploadDate and lock state if not yet stored in DB
+          // Preserve uploadDate from cbt_sync_store or local
+          const syncStoreMatch = syncStoreExams[mapped.id];
           const localMatch = existingLocal.find(l => l.id === mapped.id);
-          if (!mapped.uploadDate && localMatch?.uploadDate) {
+
+          if (syncStoreMatch?.uploadDate) {
+            mapped.uploadDate = syncStoreMatch.uploadDate;
+          } else if (!mapped.uploadDate && localMatch?.uploadDate) {
             mapped.uploadDate = localMatch.uploadDate;
           }
-          if (!mapped.uploadDate && mapped.createdAt) {
-            mapped.uploadDate = mapped.createdAt;
-          }
-          if (mapped.isUploadDateLocked === undefined && localMatch?.isUploadDateLocked !== undefined) {
+
+          if (syncStoreMatch?.isUploadDateLocked !== undefined) {
+            mapped.isUploadDateLocked = syncStoreMatch.isUploadDateLocked;
+          } else if (mapped.isUploadDateLocked === undefined && localMatch?.isUploadDateLocked !== undefined) {
             mapped.isUploadDateLocked = localMatch.isUploadDateLocked;
           } else if (mapped.isUploadDateLocked === undefined) {
             mapped.isUploadDateLocked = true;
           }
+
+          if (!mapped.uploadDate && mapped.createdAt) {
+            mapped.uploadDate = mapped.createdAt;
+          }
+
           return mapped;
         })
         .filter(

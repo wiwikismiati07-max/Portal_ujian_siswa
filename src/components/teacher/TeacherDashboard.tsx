@@ -31,6 +31,14 @@ import { CopyFromOtherTeacherModal } from './CopyFromOtherTeacherModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { TargetClassMultiSelect, ALL_ROMPEL_CLASSES } from './TargetClassMultiSelect';
 import {
+  toWibInputValue,
+  wibInputToIsoString,
+  formatWibDate,
+  formatWibTime,
+  formatWibDateTime,
+  isWibExamReady
+} from '../../utils/wibHelper';
+import {
   FileText,
   BarChart3,
   Plus,
@@ -203,30 +211,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   const [newExamPassingScore, setNewExamPassingScore] = useState(75);
   const [newExamClasses, setNewExamClasses] = useState<string[]>(['7A', '7B']);
   const [newExamInstructions, setNewExamInstructions] = useState('Kerjakan soal dengan cermat dan jujur.');
-  const [newExamUploadDate, setNewExamUploadDate] = useState<string>(() => {
-    const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-    return d.toISOString().slice(0, 16);
-  });
+  const [newExamUploadDate, setNewExamUploadDate] = useState<string>(() => toWibInputValue());
   const [isExamUploadDateLocked, setIsExamUploadDateLocked] = useState<boolean>(true);
-
-  // Helper to safely format ISO/Date string to local input format (YYYY-MM-DDTHH:mm)
-  const toLocalInputValue = (isoString?: string): string => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    if (!isoString) {
-      const d = new Date();
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
-    try {
-      const d = new Date(isoString);
-      if (isNaN(d.getTime())) {
-        return isoString.slice(0, 16);
-      }
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    } catch {
-      const d = new Date();
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    }
-  };
 
   // Open modal for creating new exam
   const handleOpenCreateExam = () => {
@@ -240,8 +226,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setNewExamPassingScore(75);
     setNewExamClasses(['7A', '7B']);
     setNewExamInstructions('Kerjakan soal dengan cermat dan jujur.');
-    const localNow = toLocalInputValue();
-    setNewExamUploadDate(localNow);
+    const wibNow = toWibInputValue();
+    setNewExamUploadDate(wibNow);
     setIsExamUploadDateLocked(false); // Editable when creating
     setIsCreateExamOpen(true);
   };
@@ -257,11 +243,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setNewExamInstructions(ex.instructions || '');
 
     // KUNCI TANGGAL & JAM RILIS AGAR TIDAK MENGIKUTI JAM REAL TIME
-    // Jika paket sudah memiliki tanggal rilis yang disimpan, tampilkan nilai yang tersimpan tersebut
+    // Jika paket sudah memiliki tanggal rilis yang disimpan, tampilkan nilai yang tersimpan dalam WIB
     if (ex.uploadDate) {
-      setNewExamUploadDate(toLocalInputValue(ex.uploadDate));
+      setNewExamUploadDate(toWibInputValue(ex.uploadDate));
     } else {
-      setNewExamUploadDate(toLocalInputValue(ex.createdAt));
+      setNewExamUploadDate(toWibInputValue(ex.createdAt));
     }
     // Set status jadwal: langsung dapat diedit oleh guru jika ingin mengatur ulang jam rilis
     setIsExamUploadDateLocked(false);
@@ -364,9 +350,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     const finalClasses = newExamClasses.length > 0 ? newExamClasses : ALL_ROMPEL_CLASSES;
     
     // Kunci tanggal & jam upload rilis:
-    // Selalu gunakan nilai yang ditentukan guru dari input newExamUploadDate
+    // Selalu gunakan nilai yang ditentukan guru dari input newExamUploadDate (dikonversi presisi ke WIB)
     const uploadIso = newExamUploadDate
-      ? new Date(newExamUploadDate).toISOString()
+      ? wibInputToIsoString(newExamUploadDate)
       : (editingExam?.uploadDate || new Date().toISOString());
 
     if (editingExam) {
@@ -389,7 +375,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setEditingExam(null);
       showNotification(
         'success',
-        `Paket ujian "${updated.title}" berhasil disimpan! Jadwal rilis dikunci pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
+        `Paket ujian "${updated.title}" berhasil disimpan! Jadwal rilis dikunci pada ${formatWibDateTime(uploadIso)}. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
       );
     } else {
       const newExam: Exam = {
@@ -417,7 +403,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setNewExamClasses(['7A', '7B']);
       showNotification(
         'success',
-        `Paket ujian "${newExam.title}" berhasil dibuat! Jadwal rilis dikunci pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
+        `Paket ujian "${newExam.title}" berhasil dibuat! Jadwal rilis dikunci pada ${formatWibDateTime(uploadIso)}. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
       );
     }
   };
@@ -975,18 +961,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                             </div>
                             <div className="text-indigo-900 font-extrabold text-xs pl-5">
                               {ex.uploadDate
-                                ? new Date(ex.uploadDate).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) + ' WIB'
+                                ? formatWibDateTime(ex.uploadDate)
                                 : 'Langsung Aktif'}
                             </div>
                             <div className="pl-5 pt-0.5 text-[11px]">
-                              {ex.uploadDate && new Date(ex.uploadDate).getTime() > Date.now() ? (
-                                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
-                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                  <span>Belum Rilis (Siswa baru dapat membuka soal saat waktu rilis tiba)</span>
+                              {ex.uploadDate && !isWibExamReady(ex.uploadDate) ? (
+                                <span className="inline-flex items-center gap-1.5 text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                                  <span>Belum Rilis (Soal otomatis siap dikerjakan siswa pukul {formatWibTime(ex.uploadDate)})</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                   <span>Sudah Rilis (Soal siap dikerjakan oleh siswa)</span>
                                 </span>
                               )}

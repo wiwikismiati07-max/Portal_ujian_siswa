@@ -3,6 +3,7 @@ import { Exam, Question, Subject, User } from '../../types';
 import { copyExamWithQuestionsDirect, getAllUsers } from '../../utils/storage';
 import { isSameTeacher } from '../../utils/userDeduplication';
 import { TargetClassMultiSelect } from './TargetClassMultiSelect';
+import { toWibInputValue, wibInputToIsoString } from '../../utils/wibHelper';
 import {
   X,
   Copy,
@@ -135,7 +136,7 @@ export const CopyFromOtherTeacherModal: React.FC<CopyFromOtherTeacherModalProps>
     setDurationMinutes(exam.durationMinutes || 45);
     setPassingScore(exam.passingScore || 75);
     setInstructions(exam.instructions || 'Kerjakan soal dengan cermat dan jujur.');
-    setUploadDate(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setUploadDate(toWibInputValue(exam.uploadDate || undefined));
     setErrorMessage(null);
   };
 
@@ -165,7 +166,7 @@ export const CopyFromOtherTeacherModal: React.FC<CopyFromOtherTeacherModalProps>
         targetSubjectName: chosenSubject?.name || selectedExam.subjectName,
         durationMinutes,
         passingScore,
-        uploadDate: new Date(uploadDate).toISOString(),
+        uploadDate: wibInputToIsoString(uploadDate),
         instructions
       });
 

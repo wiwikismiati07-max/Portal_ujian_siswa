@@ -25,6 +25,7 @@ import { SupabaseSyncBanner } from './components/SupabaseSyncBanner';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ManualBookModal } from './components/common/ManualBookModal';
 import { HotlineModal } from './components/common/HotlineModal';
+import { formatWibDateTime, isWibExamReady } from './utils/wibHelper';
 import { AlertCircle, BookOpen, PhoneCall } from 'lucide-react';
 
 export default function App() {
@@ -92,25 +93,12 @@ export default function App() {
 
   const handleStartExam = (exam: Exam) => {
     const targetDateStr = exam.uploadDate || exam.createdAt;
-    if (targetDateStr) {
-      const releaseTime = new Date(targetDateStr).getTime();
-      if (!isNaN(releaseTime) && Date.now() < releaseTime) {
-        const d = new Date(targetDateStr);
-        const hours = String(d.getHours()).padStart(2, '0');
-        const minutes = String(d.getMinutes()).padStart(2, '0');
-        const timeFormatted = `${hours}:${minutes} WIB`;
-        const dateFormatted = d.toLocaleDateString('id-ID', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        });
-        setAppAlert(
-          `Paket ujian "${exam.title}" belum dapat dikerjakan. Siswa hanya dapat mulai mengerjakan jika jam untuk mengerjakan sudah terbuka sesuai setting jam upload rilis guru pada ${dateFormatted} pukul ${timeFormatted}.`
-        );
-        setTimeout(() => setAppAlert(null), 7000);
-        return;
-      }
+    if (targetDateStr && !isWibExamReady(targetDateStr)) {
+      setAppAlert(
+        `Paket ujian "${exam.title}" belum dapat dikerjakan. Siswa hanya dapat mulai mengerjakan jika jam untuk mengerjakan sudah terbuka sesuai setting jam upload rilis guru pada ${formatWibDateTime(targetDateStr)}.`
+      );
+      setTimeout(() => setAppAlert(null), 7000);
+      return;
     }
     const questions = getQuestionsByExamId(exam.id);
     if (questions.length === 0) {
