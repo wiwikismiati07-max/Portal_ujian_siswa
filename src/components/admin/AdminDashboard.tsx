@@ -3,6 +3,8 @@ import { User, UserRole, Subject, Exam, ExamSubmission } from '../../types';
 import {
   getAllUsers,
   saveUsers,
+  saveUserDirect,
+  refreshUsersFromSupabase,
   getAllSubjects,
   getAllExams,
   getAllSubmissions,
@@ -118,11 +120,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
 
   // Global Notification state
   const [notification, setNotification] = useState<{
-    type: 'success' | 'error';
+    type: 'success' | 'error' | 'warning';
     message: string;
   } | null>(null);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
+  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
     setNotification({ type, message });
     setTimeout(() => {
       setNotification(prev => (prev?.message === message ? null : prev));
@@ -148,6 +150,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const [formNipNis, setFormNipNis] = useState('');
   const [formClassOrSubject, setFormClassOrSubject] = useState('7-A');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
 
   // Available classes for filter
   const availableClasses = useMemo(() => {
@@ -296,62 +300,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     });
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formUsername.trim() || !formName.trim()) return;
 
-    if (editingUser) {
-      const res = updateUserCredentials(
-        editingUser.id,
-        formUsername.trim(),
-        formPassword.trim() || undefined,
-        formName.trim()
-      );
+    setIsSavingUser(true);
+    setMsg(null);
 
-      if (!res.success) {
-        setMsg({ type: 'error', text: res.message });
-        return;
-      }
-
-      // Update role/class too
-      const currentUsers = getAllUsers().map(u => {
-        if (u.id === editingUser.id) {
-          return {
-            ...u,
-            role: formRole,
-            nipOrNis: formNipNis.trim(),
-            classGroup: formRole === 'siswa' ? formClassOrSubject.trim() : undefined,
-            subjectName: formRole === 'guru' ? formClassOrSubject.trim() : undefined
-          };
+    try {
+      if (editingUser) {
+        // Check username uniqueness if changed
+        const checkDuplicates = users.some(
+          u => u.id !== editingUser.id && u.username.toLowerCase() === formUsername.trim().toLowerCase()
+        );
+        if (checkDuplicates) {
+          setMsg({ type: 'error', text: 'Username sudah digunakan oleh akun lain.' });
+          setIsSavingUser(false);
+          return;
         }
-        return u;
-      });
-      saveUsers(currentUsers, true);
-      setUsers(currentUsers);
-      setIsAddUserOpen(false);
-      showNotification('success', 'Data akun berhasil diperbarui.');
-    } else {
-      if (users.some(u => u.username.toLowerCase() === formUsername.trim().toLowerCase())) {
-        setMsg({ type: 'error', text: 'Username tersebut sudah terdaftar.' });
-        return;
+
+        const userToUpdate: User = {
+          ...editingUser,
+          name: formName.trim(),
+          username: formUsername.trim(),
+          password: formPassword.trim() || editingUser.password,
+          role: formRole,
+          nipOrNis: formNipNis.trim(),
+          classGroup: formRole === 'siswa' ? formClassOrSubject.trim() : undefined,
+          subjectName: formRole === 'guru' ? formClassOrSubject.trim() : undefined
+        };
+
+        const res = await saveUserDirect(userToUpdate);
+        setUsers(getAllUsers());
+        setIsAddUserOpen(false);
+
+        if (res.success) {
+          showNotification('success', `✅ Data "${userToUpdate.name}" berhasil disimpan langsung ke database Supabase Cloud!`);
+        } else {
+          showNotification('warning', `Data diperbarui lokal (${res.error || 'Cek koneksi database'}).`);
+        }
+      } else {
+        if (users.some(u => u.username.toLowerCase() === formUsername.trim().toLowerCase())) {
+          setMsg({ type: 'error', text: 'Username tersebut sudah terdaftar.' });
+          setIsSavingUser(false);
+          return;
+        }
+
+        const newUser: User = {
+          id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: formName.trim(),
+          username: formUsername.trim(),
+          password: formPassword.trim() || '123456',
+          role: formRole,
+          nipOrNis: formNipNis.trim(),
+          classGroup: formRole === 'siswa' ? formClassOrSubject.trim() : undefined,
+          subjectName: formRole === 'guru' ? formClassOrSubject.trim() : undefined
+        };
+
+        // Direct immediate cloud write to Supabase table cbt_users
+        const res = await saveUserDirect(newUser);
+        setUsers(getAllUsers());
+        setIsAddUserOpen(false);
+
+        if (res.success) {
+          showNotification('success', `✅ Siswa/Pengguna "${newUser.name}" (@${newUser.username}) berhasil disimpan langsung ke database Supabase Cloud!`);
+        } else {
+          showNotification('warning', `Data tersimpan lokal (${res.error || 'Cek koneksi database'}).`);
+        }
       }
+    } catch (err: any) {
+      setMsg({ type: 'error', text: err?.message || 'Gagal menyimpan akun ke database.' });
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
 
-      const newUser: User = {
-        id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        name: formName.trim(),
-        username: formUsername.trim(),
-        password: formPassword.trim() || '123456',
-        role: formRole,
-        nipOrNis: formNipNis.trim(),
-        classGroup: formRole === 'siswa' ? formClassOrSubject.trim() : undefined,
-        subjectName: formRole === 'guru' ? formClassOrSubject.trim() : undefined
-      };
-
-      const updated = [...users, newUser];
-      saveUsers(updated, true);
-      setUsers(updated);
-      setIsAddUserOpen(false);
-      showNotification('success', `Akun baru "${newUser.name}" berhasil ditambahkan.`);
+  const handleRefreshFromSupabase = async () => {
+    setIsRefreshingUsers(true);
+    try {
+      const res = await refreshUsersFromSupabase();
+      if (res.success) {
+        setUsers(res.users);
+        showNotification('success', `Berhasil menyinkronkan & menarik ${res.users.length} data pengguna langsung dari Supabase Cloud!`);
+      } else {
+        showNotification('warning', `Gagal menarik dari Supabase: ${res.error || 'Cek koneksi'}`);
+      }
+    } catch (err: any) {
+      showNotification('error', `Error sinkronisasi: ${err.message}`);
+    } finally {
+      setIsRefreshingUsers(false);
     }
   };
 
@@ -397,11 +434,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl border text-xs sm:text-sm font-semibold max-w-md ${
               notification.type === 'success'
                 ? 'bg-emerald-900 text-white border-emerald-700 shadow-emerald-950/20'
+                : notification.type === 'warning'
+                ? 'bg-amber-900 text-white border-amber-700 shadow-amber-950/20'
                 : 'bg-rose-900 text-white border-rose-700 shadow-rose-950/20'
             }`}
           >
             {notification.type === 'success' ? (
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : notification.type === 'warning' ? (
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
             ) : (
               <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
             )}
@@ -552,7 +593,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
                 </span>
               </div>
               <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                Terdapat data akun dengan NIP atau Nama yang sama. Klik tombol <strong>"Bersihkan Duplikat Sekarang"</strong> untuk otomatis menindih data ganda menjadi satu baris bersih dan menyinkronkan Supabase Cloud.
+                Terdapat data akun dengan Username, NIS/Kelas atau NIP yang sama persis. Klik tombol <strong>"Bersihkan Duplikat Sekarang"</strong> untuk otomatis menggabungkan data ganda dan menyinkronkan Supabase Cloud.
               </p>
             </div>
           </div>
@@ -717,6 +758,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
               <strong>{filteredUsers.length}</strong> akun terdaftar
             </span>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshFromSupabase}
+                disabled={isRefreshingUsers}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                title="Tarik data akun terbaru langsung dari Supabase Cloud"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshingUsers ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isRefreshingUsers ? 'Menyinkronkan...' : 'Sync Cloud'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => handleOpenAdd(roleFilter === 'guru' ? 'guru' : roleFilter === 'admin' ? 'admin' : 'siswa')}
@@ -1183,16 +1234,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
                 <button
                   type="button"
                   onClick={() => setIsAddUserOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer"
+                  disabled={isSavingUser}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-rose-900 hover:bg-rose-800 text-white font-bold rounded-xl transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
+                  disabled={isSavingUser}
+                  className="px-5 py-2.5 bg-rose-900 hover:bg-rose-800 active:scale-95 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{editingUser ? 'Simpan Perubahan' : formRole === 'siswa' ? 'Simpan Siswa' : 'Tambah Akun'}</span>
+                  {isSavingUser ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Menyimpan ke Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{editingUser ? 'Simpan ke Supabase' : formRole === 'siswa' ? 'Simpan Siswa ke Supabase' : 'Tambah Akun ke Supabase'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

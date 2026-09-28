@@ -49,13 +49,14 @@ export interface DeduplicationResult {
 }
 
 /**
- * Identifies and removes duplicate users based on NIP, Name, or Username.
- * Keeps the best/most complete record and marks others for deletion.
+ * Identifies and removes truly duplicate users (exact same ID, exact same username, or exact same NIS+Class for students, same NIP for teachers).
+ * Keeps legitimate students with the same name in different classes/NIS safe.
  */
 export const cleanAndDeduplicateUsers = (users: User[]): DeduplicationResult => {
-  const seenNip = new Map<string, User>();
-  const seenName = new Map<string, User>();
+  const seenId = new Set<string>();
   const seenUsername = new Map<string, User>();
+  const seenStudentNisClass = new Map<string, User>();
+  const seenTeacherNip = new Map<string, User>();
 
   const finalUsers: User[] = [];
   const removedUserIds: string[] = [];
@@ -74,29 +75,48 @@ export const cleanAndDeduplicateUsers = (users: User[]): DeduplicationResult => 
 
     // Never remove or merge admin accounts
     if (user.role === 'admin') {
-      finalUsers.push(user);
+      if (!seenId.has(user.id)) {
+        seenId.add(user.id);
+        finalUsers.push(user);
+      }
       continue;
     }
 
-    const nipKey = user.nipOrNis ? `${user.role}_nip_${normalizeNip(user.nipOrNis)}` : null;
-    const nameKey = user.name ? `${user.role}_name_${normalizeName(user.name)}` : null;
-    const userKey = user.username ? `${user.role}_user_${normalizeUsername(user.username)}` : null;
+    if (seenId.has(user.id)) {
+      removedUserIds.push(user.id);
+      continue;
+    }
+
+    const normUser = normalizeUsername(user.username);
+    const userKey = normUser ? `${user.role}_user_${normUser}` : null;
+    
+    // For students: check exact same NIS + Class
+    const normNis = normalizeNip(user.nipOrNis);
+    const normClass = user.classGroup ? user.classGroup.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+    const studentNisClassKey = (user.role === 'siswa' && normNis && normNis.length >= 3 && normClass)
+      ? `student_${normNis}_${normClass}`
+      : null;
+
+    // For teachers: check valid NIP
+    const teacherNipKey = (user.role === 'guru' && normNis && normNis.length >= 8)
+      ? `teacher_nip_${normNis}`
+      : null;
 
     let duplicateOf: User | undefined;
 
-    if (nipKey && seenNip.has(nipKey)) {
-      duplicateOf = seenNip.get(nipKey);
-    } else if (nameKey && seenName.has(nameKey)) {
-      duplicateOf = seenName.get(nameKey);
-    } else if (userKey && seenUsername.has(userKey)) {
+    if (userKey && seenUsername.has(userKey)) {
       duplicateOf = seenUsername.get(userKey);
+    } else if (studentNisClassKey && seenStudentNisClass.has(studentNisClassKey)) {
+      duplicateOf = seenStudentNisClass.get(studentNisClassKey);
+    } else if (teacherNipKey && seenTeacherNip.has(teacherNipKey)) {
+      duplicateOf = seenTeacherNip.get(teacherNipKey);
     }
 
     if (duplicateOf) {
-      // It's a duplicate! Decide whether to enrich the existing record or keep this one
+      // It's a true duplicate!
       removedUserIds.push(user.id);
 
-      // Merge better attributes into the kept record
+      // Merge better attributes into the kept record if missing
       if (!duplicateOf.nipOrNis && user.nipOrNis) duplicateOf.nipOrNis = user.nipOrNis;
       if (!duplicateOf.classGroup && user.classGroup) duplicateOf.classGroup = user.classGroup;
       if (!duplicateOf.subjectName && user.subjectName) duplicateOf.subjectName = user.subjectName;
@@ -104,17 +124,17 @@ export const cleanAndDeduplicateUsers = (users: User[]): DeduplicationResult => 
         if (user.password && user.password !== '123456') duplicateOf.password = user.password;
       }
     } else {
-      // Clean up username format
       const cleanedUser: User = {
         ...user,
         username: normalizeUsername(user.username) || user.username
       };
 
+      seenId.add(user.id);
       finalUsers.push(cleanedUser);
 
-      if (nipKey) seenNip.set(nipKey, cleanedUser);
-      if (nameKey) seenName.set(nameKey, cleanedUser);
       if (userKey) seenUsername.set(userKey, cleanedUser);
+      if (studentNisClassKey) seenStudentNisClass.set(studentNisClassKey, cleanedUser);
+      if (teacherNipKey) seenTeacherNip.set(teacherNipKey, cleanedUser);
     }
   }
 

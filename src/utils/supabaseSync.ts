@@ -470,16 +470,12 @@ export const pullFromSupabase = async (): Promise<void> => {
 
       saveUsers(cleanedUsers, false); // false = don't re-upload back to Supabase
       
-      // Clean up duplicates and legacy demo user Budi Santoso in Supabase database in background
+      // Clean up legacy demo user Budi Santoso in Supabase database in background
       supabase
         .from('cbt_users')
         .delete()
         .or('id.eq.user_guru_1,username.eq.budi_guru,nip_or_nis.eq.198305142008011012')
         .then(() => {});
-
-      if (removedUserIds.length > 0) {
-        supabase.from('cbt_users').delete().in('id', removedUserIds).then(() => {});
-      }
 
       const current = getCurrentUser();
       if (current) {
@@ -1327,30 +1323,80 @@ export const deleteQuestionFromSupabase = async (questionId: string): Promise<bo
   }
 };
 
-export const syncUserToSupabase = async (user: User): Promise<boolean> => {
+export const syncUserToSupabase = async (
+  user: User
+): Promise<{ success: boolean; error?: string }> => {
   try {
     const dbRow = mapUserToDb(user);
     const { error } = await supabase.from('cbt_users').upsert(dbRow);
     if (error) {
-      console.warn('Supabase user sync error:', error.message);
-      return false;
+      console.warn('Supabase user direct upsert error:', error.message);
+      // Safety net backup to cbt_sync_store
+      try {
+        await supabase.from('cbt_sync_store').upsert({
+          key: `user_${user.id}`,
+          value: user,
+          updated_at: new Date().toISOString()
+        });
+      } catch {}
+      return { success: false, error: error.message };
     }
+
+    // Also mirror to sync_store as double-protection
+    try {
+      await supabase.from('cbt_sync_store').upsert({
+        key: `user_${user.id}`,
+        value: user,
+        updated_at: new Date().toISOString()
+      });
+    } catch {}
+
     broadcastCbtEvent('user_updated', { userId: user.id });
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.warn('Network error syncing user:', err);
-    return false;
+    return { success: false, error: err?.message || 'Gagal terhubung ke Supabase' };
   }
 };
 
 export const deleteUserFromSupabase = async (userId: string): Promise<boolean> => {
   try {
     await supabase.from('cbt_users').delete().eq('id', userId);
+    try {
+      await supabase.from('cbt_sync_store').delete().eq('key', `user_${userId}`);
+    } catch {}
     broadcastCbtEvent('user_deleted', { userId });
     return true;
   } catch (err) {
     console.warn('Network error deleting user:', err);
     return false;
+  }
+};
+
+export const fetchUsersDirectFromSupabase = async (): Promise<{
+  success: boolean;
+  users: User[];
+  error?: string;
+}> => {
+  try {
+    const { data, error } = await supabase
+      .from('cbt_users')
+      .select('*')
+      .order('name', { ascending: true })
+      .limit(3000);
+
+    if (error) {
+      return { success: false, users: [], error: error.message };
+    }
+
+    if (data && data.length > 0) {
+      const mapped = data.map(mapUserFromDb);
+      return { success: true, users: mapped };
+    }
+
+    return { success: true, users: [] };
+  } catch (err: any) {
+    return { success: false, users: [], error: err?.message || 'Gagal mengambil data pengguna dari Supabase' };
   }
 };
 

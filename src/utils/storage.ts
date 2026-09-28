@@ -11,6 +11,7 @@ import {
   syncUserToSupabase,
   syncUsersBatchToSupabase,
   deleteUserFromSupabase,
+  fetchUsersDirectFromSupabase,
   syncSubjectToSupabase,
   syncSubjectsBatchToSupabase,
   deleteSubjectFromSupabase,
@@ -262,6 +263,53 @@ export const updateUserCredentials = (
   }
 
   return { success: true, message: 'Kredensial berhasil diperbarui!', updatedUser: user };
+};
+
+export const saveUserDirect = async (
+  user: User
+): Promise<{ success: boolean; error?: string }> => {
+  // 1. Direct immediate save to Supabase
+  const syncRes = await syncUserToSupabase(user);
+
+  // 2. Update local state & storage immediately
+  const currentUsers = getAllUsers();
+  const existingIdx = currentUsers.findIndex(u => u.id === user.id);
+  let updatedUsers: User[];
+  if (existingIdx !== -1) {
+    updatedUsers = [...currentUsers];
+    updatedUsers[existingIdx] = user;
+  } else {
+    updatedUsers = [user, ...currentUsers];
+  }
+
+  memoryUsersCache = updatedUsers;
+  setStored(STORAGE_KEYS.USERS, updatedUsers);
+
+  // If current logged in user is the one updated, update session too
+  const current = getCurrentUser();
+  if (current && current.id === user.id) {
+    setCurrentUser(user);
+  }
+
+  notifyDataUpdated();
+  return syncRes;
+};
+
+export const refreshUsersFromSupabase = async (): Promise<{
+  success: boolean;
+  users: User[];
+  error?: string;
+}> => {
+  const res = await fetchUsersDirectFromSupabase();
+  if (res.success && res.users.length > 0) {
+    const { cleanAndDeduplicateUsers } = await import('./userDeduplication');
+    const { cleanedUsers } = cleanAndDeduplicateUsers(res.users);
+    memoryUsersCache = cleanedUsers;
+    setStored(STORAGE_KEYS.USERS, cleanedUsers);
+    notifyDataUpdated();
+    return { success: true, users: cleanedUsers };
+  }
+  return { success: res.success, users: getAllUsers(), error: res.error };
 };
 
 import {
