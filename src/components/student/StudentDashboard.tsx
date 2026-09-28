@@ -20,7 +20,8 @@ import {
   Search,
   GraduationCap,
   ArrowRight,
-  UserCheck
+  UserCheck,
+  Lock
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -36,6 +37,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
   const [selectedExamForModal, setSelectedExamForModal] = useState<Exam | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  // Real-time ticker: checks exam release readiness live every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -47,19 +57,66 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);
 
-  // Filter exams that are active, targeted to this student's class, and whose uploadDate has arrived
+  // Helper: check whether an exam is ready to be taken based on teacher's locked upload release date
+  const isExamReady = (exam: Exam, now: number = currentTime): boolean => {
+    if (!exam.uploadDate) return true;
+    const releaseTime = new Date(exam.uploadDate).getTime();
+    if (isNaN(releaseTime)) return true;
+    return now >= releaseTime;
+  };
+
+  // Helper: format remaining countdown until exam release
+  const formatCountdown = (dateStr: string, now: number): string => {
+    const target = new Date(dateStr).getTime();
+    if (isNaN(target)) return '0 detik';
+    const diff = target - now;
+    if (diff <= 0) return '0 detik';
+    const totalSeconds = Math.floor(diff / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (days > 0) return `${days} hari ${hours} jam lagi`;
+    if (hours > 0) return `${hours} jam ${minutes} menit lagi`;
+    if (minutes > 0) return `${minutes} menit ${seconds} dtk lagi`;
+    return `${seconds} detik lagi`;
+  };
+
+  const formatScheduleDate = (dateStr?: string): string => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  const formatScheduleTime = (dateStr?: string): string => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' WIB';
+    } catch {
+      return '-';
+    }
+  };
+
+  // Filter exams that are active and targeted to this student's class
   const studentClass = student.classGroup || '';
   const availableExams = exams.filter(e => {
     if (e.status !== 'active') return false;
-
-    // Check upload date / schedule release date
-    if (e.uploadDate) {
-      const uploadTime = new Date(e.uploadDate).getTime();
-      if (!isNaN(uploadTime) && Date.now() < uploadTime) {
-        return false; // Hide exam from students until upload date/time is reached
-      }
-    }
-
     return isStudentEligibleForExam(e.targetClasses, studentClass);
   });
 
@@ -92,7 +149,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
       ? Math.round(mySubmissions.reduce((acc, curr) => acc + curr.percentage, 0) / completedCount)
       : 0;
 
+  const handleOpenExamModal = (exam: Exam) => {
+    if (!isExamReady(exam, Date.now())) {
+      alert(
+        `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${formatScheduleDate(exam.uploadDate)} pukul ${formatScheduleTime(exam.uploadDate)} sesuai jadwal rilis guru.`
+      );
+      return;
+    }
+    setSelectedExamForModal(exam);
+  };
+
   const handleStartExamWithLockdown = (exam: Exam) => {
+    if (!isExamReady(exam, Date.now())) {
+      alert(
+        `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${formatScheduleDate(exam.uploadDate)} pukul ${formatScheduleTime(exam.uploadDate)} sesuai jadwal rilis guru.`
+      );
+      return;
+    }
     try {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -384,15 +457,46 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                           <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${theme.bg} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform shrink-0`}>
                             <GraduationCap className="w-6 h-6" />
                           </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${
-                            activeTab === 'pending'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          }`}>
-                            {activeTab === 'pending'
-                              ? `⚡ ${examCountForThis} Paket Tersedia`
-                              : `✅ ${examCountForThis} Paket Selesai`}
-                          </span>
+                          {activeTab === 'pending' ? (
+                            (() => {
+                              const pendingForThis = pendingExams.filter(
+                                e => e.subjectName === subjectName || (subjectObj && e.subjectId === subjectObj.id)
+                              );
+                              const readyCount = pendingForThis.filter(e => isExamReady(e, currentTime)).length;
+                              const scheduledCount = pendingForThis.length - readyCount;
+
+                              if (readyCount > 0 && scheduledCount > 0) {
+                                return (
+                                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    ⚡ {readyCount} Siap • 🔒 {scheduledCount} Terjadwal
+                                  </span>
+                                );
+                              }
+                              if (readyCount > 0) {
+                                return (
+                                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                    ⚡ {readyCount} Siap Dikerjakan
+                                  </span>
+                                );
+                              }
+                              if (scheduledCount > 0) {
+                                return (
+                                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
+                                    🔒 {scheduledCount} Terjadwal
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-slate-50 text-slate-600 border border-slate-200">
+                                  0 Paket
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              ✅ {examCountForThis} Paket Selesai
+                            </span>
+                          )}
                         </div>
 
                         <div>
@@ -503,6 +607,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                 const questions = getQuestionsByExamId(exam.id);
                 const isCompleted = myCompletedExamIds.has(exam.id);
                 const submission = mySubmissions.find(s => s.examId === exam.id);
+                const isReady = isExamReady(exam, currentTime);
 
                 return (
                   <div
@@ -520,10 +625,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Selesai</span>
                           </span>
+                        ) : isReady ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-extrabold border border-emerald-200 shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Siap Dikerjakan</span>
+                          </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-xl text-xs font-extrabold border border-amber-200 shrink-0">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Tersedia</span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-xl text-xs font-extrabold border border-amber-300 shrink-0">
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Terjadwal (Belum Rilis)</span>
                           </span>
                         )}
                       </div>
@@ -548,13 +658,24 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                         <div className="flex items-center gap-2 text-indigo-950 font-semibold">
                           <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span className="text-[11px]">
-                            <strong>Hari & Tanggal:</strong> {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'Senin, 22 September 2026'}
+                            <strong>Hari & Tanggal:</strong>{' '}
+                            {formatScheduleDate(exam.uploadDate || exam.createdAt)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-indigo-950 font-semibold">
                           <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span className="text-[11px]">
-                            <strong>Waktu Ujian:</strong> 08:00 - 09:30 WIB ({exam.durationMinutes} Menit)
+                            <strong>Waktu Upload Rilis:</strong>{' '}
+                            {formatScheduleTime(exam.uploadDate)} ({exam.durationMinutes} Menit)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-indigo-950 font-semibold">
+                          <Lock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="text-[11px]">
+                            <strong>Status Jadwal:</strong>{' '}
+                            <span className={isReady ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                              {isReady ? '✅ Waktu Rilis Tiba — Siap Dikerjakan' : '⏳ Terkunci (Dibuka saat jam rilis)'}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -611,10 +732,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                             )}
                           </div>
                         </div>
+                      ) : !isReady ? (
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full py-3 px-4 bg-slate-100 text-slate-500 border border-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-2xs"
+                            title="Soal ujian terkunci hingga waktu upload rilis yang ditentukan guru"
+                          >
+                            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Soal Siap Pukul {formatScheduleTime(exam.uploadDate)}</span>
+                          </button>
+                          <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-800 font-semibold bg-amber-50/90 py-1.5 px-2.5 rounded-xl border border-amber-200">
+                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
+                            <span>Dibuka dalam {formatCountdown(exam.uploadDate || '', currentTime)}</span>
+                          </div>
+                        </div>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setSelectedExamForModal(exam)}
+                          onClick={() => handleOpenExamModal(exam)}
                           className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <Play className="w-4 h-4 fill-white" />

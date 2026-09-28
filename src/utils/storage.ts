@@ -573,7 +573,8 @@ export const copyExamWithQuestionsDirect = async (
       passingScore: opts.passingScore !== undefined ? opts.passingScore : sourceExam.passingScore,
       instructions: opts.instructions !== undefined ? opts.instructions : sourceExam.instructions,
       createdAt: new Date().toISOString().split('T')[0],
-      uploadDate: opts.uploadDate || sourceExam.uploadDate || new Date().toISOString()
+      uploadDate: opts.uploadDate || sourceExam.uploadDate || new Date().toISOString(),
+      isUploadDateLocked: true
     };
 
     // Find and clone all questions belonging to sourceExamId (excluding any deleted ones)

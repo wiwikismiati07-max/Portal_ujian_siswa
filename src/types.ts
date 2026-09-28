@@ -96,6 +96,7 @@ export interface Exam {
   instructions?: string;
   createdAt: string;
   uploadDate?: string; // Tanggal & Waktu Upload / Rilis Ujian
+  isUploadDateLocked?: boolean; // Status tanggal & jam upload rilis terkunci tetap (tidak berubah mengikuti jam real time)
 }
 
 export interface ViolationLog {

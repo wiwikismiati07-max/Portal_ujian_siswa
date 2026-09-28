@@ -71,8 +71,14 @@ CREATE TABLE IF NOT EXISTS public.cbt_exams (
   status TEXT DEFAULT 'active',
   instructions TEXT,
   created_at TEXT,
+  upload_date TEXT,
+  is_upload_date_locked BOOLEAN DEFAULT true,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration columns for cbt_exams if already created earlier
+ALTER TABLE public.cbt_exams ADD COLUMN IF NOT EXISTS upload_date TEXT;
+ALTER TABLE public.cbt_exams ADD COLUMN IF NOT EXISTS is_upload_date_locked BOOLEAN DEFAULT true;
 
 CREATE INDEX IF NOT EXISTS idx_cbt_exams_status ON public.cbt_exams(status);
 

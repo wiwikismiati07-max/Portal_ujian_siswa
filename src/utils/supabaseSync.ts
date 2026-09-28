@@ -120,6 +120,8 @@ export const mapExamToDb = (e: Exam) => ({
   status: e.status,
   instructions: e.instructions || null,
   created_at: e.createdAt,
+  upload_date: e.uploadDate || null,
+  is_upload_date_locked: e.isUploadDateLocked ?? (e.uploadDate ? true : false),
   updated_at: new Date().toISOString()
 });
 
@@ -136,7 +138,9 @@ export const mapExamFromDb = (row: any): Exam => ({
   passingScore: Number(row.passing_score) || 75,
   status: row.status || 'active',
   instructions: row.instructions || undefined,
-  createdAt: row.created_at || new Date().toISOString()
+  createdAt: row.created_at || new Date().toISOString(),
+  uploadDate: row.upload_date || row.uploadDate || undefined,
+  isUploadDateLocked: row.is_upload_date_locked !== undefined ? Boolean(row.is_upload_date_locked) : (row.upload_date ? true : undefined)
 });
 
 export const mapQuestionToDb = (q: Question) => ({
@@ -443,9 +447,21 @@ export const pullFromSupabase = async (): Promise<void> => {
       .select('*')
       .limit(500);
     if (!examsError && dbExams) {
+      const existingLocal = getAllExams();
       // Filter out deleted or stale mock exams
       const cleanExams = dbExams
-        .map(mapExamFromDb)
+        .map(row => {
+          const mapped = mapExamFromDb(row);
+          // Preserve local uploadDate and lock state if not yet stored in DB
+          const localMatch = existingLocal.find(l => l.id === mapped.id);
+          if (!mapped.uploadDate && localMatch?.uploadDate) {
+            mapped.uploadDate = localMatch.uploadDate;
+          }
+          if (mapped.isUploadDateLocked === undefined && localMatch?.isUploadDateLocked !== undefined) {
+            mapped.isUploadDateLocked = localMatch.isUploadDateLocked;
+          }
+          return mapped;
+        })
         .filter(
           e =>
             !isExamDeleted(e.id) &&
@@ -633,6 +649,13 @@ export const setupRealtimeSubscription = () => {
         const exams = getAllExams();
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const item = mapExamFromDb(payload.new);
+          const localMatch = exams.find(e => e.id === item.id);
+          if (!item.uploadDate && localMatch?.uploadDate) {
+            item.uploadDate = localMatch.uploadDate;
+          }
+          if (item.isUploadDateLocked === undefined && localMatch?.isUploadDateLocked !== undefined) {
+            item.isUploadDateLocked = localMatch.isUploadDateLocked;
+          }
           const next = [item, ...exams.filter(e => e.id !== item.id)];
           saveExams(next, false);
         } else if (payload.eventType === 'DELETE') {
@@ -819,7 +842,14 @@ export const deleteSubmissionFromSupabase = async (submissionId: string): Promis
 export const syncExamToSupabase = async (exam: Exam): Promise<boolean> => {
   try {
     const dbRow = mapExamToDb(exam);
-    const { error } = await supabase.from('cbt_exams').upsert(dbRow);
+    let { error } = await supabase.from('cbt_exams').upsert(dbRow);
+    if (error && (error.message?.includes('upload_date') || error.message?.includes('is_upload_date_locked'))) {
+      const fallbackRow = { ...dbRow };
+      delete (fallbackRow as any).upload_date;
+      delete (fallbackRow as any).is_upload_date_locked;
+      const res = await supabase.from('cbt_exams').upsert(fallbackRow);
+      error = res.error;
+    }
     if (error) {
       console.warn('Supabase exam sync error:', error.message);
       return false;

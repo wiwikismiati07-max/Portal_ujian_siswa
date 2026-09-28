@@ -51,7 +51,9 @@ import {
   ArrowRight,
   Filter,
   Edit,
-  Copy
+  Copy,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 interface TeacherDashboardProps {
@@ -201,9 +203,29 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
   const [newExamPassingScore, setNewExamPassingScore] = useState(75);
   const [newExamClasses, setNewExamClasses] = useState<string[]>(['7A', '7B']);
   const [newExamInstructions, setNewExamInstructions] = useState('Kerjakan soal dengan cermat dan jujur.');
-  const [newExamUploadDate, setNewExamUploadDate] = useState<string>(
-    new Date().toISOString().slice(0, 16)
-  );
+  const [newExamUploadDate, setNewExamUploadDate] = useState<string>(() => {
+    const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+    return d.toISOString().slice(0, 16);
+  });
+  const [isExamUploadDateLocked, setIsExamUploadDateLocked] = useState<boolean>(true);
+
+  // Helper to safely format ISO/Date string to local input format (YYYY-MM-DDTHH:mm)
+  const toLocalInputValue = (isoString?: string): string => {
+    if (!isoString) {
+      const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+      return d.toISOString().slice(0, 16);
+    }
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) {
+        return isoString.slice(0, 16);
+      }
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    } catch {
+      const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+      return d.toISOString().slice(0, 16);
+    }
+  };
 
   // Open modal for creating new exam
   const handleOpenCreateExam = () => {
@@ -217,10 +239,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setNewExamPassingScore(75);
     setNewExamClasses(['7A', '7B']);
     setNewExamInstructions('Kerjakan soal dengan cermat dan jujur.');
-    const localNow = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
+    const localNow = toLocalInputValue();
     setNewExamUploadDate(localNow);
+    setIsExamUploadDateLocked(false); // Editable when creating
     setIsCreateExamOpen(true);
   };
 
@@ -233,19 +254,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setNewExamPassingScore(ex.passingScore);
     setNewExamClasses(ex.targetClasses && ex.targetClasses.length > 0 ? ex.targetClasses : ['7A', '7B']);
     setNewExamInstructions(ex.instructions || '');
+
+    // KUNCI TANGGAL & JAM RILIS AGAR TIDAK MENGIKUTI JAM REAL TIME
     if (ex.uploadDate) {
-      try {
-        const d = new Date(ex.uploadDate);
-        const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-          .toISOString()
-          .slice(0, 16);
-        setNewExamUploadDate(localIso);
-      } catch {
-        setNewExamUploadDate(new Date().toISOString().slice(0, 16));
-      }
+      setNewExamUploadDate(toLocalInputValue(ex.uploadDate));
     } else {
-      setNewExamUploadDate(new Date().toISOString().slice(0, 16));
+      setNewExamUploadDate(toLocalInputValue());
     }
+    // Terkunci tetap secara default
+    setIsExamUploadDateLocked(true);
     setIsCreateExamOpen(true);
   };
 
@@ -343,7 +360,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
 
     const chosenSubject = subjects.find(s => s.id === newExamSubjectId) || subjects[0];
     const finalClasses = newExamClasses.length > 0 ? newExamClasses : ALL_ROMPEL_CLASSES;
-    const uploadIso = newExamUploadDate ? new Date(newExamUploadDate).toISOString() : new Date().toISOString();
+    
+    // Kunci tanggal & jam upload rilis:
+    // Jika sedang edit dan jadwal terkunci, pertahankan tepat string ISO asli tanpa geser offset
+    let uploadIso: string;
+    if (editingExam && isExamUploadDateLocked && editingExam.uploadDate) {
+      uploadIso = editingExam.uploadDate;
+    } else {
+      uploadIso = newExamUploadDate ? new Date(newExamUploadDate).toISOString() : new Date().toISOString();
+    }
 
     if (editingExam) {
       const updated: Exam = {
@@ -355,14 +380,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
         durationMinutes: Number(newExamDuration) || 45,
         passingScore: Number(newExamPassingScore) || 75,
         instructions: newExamInstructions.trim(),
-        uploadDate: uploadIso
+        uploadDate: uploadIso,
+        isUploadDateLocked: true // Selalu dikunci setelah guru menyimpan paket ujian
       };
 
       await updateExam(updated);
       setExams(getAllExams());
       setIsCreateExamOpen(false);
       setEditingExam(null);
-      showNotification('success', `Paket ujian "${updated.title}" berhasil diperbarui!`);
+      showNotification(
+        'success',
+        `Paket ujian "${updated.title}" berhasil disimpan! Tanggal & jam rilis terkunci tetap pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB.`
+      );
     } else {
       const newExam: Exam = {
         id: `exam_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -378,7 +407,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
         status: 'active',
         instructions: newExamInstructions.trim(),
         createdAt: new Date().toISOString().split('T')[0],
-        uploadDate: uploadIso
+        uploadDate: uploadIso,
+        isUploadDateLocked: true // Selalu dikunci setelah guru menyimpan paket ujian
       };
 
       await addExam(newExam);
@@ -386,7 +416,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setIsCreateExamOpen(false);
       setNewExamTitle('');
       setNewExamClasses(['7A', '7B']);
-      showNotification('success', `Paket ujian "${newExam.title}" berhasil dibuat dengan tanggal upload ${new Date(uploadIso).toLocaleString('id-ID')}!`);
+      showNotification(
+        'success',
+        `Paket ujian "${newExam.title}" berhasil dibuat! Tanggal & jam rilis terkunci tetap pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB.`
+      );
     }
   };
 
@@ -929,17 +962,36 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                             <div>Jumlah Butir Soal: <strong className="text-emerald-700">{qCount} Butir</strong></div>
                           </div>
 
-                          {/* Tanggal Upload Rilis Badge */}
-                          <div className="bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-100 text-xs text-indigo-950 flex items-center gap-2 font-medium mb-2">
-                            <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
-                            <span>
-                              <strong>Tanggal Upload Rilis:</strong>{' '}
-                              <span className="text-indigo-800 font-bold">
-                                {ex.uploadDate
-                                  ? new Date(ex.uploadDate).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + ' WIB'
-                                  : 'Langsung Aktif'}
+                          {/* Tanggal Upload Rilis Badge with Lock Indicator & Readiness */}
+                          <div className="bg-indigo-50/70 p-2.5 rounded-2xl border border-indigo-100 text-xs text-indigo-950 flex flex-col gap-1.5 font-medium mb-3">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1.5 font-bold text-slate-800">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                <span>Tanggal & Jam Upload Rilis:</span>
                               </span>
-                            </span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <Lock className="w-2.5 h-2.5 text-amber-700" />
+                                <span>Terkunci Tetap</span>
+                              </span>
+                            </div>
+                            <div className="text-indigo-900 font-extrabold text-xs pl-5">
+                              {ex.uploadDate
+                                ? new Date(ex.uploadDate).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' }) + ' WIB'
+                                : 'Langsung Aktif'}
+                            </div>
+                            <div className="pl-5 pt-0.5 text-[11px]">
+                              {ex.uploadDate && new Date(ex.uploadDate).getTime() > Date.now() ? (
+                                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  <span>Belum Rilis (Siswa baru dapat membuka soal saat waktu rilis tiba)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Sudah Rilis (Soal siap dikerjakan oleh siswa)</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -1075,41 +1127,92 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      Mata Pelajaran
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Mata Pelajaran
+                  </label>
+                  <select
+                    value={newExamSubjectId}
+                    onChange={e => setNewExamSubjectId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white font-medium text-slate-800"
+                  >
+                    {subjects.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tanggal & Waktu Upload Rilis with Lock / Unlock */}
+                <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                      <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Tanggal & Jam Upload Rilis</span>
+                      <span className="text-rose-500">*</span>
                     </label>
-                    <select
-                      value={newExamSubjectId}
-                      onChange={e => setNewExamSubjectId(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white font-medium text-slate-800"
-                    >
-                      {subjects.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.code})
-                        </option>
-                      ))}
-                    </select>
+
+                    {/* Lock status pill */}
+                    {isExamUploadDateLocked ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <Lock className="w-3 h-3 text-amber-700" />
+                        <span>Terkunci Tetap</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        <Unlock className="w-3 h-3 text-emerald-700" />
+                        <span>Dapat Diedit</span>
+                      </span>
+                    )}
                   </div>
 
-                  {/* Tanggal & Waktu Upload Rilis */}
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Tanggal & Waktu Upload Rilis</span>
-                    </label>
+                  <div className="relative">
                     <input
                       type="datetime-local"
                       required
                       value={newExamUploadDate}
                       onChange={e => setNewExamUploadDate(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-medium text-slate-800"
+                      disabled={isExamUploadDateLocked}
+                      className={`w-full p-2.5 rounded-xl border outline-none font-semibold text-xs transition-all ${
+                        isExamUploadDateLocked
+                          ? 'bg-slate-100 text-slate-600 border-slate-300 cursor-not-allowed select-none'
+                          : 'bg-white text-slate-900 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs'
+                      }`}
                     />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      🔒 Siswa tidak dapat melihat paket ujian ini sebelum tanggal/waktu ini tiba.
-                    </p>
                   </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-[11px]">
+                    <div className="text-slate-500 flex items-center gap-1.5 leading-snug">
+                      {isExamUploadDateLocked ? (
+                        <span className="text-amber-800 font-medium flex items-center gap-1">
+                          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Waktu rilis dikunci tetap agar jam tidak berubah mengikuti jam real-time.</span>
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 font-medium flex items-center gap-1">
+                          <Unlock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Silakan tentukan jadwal rilis. Setelah disimpan, waktu akan otomatis dikunci.</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsExamUploadDateLocked(!isExamUploadDateLocked)}
+                      className={`shrink-0 self-start sm:self-auto px-3 py-1 rounded-xl font-bold text-[11px] transition-colors cursor-pointer border ${
+                        isExamUploadDateLocked
+                          ? 'bg-white border-amber-300 text-amber-800 hover:bg-amber-50 shadow-2xs'
+                          : 'bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50 shadow-2xs'
+                      }`}
+                    >
+                      {isExamUploadDateLocked ? '🔓 Buka Kunci Jadwal' : '🔒 Kunci Jadwal'}
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 italic">
+                    ℹ️ Soal ujian otomatis siap dikerjakan oleh siswa tepat saat tanggal & jam rilis ini tiba.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

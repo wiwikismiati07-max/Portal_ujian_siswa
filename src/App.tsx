@@ -91,6 +91,16 @@ export default function App() {
   };
 
   const handleStartExam = (exam: Exam) => {
+    if (exam.uploadDate) {
+      const releaseTime = new Date(exam.uploadDate).getTime();
+      if (!isNaN(releaseTime) && Date.now() < releaseTime) {
+        setAppAlert(
+          `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${new Date(exam.uploadDate).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB sesuai jadwal rilis guru.`
+        );
+        setTimeout(() => setAppAlert(null), 6000);
+        return;
+      }
+    }
     const questions = getQuestionsByExamId(exam.id);
     if (questions.length === 0) {
       setAppAlert('Paket ujian ini belum memiliki butir soal. Silakan hubungi guru pengampu.');
