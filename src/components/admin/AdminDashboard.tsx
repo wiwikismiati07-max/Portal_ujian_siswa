@@ -230,16 +230,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     setCurrentPage(1);
   }, [roleFilter, selectedClass, searchQuery, pageSize]);
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (defaultRole?: UserRole) => {
     setEditingUser(null);
     setFormName('');
     setFormUsername('');
     setFormPassword('123456');
-    setFormRole('siswa');
+    const targetRole = defaultRole || (roleFilter !== 'all' ? roleFilter : 'siswa');
+    setFormRole(targetRole);
     setFormNipNis('');
-    setFormClassOrSubject('7-A');
+    setFormClassOrSubject(targetRole === 'siswa' ? (selectedClass !== 'all' ? selectedClass : '7A') : '');
     setIsAddUserOpen(true);
     setMsg(null);
+  };
+
+  const generateAutoUsername = (name: string, nis?: string) => {
+    if (nis && nis.trim().length >= 3) {
+      return nis.trim().toLowerCase();
+    }
+    if (!name.trim()) return '';
+    const clean = name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '_');
+    return clean;
   };
 
   const handleOpenEdit = (u: User) => {
@@ -471,7 +485,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           </button>
           <button
             type="button"
-            onClick={handleOpenAdd}
+            onClick={() => handleOpenAdd()}
             className="px-4 py-2.5 bg-rose-500 hover:bg-rose-400 active:bg-rose-600 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
@@ -703,6 +717,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
               <strong>{filteredUsers.length}</strong> akun terdaftar
             </span>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenAdd(roleFilter === 'guru' ? 'guru' : roleFilter === 'admin' ? 'admin' : 'siswa')}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title={roleFilter === 'guru' ? 'Tambah Guru Baru' : roleFilter === 'admin' ? 'Tambah Admin Baru' : 'Tambah Siswa Baru'}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>
+                  {roleFilter === 'guru' ? '+ Tambah Guru' : roleFilter === 'admin' ? '+ Tambah Admin' : '+ Tambah Siswa'}
+                </span>
+              </button>
               <button
                 type="button"
                 onClick={handleDownloadUsers}
@@ -977,11 +1002,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       {isAddUserOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 flex items-center justify-center min-h-screen">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 my-auto max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">
-              {editingUser ? 'Perbarui Akun & Kredensial' : 'Tambah Akun Pengguna Baru'}
+            <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-rose-700" />
+              <span>
+                {editingUser
+                  ? `Perbarui Data ${editingUser.role === 'siswa' ? 'Siswa' : editingUser.role === 'guru' ? 'Guru' : 'Pengguna'}`
+                  : `Tambah ${formRole === 'siswa' ? 'Siswa' : formRole === 'guru' ? 'Guru' : 'Akun'} Baru`}
+              </span>
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Atur username, kata sandi, dan hak akses pengguna. Data langsung tersimpan di Supabase Cloud.
+              Atur kredensial login, NIS/NIP, dan kelas. Data langsung tersimpan di database Supabase Cloud.
             </p>
 
             {msg && (
@@ -1005,94 +1035,148 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Peran Akun</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['admin', 'guru', 'siswa'] as UserRole[]).map(r => (
+                  {(['siswa', 'guru', 'admin'] as UserRole[]).map(r => (
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setFormRole(r)}
+                      onClick={() => {
+                        setFormRole(r);
+                        if (r === 'siswa' && !formClassOrSubject) {
+                          setFormClassOrSubject('7A');
+                        }
+                      }}
                       className={`py-2 rounded-xl border text-center font-bold capitalize cursor-pointer transition-colors ${
                         formRole === r
                           ? 'bg-rose-900 text-white border-rose-900 shadow-xs'
                           : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
-                      {r}
+                      {r === 'siswa' ? 'Siswa' : r === 'guru' ? 'Guru' : 'Admin'}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap</label>
-                <input
-                  type="text"
-                  required
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  placeholder="Contoh: Muhammad Rizky Pratama"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Username (Login ID)</label>
-                <input
-                  type="text"
-                  required
-                  value={formUsername}
-                  onChange={e => setFormUsername(e.target.value)}
-                  placeholder="Contoh: rizky_siswa"
-                  className="w-full px-3.5 py-2.5 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-
-              <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Kata Sandi (Password Aktif)
+                  Nama Lengkap {formRole === 'siswa' ? 'Siswa' : 'Pengguna'}
                 </label>
                 <input
                   type="text"
                   required
-                  value={formPassword}
-                  onChange={e => setFormPassword(e.target.value)}
-                  placeholder="Password akun"
-                  className="w-full px-3.5 py-2.5 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+                  value={formName}
+                  onChange={e => {
+                    setFormName(e.target.value);
+                    if (!formUsername || formUsername.startsWith('@') || formUsername === generateAutoUsername(formName, formNipNis)) {
+                      setFormUsername(generateAutoUsername(e.target.value, formNipNis));
+                    }
+                  }}
+                  placeholder={formRole === 'siswa' ? 'Contoh: MUHAMMAD RIZKY PRATAMA' : 'Contoh: WIWIK ISMIATI, S.Pd'}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-semibold uppercase"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    {formRole === 'siswa' ? 'NIS' : 'NIP / NUPTK'}
+                    {formRole === 'siswa' ? 'NIS (Nomor Induk)' : 'NIP / NUPTK'}
                   </label>
                   <input
                     type="text"
                     value={formNipNis}
-                    onChange={e => setFormNipNis(e.target.value)}
-                    placeholder="Opsional"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+                    onChange={e => {
+                      setFormNipNis(e.target.value);
+                      if (formRole === 'siswa' && e.target.value.trim().length >= 3 && (!formUsername || formUsername === generateAutoUsername(formName))) {
+                        setFormUsername(e.target.value.trim().toLowerCase());
+                      }
+                    }}
+                    placeholder={formRole === 'siswa' ? 'Contoh: 9178' : 'Contoh: 1983...'}
+                    className="w-full px-3.5 py-2.5 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    {formRole === 'siswa' ? 'Kelas/Rombel' : 'Mata Pelajaran'}
+                    {formRole === 'siswa' ? 'Kelas / Rombel' : 'Mata Pelajaran'}
                   </label>
-                  <input
-                    type="text"
-                    list={formRole === 'siswa' ? 'student-classes-list' : undefined}
-                    value={formClassOrSubject}
-                    onChange={e => setFormClassOrSubject(e.target.value)}
-                    placeholder={formRole === 'siswa' ? 'Pilih/Ketik: 7A, 7B, 8A, dst.' : 'Contoh: IPA'}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-                  />
-                  {formRole === 'siswa' && (
-                    <datalist id="student-classes-list">
+                  {formRole === 'siswa' ? (
+                    <select
+                      value={formClassOrSubject}
+                      onChange={e => setFormClassOrSubject(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-bold"
+                    >
                       {DEFAULT_CLASSES.map(cls => (
-                        <option key={cls} value={cls} />
+                        <option key={cls} value={cls}>
+                          Kelas {cls}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formClassOrSubject}
+                      onChange={e => setFormClassOrSubject(e.target.value)}
+                      placeholder="Contoh: IPA / Informatika"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-semibold"
+                    />
                   )}
                 </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Username (Login ID)</label>
+                  {formName && (
+                    <button
+                      type="button"
+                      onClick={() => setFormUsername(generateAutoUsername(formName, formNipNis))}
+                      className="text-[10px] text-rose-700 font-bold hover:underline cursor-pointer"
+                    >
+                      🪄 Auto-Username
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={formUsername}
+                  onChange={e => setFormUsername(e.target.value.toLowerCase().replace(/\s+/g, '_'))}
+                  placeholder="Contoh: 9178 atau rizky_pratama"
+                  className="w-full px-3.5 py-2.5 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">
+                    Kata Sandi (Password Aktif)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setFormPassword('123456')}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono cursor-pointer"
+                    >
+                      123456
+                    </button>
+                    {formNipNis && (
+                      <button
+                        type="button"
+                        onClick={() => setFormPassword(formNipNis)}
+                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono cursor-pointer"
+                      >
+                        Sama NIS
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={formPassword}
+                  onChange={e => setFormPassword(e.target.value)}
+                  placeholder="Password akun"
+                  className="w-full px-3.5 py-2.5 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-bold"
+                />
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
@@ -1105,9 +1189,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-rose-900 hover:bg-rose-800 text-white font-bold rounded-xl transition-colors shadow-xs cursor-pointer"
+                  className="px-5 py-2.5 bg-rose-900 hover:bg-rose-800 text-white font-bold rounded-xl transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  {editingUser ? 'Simpan Perubahan' : 'Tambah Akun'}
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{editingUser ? 'Simpan Perubahan' : formRole === 'siswa' ? 'Simpan Siswa' : 'Tambah Akun'}</span>
                 </button>
               </div>
             </form>
