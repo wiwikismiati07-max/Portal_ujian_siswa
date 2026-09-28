@@ -1061,7 +1061,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                             <span>Tertib (0x)</span>
                           </span>
                         ) : isCritical ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-[11px] font-black animate-pulse">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-[11px] font-black ">
                             <AlertOctagon className="w-3.5 h-3.5 text-rose-600" />
                             <span>{violations}x Kritis (Auto-Submit)</span>
                           </span>

@@ -351,7 +351,7 @@ export const ExcelManager: React.FC<ExcelManagerProps> = ({
               <div
                 className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs transition-transform ${
                   isProcessing
-                    ? 'bg-indigo-600 text-white animate-pulse'
+                    ? 'bg-indigo-600 text-white '
                     : 'bg-white text-indigo-600 border border-slate-200'
                 }`}
               >

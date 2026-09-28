@@ -305,7 +305,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                     className="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
                     title="Unggah butir soal lokal langsung ke tabel cbt_questions di Supabase"
                   >
-                    <UploadCloud className={`w-4 h-4 text-indigo-600 ${isSyncingQuestions ? 'animate-bounce' : ''}`} />
+                    <UploadCloud className={`w-4 h-4 text-indigo-600 ${isSyncingQuestions ? '' : ''}`} />
                     <span>{isSyncingQuestions ? 'Mengunggah Soal...' : 'Sinkronkan Butir Soal ke Supabase'}</span>
                   </button>
 
@@ -412,7 +412,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
               disabled={isUploading}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
-              <UploadCloud className={`w-4 h-4 ${isUploading ? 'animate-bounce' : ''}`} />
+              <UploadCloud className={`w-4 h-4 ${isUploading ? '' : ''}`} />
               {isUploading ? 'Mengunggah...' : 'Upload Data Lokal ke Cloud'}
             </button>
 

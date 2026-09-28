@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   supabaseStatus === 'connected'
                     ? 'bg-emerald-50/90 text-emerald-800 border-emerald-200 hover:bg-emerald-100/90'
                     : supabaseStatus === 'needs_table_setup'
-                    ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100/90 animate-pulse'
+                    ? 'bg-amber-50/90 text-amber-900 border-amber-300 hover:bg-amber-100/90'
                     : 'bg-slate-100/90 text-slate-700 border-slate-200 hover:bg-slate-200'
                 }`}
               >
@@ -219,7 +219,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
             ) : isExamLockActive ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold animate-pulse">
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold">
                 <span className="w-2 h-2 rounded-full bg-amber-600 shrink-0"></span>
                 <span className="text-[11px] sm:text-xs">MODE LOCKDOWN AKTIF</span>
               </div>

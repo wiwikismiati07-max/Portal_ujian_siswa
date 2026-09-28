@@ -572,7 +572,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
                 {/* Error Message */}
                 {error && (
-                  <div className="flex items-start gap-2.5 p-3.5 text-xs font-semibold text-rose-900 bg-rose-50 border border-rose-200 rounded-2xl animate-shake">
+                  <div className="flex items-start gap-2.5 p-3.5 text-xs font-semibold text-rose-900 bg-rose-50 border border-rose-200 rounded-2xl ">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
                     <span>{error}</span>
                   </div>

@@ -408,7 +408,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
               <span>Pusat Kendali Administrator</span>
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full text-xs font-bold text-emerald-800 border border-emerald-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 "></span>
               <span>Supabase Cloud Terhubung</span>
             </span>
           </div>
@@ -425,7 +425,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
             <button
               type="button"
               onClick={handleCleanDuplicates}
-              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-500/20 animate-pulse"
+              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-500/20 "
               title="Bersihkan Akun Duplikat / Ganda"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />

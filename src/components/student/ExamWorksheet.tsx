@@ -644,7 +644,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       {!isFullscreen && !submittedResult && (
         <div className="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 text-center text-white animate-in fade-in duration-200">
           <div className="max-w-md w-full bg-slate-900 border-2 border-amber-500/80 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col items-center">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4 animate-pulse">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4 ">
               <Lock className="w-8 h-8" />
             </div>
 
@@ -693,7 +693,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
 
           {/* Center Timer Display */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-xl shadow-xs shrink-0">
-            <Clock className={`w-4 h-4 ${timeLeftSeconds < 300 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`} />
+            <Clock className={`w-4 h-4 ${timeLeftSeconds < 300 ? 'text-rose-400 ' : 'text-emerald-400'}`} />
             <span className={`font-mono text-xs sm:text-sm font-extrabold ${timeLeftSeconds < 300 ? 'text-rose-300' : 'text-white'}`}>
               {formatTime(timeLeftSeconds)}
             </span>
@@ -717,7 +717,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
             </div>
 
             {violationCount > 0 && (
-              <div className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-extrabold animate-pulse">
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-extrabold ">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>Pelanggaran: {violationCount}/3</span>
               </div>
@@ -1558,7 +1558,7 @@ export const ExamWorksheet: React.FC<ExamWorksheetProps> = ({
       {showViolationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-rose-950/80 backdrop-blur-sm animate-in zoom-in-95 duration-150">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border-2 border-rose-500 text-center">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4 animate-bounce">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4 ">
               <AlertTriangle className="w-8 h-8" />
             </div>
 

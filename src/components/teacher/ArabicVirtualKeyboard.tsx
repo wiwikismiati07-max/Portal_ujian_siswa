@@ -383,7 +383,7 @@ export const ArabicVirtualKeyboard: React.FC<ArabicVirtualKeyboardProps> = ({
       ) : (
         <div className="p-2.5 bg-slate-100 flex items-center justify-between text-xs text-slate-700 border-t border-slate-200">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 "></span>
             <span className="font-semibold text-slate-700">Keyboard Arab Diminimalkan</span>
           </div>
           <div className="flex items-center gap-2">

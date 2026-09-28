@@ -967,7 +967,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
                             <div className="pl-5 pt-0.5 text-[11px]">
                               {ex.uploadDate && !isWibExamReady(ex.uploadDate) ? (
                                 <span className="inline-flex items-center gap-1.5 text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
-                                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                                  <Clock className="w-3.5 h-3.5 text-amber-600 " />
                                   <span>Belum Rilis (Soal otomatis siap dikerjakan siswa pukul {formatWibTime(ex.uploadDate)})</span>
                                 </span>
                               ) : (

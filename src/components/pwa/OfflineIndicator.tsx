@@ -10,7 +10,7 @@ export const OfflineIndicator: React.FC = () => {
   return (
     <div
       id="pwa-offline-indicator"
-      className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xl animate-bounce"
+      className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xl"
     >
       <WifiOff className="w-4 h-4" />
       <span>Mode Offline — Anda masih dapat mengakses halaman yang telah disimpan.</span>

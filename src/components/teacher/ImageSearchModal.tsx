@@ -533,7 +533,7 @@ export const ImageSearchModal: React.FC<ImageSearchModalProps> = ({
               </div>
 
               {isUploading && (
-                <div className="text-center text-xs text-indigo-600 font-semibold animate-pulse">
+                <div className="text-center text-xs text-indigo-600 font-semibold ">
                   Sedang memproses gambar...
                 </div>
               )}

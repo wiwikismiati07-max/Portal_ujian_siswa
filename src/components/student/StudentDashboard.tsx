@@ -717,7 +717,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                             <span>Ujian Terkunci — Dibuka Pukul {formatScheduleTime(exam.uploadDate || exam.createdAt)}</span>
                           </button>
                           <div className="flex items-center justify-center gap-1.5 text-xs text-amber-800 font-bold bg-amber-50/90 py-2 px-3 rounded-xl border border-amber-200">
-                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
+                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 " />
                             <span>Dibuka dalam {formatCountdown(exam.uploadDate || exam.createdAt || '', currentTime)}</span>
                           </div>
                         </div>
