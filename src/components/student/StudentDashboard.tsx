@@ -59,9 +59,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
   // Helper: check whether an exam is ready to be taken based on teacher's locked upload release date
   const isExamReady = (exam: Exam, now: number = currentTime): boolean => {
-    if (!exam.uploadDate) return true;
-    const releaseTime = new Date(exam.uploadDate).getTime();
-    if (isNaN(releaseTime)) return true;
+    const targetDateStr = exam.uploadDate || exam.createdAt;
+    if (!targetDateStr) return false;
+    const releaseTime = new Date(targetDateStr).getTime();
+    if (isNaN(releaseTime)) return false;
     return now >= releaseTime;
   };
 
@@ -70,7 +71,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     const target = new Date(dateStr).getTime();
     if (isNaN(target)) return '0 detik';
     const diff = target - now;
-    if (diff <= 0) return '0 detik';
+    if (diff <= 0) return 'Waktu rilis telah tiba';
     const totalSeconds = Math.floor(diff / 1000);
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -104,10 +105,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return '-';
-      return d.toLocaleTimeString('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }) + ' WIB';
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes} WIB`;
     } catch {
       return '-';
     }
@@ -151,8 +151,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
   const handleOpenExamModal = (exam: Exam) => {
     if (!isExamReady(exam, Date.now())) {
+      const releaseDate = formatScheduleDate(exam.uploadDate || exam.createdAt);
+      const releaseTime = formatScheduleTime(exam.uploadDate || exam.createdAt);
       alert(
-        `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${formatScheduleDate(exam.uploadDate)} pukul ${formatScheduleTime(exam.uploadDate)} sesuai jadwal rilis guru.`
+        `Paket ujian "${exam.title}" belum dapat dikerjakan. Siswa hanya dapat mulai mengerjakan jika jam untuk mengerjakan sudah terbuka sesuai setting jam upload rilis guru pada ${releaseDate} pukul ${releaseTime}.`
       );
       return;
     }
@@ -161,8 +163,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
 
   const handleStartExamWithLockdown = (exam: Exam) => {
     if (!isExamReady(exam, Date.now())) {
+      const releaseDate = formatScheduleDate(exam.uploadDate || exam.createdAt);
+      const releaseTime = formatScheduleTime(exam.uploadDate || exam.createdAt);
       alert(
-        `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${formatScheduleDate(exam.uploadDate)} pukul ${formatScheduleTime(exam.uploadDate)} sesuai jadwal rilis guru.`
+        `Paket ujian "${exam.title}" belum dapat dikerjakan. Siswa hanya dapat mulai mengerjakan jika jam untuk mengerjakan sudah terbuka sesuai setting jam upload rilis guru pada ${releaseDate} pukul ${releaseTime}.`
       );
       return;
     }
@@ -666,7 +670,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                           <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span className="text-[11px]">
                             <strong>Waktu Upload Rilis:</strong>{' '}
-                            {formatScheduleTime(exam.uploadDate)} ({exam.durationMinutes} Menit)
+                            {formatScheduleTime(exam.uploadDate || exam.createdAt)} ({exam.durationMinutes} Menit)
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-indigo-950 font-semibold">
@@ -737,22 +741,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
                           <button
                             type="button"
                             disabled
-                            className="w-full py-3 px-4 bg-slate-100 text-slate-500 border border-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-2xs"
-                            title="Soal ujian terkunci hingga waktu upload rilis yang ditentukan guru"
+                            className="w-full py-3.5 px-4 bg-slate-100 text-slate-500 border border-slate-200 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-2xs"
+                            title={`Ujian belum dapat dikerjakan. Jadwal buka ujian: ${formatScheduleTime(exam.uploadDate || exam.createdAt)}`}
                           >
                             <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                            <span>Soal Siap Pukul {formatScheduleTime(exam.uploadDate)}</span>
+                            <span>Ujian Terkunci — Dibuka Pukul {formatScheduleTime(exam.uploadDate || exam.createdAt)}</span>
                           </button>
-                          <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-800 font-semibold bg-amber-50/90 py-1.5 px-2.5 rounded-xl border border-amber-200">
+                          <div className="flex items-center justify-center gap-1.5 text-xs text-amber-800 font-bold bg-amber-50/90 py-2 px-3 rounded-xl border border-amber-200">
                             <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
-                            <span>Dibuka dalam {formatCountdown(exam.uploadDate || '', currentTime)}</span>
+                            <span>Dibuka dalam {formatCountdown(exam.uploadDate || exam.createdAt || '', currentTime)}</span>
                           </div>
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleOpenExamModal(exam)}
-                          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <Play className="w-4 h-4 fill-white" />
                           <span>Mulai Kerjakan Ujian</span>
@@ -768,72 +772,110 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
       )}
 
       {/* Exam Pre-flight Confirmation Modal */}
-      {selectedExamForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-4">
-              <FileCheck className="w-6 h-6" />
-            </div>
+      {selectedExamForModal && (() => {
+        const isModalExamReady = isExamReady(selectedExamForModal, currentTime);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-4">
+                <FileCheck className="w-6 h-6" />
+              </div>
 
-            <h3 className="text-xl font-extrabold text-slate-900 mb-1">
-              Konfirmasi Memulai Ujian
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              {selectedExamForModal.title}
-            </p>
+              <h3 className="text-xl font-extrabold text-slate-900 mb-1">
+                Konfirmasi Memulai Ujian
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                {selectedExamForModal.title}
+              </p>
 
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs space-y-2 mb-5">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Mata Pelajaran:</span>
-                <span className="font-semibold text-slate-800">{selectedExamForModal.subjectName}</span>
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs space-y-2 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Mata Pelajaran:</span>
+                  <span className="font-semibold text-slate-800">{selectedExamForModal.subjectName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Guru Pengampu / Pembuat Soal:</span>
+                  <span className="font-bold text-indigo-700">{selectedExamForModal.teacherName || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Jadwal Rilis Guru:</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatScheduleDate(selectedExamForModal.uploadDate || selectedExamForModal.createdAt)} pukul {formatScheduleTime(selectedExamForModal.uploadDate || selectedExamForModal.createdAt)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status Akses:</span>
+                  <span className={`font-bold ${isModalExamReady ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {isModalExamReady ? '✅ Jam Ujian Sudah Terbuka' : '🔒 Jam Ujian Belum Terbuka'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Durasi Waktu:</span>
+                  <span className="font-semibold text-slate-800">{selectedExamForModal.durationMinutes} Menit</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Passing Grade (KKM):</span>
+                  <span className="font-semibold text-indigo-700">{selectedExamForModal.passingScore} Poin</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Siswa Peserta:</span>
+                  <span className="font-semibold text-slate-800">{student.name} ({studentClass})</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Guru Pengampu / Pembuat Soal:</span>
-                <span className="font-bold text-indigo-700">{selectedExamForModal.teacherName || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Durasi Waktu:</span>
-                <span className="font-semibold text-slate-800">{selectedExamForModal.durationMinutes} Menit</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Passing Grade (KKM):</span>
-                <span className="font-semibold text-indigo-700">{selectedExamForModal.passingScore} Poin</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Siswa Peserta:</span>
-                <span className="font-semibold text-slate-800">{student.name} ({studentClass})</span>
-              </div>
-            </div>
 
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 font-medium mb-6">
-              ⚠️ Peringatan: Saat dimulai, jendela akan terkunci penuh. Anda tidak dapat membuka tab atau kalkulator lain sebelum selesai mengumpulkan.
-            </div>
+              {!isModalExamReady ? (
+                <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 font-medium mb-5 flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold">Ujian Belum Dapat Dikerjakan!</strong>
+                    <span>
+                      Soal ujian belum dibuka karena belum sesuai dengan setting jam upload rilis yang disimpan oleh guru ({formatScheduleDate(selectedExamForModal.uploadDate || selectedExamForModal.createdAt)} pukul {formatScheduleTime(selectedExamForModal.uploadDate || selectedExamForModal.createdAt)}). Siswa belum dapat mengerjakan ujian ini.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 font-medium mb-5">
+                  ⚠️ Peringatan: Saat dimulai, jendela akan terkunci penuh. Anda tidak dapat membuka tab atau kalkulator lain sebelum selesai mengumpulkan.
+                </div>
+              )}
 
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedExamForModal(null)}
-                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const examToStart = selectedExamForModal;
-                  setSelectedExamForModal(null);
-                  if (examToStart) {
-                    handleStartExamWithLockdown(examToStart);
-                  }
-                }}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-2"
-              >
-                <span>Kunci Layar & Mulai Ujian</span>
-              </button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedExamForModal(null)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                {isModalExamReady ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const examToStart = selectedExamForModal;
+                      setSelectedExamForModal(null);
+                      if (examToStart) {
+                        handleStartExamWithLockdown(examToStart);
+                      }
+                    }}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <span>Kunci Layar & Mulai Ujian</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-6 py-2.5 bg-slate-200 text-slate-400 text-xs font-bold rounded-xl shadow-none cursor-not-allowed inline-flex items-center gap-2 select-none"
+                  >
+                    <Lock className="w-4 h-4 text-slate-400" />
+                    <span>Jam Ujian Belum Terbuka</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

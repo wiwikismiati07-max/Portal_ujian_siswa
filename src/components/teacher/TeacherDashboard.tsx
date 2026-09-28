@@ -211,19 +211,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
 
   // Helper to safely format ISO/Date string to local input format (YYYY-MM-DDTHH:mm)
   const toLocalInputValue = (isoString?: string): string => {
+    const pad = (n: number) => String(n).padStart(2, '0');
     if (!isoString) {
-      const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-      return d.toISOString().slice(0, 16);
+      const d = new Date();
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
     try {
       const d = new Date(isoString);
       if (isNaN(d.getTime())) {
         return isoString.slice(0, 16);
       }
-      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     } catch {
-      const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-      return d.toISOString().slice(0, 16);
+      const d = new Date();
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
   };
 
@@ -256,13 +257,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     setNewExamInstructions(ex.instructions || '');
 
     // KUNCI TANGGAL & JAM RILIS AGAR TIDAK MENGIKUTI JAM REAL TIME
+    // Jika paket sudah memiliki tanggal rilis yang disimpan, tampilkan nilai yang tersimpan tersebut
     if (ex.uploadDate) {
       setNewExamUploadDate(toLocalInputValue(ex.uploadDate));
     } else {
-      setNewExamUploadDate(toLocalInputValue());
+      setNewExamUploadDate(toLocalInputValue(ex.createdAt));
     }
-    // Terkunci tetap secara default
-    setIsExamUploadDateLocked(true);
+    // Set status jadwal: langsung dapat diedit oleh guru jika ingin mengatur ulang jam rilis
+    setIsExamUploadDateLocked(false);
     setIsCreateExamOpen(true);
   };
 
@@ -362,13 +364,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
     const finalClasses = newExamClasses.length > 0 ? newExamClasses : ALL_ROMPEL_CLASSES;
     
     // Kunci tanggal & jam upload rilis:
-    // Jika sedang edit dan jadwal terkunci, pertahankan tepat string ISO asli tanpa geser offset
-    let uploadIso: string;
-    if (editingExam && isExamUploadDateLocked && editingExam.uploadDate) {
-      uploadIso = editingExam.uploadDate;
-    } else {
-      uploadIso = newExamUploadDate ? new Date(newExamUploadDate).toISOString() : new Date().toISOString();
-    }
+    // Selalu gunakan nilai yang ditentukan guru dari input newExamUploadDate
+    const uploadIso = newExamUploadDate
+      ? new Date(newExamUploadDate).toISOString()
+      : (editingExam?.uploadDate || new Date().toISOString());
 
     if (editingExam) {
       const updated: Exam = {
@@ -390,7 +389,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setEditingExam(null);
       showNotification(
         'success',
-        `Paket ujian "${updated.title}" berhasil disimpan! Tanggal & jam rilis terkunci tetap pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB.`
+        `Paket ujian "${updated.title}" berhasil disimpan! Jadwal rilis dikunci pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
       );
     } else {
       const newExam: Exam = {
@@ -418,7 +417,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       setNewExamClasses(['7A', '7B']);
       showNotification(
         'success',
-        `Paket ujian "${newExam.title}" berhasil dibuat! Tanggal & jam rilis terkunci tetap pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })} WIB.`
+        `Paket ujian "${newExam.title}" berhasil dibuat! Jadwal rilis dikunci pada ${new Date(uploadIso).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB. Siswa baru dapat mulai mengerjakan jika jam rilis sudah tiba.`
       );
     }
   };

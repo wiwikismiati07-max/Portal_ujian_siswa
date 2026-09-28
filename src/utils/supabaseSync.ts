@@ -457,8 +457,13 @@ export const pullFromSupabase = async (): Promise<void> => {
           if (!mapped.uploadDate && localMatch?.uploadDate) {
             mapped.uploadDate = localMatch.uploadDate;
           }
+          if (!mapped.uploadDate && mapped.createdAt) {
+            mapped.uploadDate = mapped.createdAt;
+          }
           if (mapped.isUploadDateLocked === undefined && localMatch?.isUploadDateLocked !== undefined) {
             mapped.isUploadDateLocked = localMatch.isUploadDateLocked;
+          } else if (mapped.isUploadDateLocked === undefined) {
+            mapped.isUploadDateLocked = true;
           }
           return mapped;
         })
@@ -854,6 +859,18 @@ export const syncExamToSupabase = async (exam: Exam): Promise<boolean> => {
       console.warn('Supabase exam sync error:', error.message);
       return false;
     }
+
+    // Always backup to cbt_sync_store table as safety net so upload_date is never lost across devices
+    try {
+      await supabase.from('cbt_sync_store').upsert({
+        key: `exam_${exam.id}`,
+        value: exam,
+        updated_at: new Date().toISOString()
+      });
+    } catch {
+      // Non-blocking
+    }
+
     broadcastCbtEvent('exam_updated', { examId: exam.id });
     return true;
   } catch (err) {

@@ -91,13 +91,24 @@ export default function App() {
   };
 
   const handleStartExam = (exam: Exam) => {
-    if (exam.uploadDate) {
-      const releaseTime = new Date(exam.uploadDate).getTime();
+    const targetDateStr = exam.uploadDate || exam.createdAt;
+    if (targetDateStr) {
+      const releaseTime = new Date(targetDateStr).getTime();
       if (!isNaN(releaseTime) && Date.now() < releaseTime) {
+        const d = new Date(targetDateStr);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const timeFormatted = `${hours}:${minutes} WIB`;
+        const dateFormatted = d.toLocaleDateString('id-ID', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
         setAppAlert(
-          `Paket ujian "${exam.title}" belum dapat dibuka. Soal akan otomatis siap dikerjakan oleh siswa pada ${new Date(exam.uploadDate).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })} WIB sesuai jadwal rilis guru.`
+          `Paket ujian "${exam.title}" belum dapat dikerjakan. Siswa hanya dapat mulai mengerjakan jika jam untuk mengerjakan sudah terbuka sesuai setting jam upload rilis guru pada ${dateFormatted} pukul ${timeFormatted}.`
         );
-        setTimeout(() => setAppAlert(null), 6000);
+        setTimeout(() => setAppAlert(null), 7000);
         return;
       }
     }

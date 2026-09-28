@@ -456,16 +456,24 @@ export const overwriteAllSubjects = (newSubjects: Subject[]): void => {
 
 // --- EXAMS ---
 export const getAllExams = (): Exam[] => {
+  let list: Exam[];
   if (memoryExamsCache !== null) {
-    return memoryExamsCache.filter(e => !isExamDeleted(e.id));
+    list = memoryExamsCache.filter(e => !isExamDeleted(e.id));
+  } else {
+    const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, []);
+    const clean = stored.filter(e => !isExamDeleted(e.id));
+    if (clean.length !== stored.length) {
+      setStored(STORAGE_KEYS.EXAMS, clean);
+    }
+    memoryExamsCache = clean;
+    list = clean;
   }
-  const stored = getStored<Exam[]>(STORAGE_KEYS.EXAMS, []);
-  const clean = stored.filter(e => !isExamDeleted(e.id));
-  if (clean.length !== stored.length) {
-    setStored(STORAGE_KEYS.EXAMS, clean);
-  }
-  memoryExamsCache = clean;
-  return clean;
+  return list.map(e => {
+    if (!e.uploadDate && e.createdAt) {
+      return { ...e, uploadDate: e.createdAt, isUploadDateLocked: e.isUploadDateLocked ?? true };
+    }
+    return e;
+  });
 };
 
 export const saveExams = (exams: Exam[], syncToDb = true): void => {
