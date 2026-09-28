@@ -1832,7 +1832,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
               )}
             </div>
           ) : (
-            <div className="w-full overflow-hidden text-black font-serif">
+            <div className="w-full overflow-visible print:overflow-visible text-black font-serif">
               <table className="w-full text-left text-xs border-collapse border border-black table-fixed">
                 <thead className="bg-slate-100 font-bold text-center border-b-2 border-black">
                   <tr>

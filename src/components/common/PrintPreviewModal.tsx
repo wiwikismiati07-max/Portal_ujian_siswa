@@ -188,7 +188,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
       </div>
 
       {/* Printable Sheet Viewport (Real A4 Container with adaptive orientation width) */}
-      <div className={`w-full ${containerMaxWidth} bg-white shadow-2xl rounded-lg border border-slate-300 p-6 sm:p-8 lg:p-10 text-black my-2 font-serif min-h-[700px] overflow-hidden transition-all duration-300`}>
+      <div className={`w-full ${containerMaxWidth} bg-white shadow-2xl rounded-lg border border-slate-300 p-6 sm:p-8 lg:p-10 text-black my-2 font-serif min-h-[700px] overflow-visible print:overflow-visible transition-all duration-300`}>
         <div ref={contentRef} id="official-printable-content" className="w-full">
           {children}
         </div>

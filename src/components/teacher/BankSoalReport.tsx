@@ -823,7 +823,7 @@ export const BankSoalReport: React.FC<BankSoalReportProps> = ({
 
         <div className="my-6">
           {printDocMode === 'kisi_kisi' ? (
-            <div className="w-full overflow-hidden">
+            <div className="w-full overflow-visible print:overflow-visible">
               <table className="w-full text-left text-xs border-collapse border border-black table-fixed">
                 <thead className="bg-slate-100 border-b-2 border-black text-black font-serif font-bold text-center">
                   <tr>
