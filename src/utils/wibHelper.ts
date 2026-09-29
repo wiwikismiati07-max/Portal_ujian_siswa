@@ -172,3 +172,32 @@ export const formatWibCountdown = (targetIsoOrDateStr: string, nowMs: number = D
   if (minutes > 0) return `${minutes} menit ${seconds} detik lagi`;
   return `${seconds} detik lagi`;
 };
+
+/**
+ * Mengubah ISO string menjadi format tanggal string YYYY-MM-DD dalam WIB
+ */
+export const getWibDateString = (isoOrDateStr?: string): string => {
+  if (!isoOrDateStr) return '';
+  const d = new Date(isoOrDateStr);
+  if (isNaN(d.getTime())) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: WIB_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(d);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  } catch {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+};
+
+/**
+ * Mendapatkan string YYYY-MM-DD untuk hari ini dalam WIB
+ */
+export const getTodayWibDateString = (): string => {
+  return getWibDateString(new Date().toISOString());
+};

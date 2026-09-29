@@ -36,6 +36,7 @@ import {
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
 import { PrintPreviewModal } from '../common/PrintPreviewModal';
+import { getWibDateString, getTodayWibDateString, formatWibDate } from '../../utils/wibHelper';
 
 interface ClassScoreRecapProps {
   submissions: ExamSubmission[];
@@ -62,6 +63,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [printDocMode, setPrintDocMode] = useState<'rekap' | 'analisis'>('rekap');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  // Date Filter State (List Siswa Mengerjakan Hari Ini / Per Tanggal)
+  const todayWibStr = useMemo(() => getTodayWibDateString(), []);
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'today' | 'custom'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(todayWibStr);
+
+  // Hitung jumlah siswa yang mengerjakan hari ini (WIB)
+  const todaySubmissionsCount = useMemo(() => {
+    return submissions.filter(s => {
+      if (!s.submittedAt || s.id.startsWith('unsub_') || s.id.startsWith('unsubmitted_')) return false;
+      return getWibDateString(s.submittedAt) === todayWibStr;
+    }).length;
+  }, [submissions, todayWibStr]);
 
   // Calculate submission counts & remedial counts per exam for dropdown
   const examSubmissionCounts = useMemo(() => {
@@ -259,9 +273,18 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     return [...rawFiltered, ...missingRows];
   }, [submissions, selectedExamId, selectedClass, showAllClassRoster, allStudents, currentExam]);
 
-  // Filter submissions by Integrity, Score Filter, and Search keyword, and sort by Class & Name
+  // Filter submissions by Integrity, Date, Score Filter, and Search keyword, and sort by Class & Name
   const filteredSubmissions = useMemo(() => {
     const list = baseSubmissions.filter(sub => {
+      // Date Filter (List Siswa Mengerjakan Hari Ini / Per Tanggal)
+      if (dateFilterMode === 'today') {
+        if (!sub.submittedAt || sub.id.startsWith('unsub_') || sub.id.startsWith('unsubmitted_')) return false;
+        if (getWibDateString(sub.submittedAt) !== todayWibStr) return false;
+      } else if (dateFilterMode === 'custom') {
+        if (!sub.submittedAt || sub.id.startsWith('unsub_') || sub.id.startsWith('unsubmitted_')) return false;
+        if (selectedDate && getWibDateString(sub.submittedAt) !== selectedDate) return false;
+      }
+
       // Integrity filter
       const violations = sub.violationCount || 0;
       if (integrityFilter === 'clean' && violations > 0) return false;
@@ -288,7 +311,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
     // Urut Kelas (7A, 7B, ... 8A, ... 9A, ... 9H) lalu Urut Nama Siswa (A - Z)
     return list.sort((a, b) => compareByClassAndName(a, b));
-  }, [baseSubmissions, integrityFilter, scoreFilter, searchKeyword, currentExam]);
+  }, [baseSubmissions, integrityFilter, scoreFilter, searchKeyword, currentExam, dateFilterMode, selectedDate, todayWibStr]);
 
   // Calculate statistics from base submissions
   const totalBaseStudents = baseSubmissions.length;
@@ -664,6 +687,52 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
             />
             <span className="font-semibold">Sertakan Siswa Belum Ujian (Nilai 0)</span>
           </label>
+
+          {/* Filter Tanggal Mengerjakan (List Siswa Mengerjakan Hari Ini / Per Tanggal) */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0 bg-indigo-50/70 border border-indigo-200 px-3 py-1.5 rounded-xl">
+            <label className="text-[11px] sm:text-xs font-bold text-indigo-900 uppercase tracking-wide shrink-0 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Tanggal:</span>
+            </label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <select
+                value={dateFilterMode}
+                onChange={(e) => {
+                  const val = e.target.value as 'all' | 'today' | 'custom';
+                  setDateFilterMode(val);
+                  if (val === 'custom' && !selectedDate) {
+                    setSelectedDate(todayWibStr);
+                  }
+                }}
+                className="text-xs font-semibold px-2.5 py-1 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 text-indigo-950"
+              >
+                <option value="all">📅 Semua Tanggal</option>
+                <option value="today">⚡ Hari Ini ({todaySubmissionsCount} Siswa)</option>
+                <option value="custom">📆 Per Tanggal Spesifik...</option>
+              </select>
+
+              {dateFilterMode === 'custom' && (
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="text-xs font-semibold px-2 py-1 bg-white border border-indigo-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800"
+                />
+              )}
+
+              {dateFilterMode !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setDateFilterMode('all')}
+                  className="px-2 py-0.5 bg-indigo-200/80 hover:bg-indigo-300 text-indigo-900 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Kembali ke semua tanggal"
+                >
+                  <span>Reset Tanggal</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Search box */}
@@ -877,6 +946,14 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
               <span>🔤</span>
               <span>Urut: Kelas & Nama (A-Z)</span>
             </span>
+            {dateFilterMode !== 'all' && (
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md text-[11px] font-bold flex items-center gap-1 animate-in fade-in">
+                <span>⚡</span>
+                <span>
+                  Filter Tanggal: {dateFilterMode === 'today' ? `Hari Ini (${formatWibDate(new Date().toISOString())})` : formatWibDate(selectedDate)}
+                </span>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap text-xs">
