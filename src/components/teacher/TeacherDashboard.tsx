@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Exam, Question, Subject, ExamSubmission } from '../../types';
 import { isSameTeacher } from '../../utils/userDeduplication';
+import { pullFromSupabase } from '../../utils/supabaseSync';
 import {
   getAllExams,
   getAllQuestions,
@@ -189,6 +190,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, ini
       const freshGuruList = getAllUsers().filter(u => u.role === 'guru');
       setAllTeachers(freshGuruList.length > 0 ? freshGuruList : [teacher]);
     };
+
+    // Immediately pull fresh multi-user data from Supabase Cloud on mount
+    pullFromSupabase().then(() => {
+      handleUpdate();
+    }).catch(() => {});
+
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, [teacher]);

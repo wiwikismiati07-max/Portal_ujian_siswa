@@ -17,6 +17,7 @@ import {
   overwriteSubjectsDirect
 } from '../../utils/storage';
 import { cleanAndDeduplicateUsers } from '../../utils/userDeduplication';
+import { pullFromSupabase } from '../../utils/supabaseSync';
 import { ExcelManager } from '../teacher/ExcelManager';
 import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
 import { SUPABASE_SETUP_SQL, SUPABASE_REKAP_NILAI_SQL, SUPABASE_REKAP_NILAI_TABLE_SQL } from '../../utils/supabaseClient';
@@ -138,6 +139,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       setSubmissions(getAllSubmissions());
       setSubjects(getAllSubjects());
     };
+
+    // Immediately pull fresh multi-user data from Supabase Cloud on mount
+    pullFromSupabase().then(() => {
+      handleUpdate();
+    }).catch(() => {});
+
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);

@@ -158,6 +158,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     const handleUpdate = () => {
       setAllUsers(getAllUsers());
     };
+    pullFromSupabase().catch(() => {});
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, ExamSubmission, Subject } from '../../types';
 import { getAllExams, getAllSubmissions, getQuestionsByExamId, getAllSubjects } from '../../utils/storage';
+import { pullFromSupabase } from '../../utils/supabaseSync';
 import { isStudentEligibleForExam } from '../../utils/classHelper';
 import {
   formatWibDate,
@@ -60,6 +61,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, onS
       setSubmissions(getAllSubmissions());
       setSubjects(getAllSubjects());
     };
+
+    // Immediately pull fresh multi-user data from Supabase Cloud on mount
+    pullFromSupabase().then(() => {
+      handleUpdate();
+    }).catch(() => {});
+
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);

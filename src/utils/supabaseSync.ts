@@ -442,6 +442,7 @@ export const initSupabaseSync = async (): Promise<boolean> => {
     setStatus('connected', 'Terhubung ke Supabase (Sinkronisasi Multiuser Aktif)');
     await pullFromSupabase();
     setupRealtimeSubscription();
+    startMultiuserAutoSync(8000);
     return true;
   } catch (err: any) {
     console.error('Supabase init error:', err);
@@ -564,24 +565,6 @@ export const pullFromSupabase = async (): Promise<void> => {
             !e.id.startsWith('exam_arb_pts')
         );
 
-      // Clean deleted exams & mock exams from DB in the background
-      const toDeleteFromDb = dbExams
-        .map(mapExamFromDb)
-        .filter(
-          e =>
-            isExamDeleted(e.id) ||
-            e.id.startsWith('exam_inf_pts') ||
-            e.id.startsWith('exam_ipa_pts') ||
-            e.id.startsWith('exam_arb_pts')
-        )
-        .map(e => e.id);
-
-      if (toDeleteFromDb.length > 0) {
-        supabase.from('cbt_submissions').delete().in('exam_id', toDeleteFromDb).then(() => {});
-        supabase.from('cbt_questions').delete().in('exam_id', toDeleteFromDb).then(() => {});
-        supabase.from('cbt_exams').delete().in('id', toDeleteFromDb).then(() => {});
-      }
-
       saveExams(cleanExams, false);
     }
 
@@ -591,16 +574,12 @@ export const pullFromSupabase = async (): Promise<void> => {
       .select('*')
       .limit(2000);
     if (!qError && dbQuestions) {
-      const currentExams = getAllExams();
-      const validExamIds = new Set(currentExams.map(e => e.id));
-
       const cleanQuestions = dbQuestions
         .map(mapQuestionFromDb)
         .filter(
           q =>
             !isQuestionDeleted(q.id, q.examId) &&
             !isExamDeleted(q.examId) &&
-            validExamIds.has(q.examId) &&
             !q.examId.startsWith('exam_inf_pts') &&
             !q.examId.startsWith('exam_ipa_pts') &&
             !q.examId.startsWith('exam_arb_pts')
@@ -616,65 +595,54 @@ export const pullFromSupabase = async (): Promise<void> => {
         }
       }
 
-      // Clean up orphaned or deleted questions from DB in the background
-      const badQIds = dbQuestions
-        .map(mapQuestionFromDb)
-        .filter(
-          q =>
-            isQuestionDeleted(q.id, q.examId) ||
-            isExamDeleted(q.examId) ||
-            !validExamIds.has(q.examId) ||
-            q.examId.startsWith('exam_inf_pts') ||
-            q.examId.startsWith('exam_ipa_pts') ||
-            q.examId.startsWith('exam_arb_pts')
-        )
-        .map(q => q.id);
-
-      if (badQIds.length > 0) {
-        supabase.from('cbt_questions').delete().in('id', badQIds).then(() => {});
-      }
-
       // Supabase is authoritative; save clean questions without re-uploading stale deleted ones
       saveQuestions(dedupedQuestions, false);
     }
 
-    // 5. Submissions
+    // 5. Submissions (Primary Table cbt_submissions + Backup cbt_sync_store)
     const { data: dbSubmissions, error: subError } = await supabase
       .from('cbt_submissions')
       .select('*')
       .limit(5000);
 
-    if (!subError && dbSubmissions) {
-      const currentExams = getAllExams();
-      const validExamIds = new Set(currentExams.map(e => e.id));
+    const pulledSubMap = new Map<string, ExamSubmission>();
 
+    if (!subError && dbSubmissions) {
       const cleanSubs = dbSubmissions
         .map(mapSubmissionFromDb)
-        .filter(
-          s =>
-            !isSubmissionDeleted(s.id, s.examId) &&
-            !isExamDeleted(s.examId) &&
-            validExamIds.has(s.examId)
-        );
+        .filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
 
-      const badSubIds = dbSubmissions
-        .map(mapSubmissionFromDb)
-        .filter(
-          s =>
-            isSubmissionDeleted(s.id, s.examId) ||
-            isExamDeleted(s.examId) ||
-            !validExamIds.has(s.examId)
-        )
-        .map(s => s.id);
-
-      if (badSubIds.length > 0) {
-        supabase.from('cbt_submissions').delete().in('id', badSubIds).then(() => {});
+      for (const s of cleanSubs) {
+        pulledSubMap.set(s.id, s);
       }
-
-      saveSubmissions(cleanSubs, false);
     }
 
+    // Also pull backup submissions from cbt_sync_store to ensure no submission is ever lost
+    try {
+      const { data: storeSubs } = await supabase
+        .from('cbt_sync_store')
+        .select('key, value')
+        .like('key', 'sub_%');
+
+      if (storeSubs && storeSubs.length > 0) {
+        for (const row of storeSubs) {
+          if (row.value && typeof row.value === 'object' && row.value.id) {
+            const sub = row.value as ExamSubmission;
+            if (!isSubmissionDeleted(sub.id, sub.examId) && !isExamDeleted(sub.examId)) {
+              if (!pulledSubMap.has(sub.id)) {
+                pulledSubMap.set(sub.id, sub);
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const finalSubmissions = Array.from(pulledSubMap.values());
+    saveSubmissions(finalSubmissions, false);
+
     notifyDataUpdated();
+
   } catch (err) {
     console.error('Error during pullFromSupabase:', err);
   }
@@ -1558,5 +1526,71 @@ export const uploadAllLocalToSupabase = async (
   } catch (err: any) {
     console.error('Error uploading to Supabase:', err);
     return { success: false, message: err.message || 'Gagal mengunggah data ke Supabase' };
+  }
+};
+
+let autoSyncInterval: any = null;
+
+export const startMultiuserAutoSync = (intervalMs = 8000) => {
+  if (autoSyncInterval) {
+    clearInterval(autoSyncInterval);
+  }
+  autoSyncInterval = setInterval(() => {
+    pullFromSupabase().catch(() => {});
+  }, intervalMs);
+};
+
+export const fetchSubmissionsDirectFromSupabase = async (examId?: string): Promise<{
+  success: boolean;
+  submissions: ExamSubmission[];
+  error?: string;
+}> => {
+  try {
+    let query = supabase.from('cbt_submissions').select('*').limit(5000);
+    if (examId) {
+      query = query.eq('exam_id', examId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      return { success: false, submissions: getAllSubmissions(), error: error.message };
+    }
+
+    const map = new Map<string, ExamSubmission>();
+    if (data && data.length > 0) {
+      const mapped = data
+        .map(mapSubmissionFromDb)
+        .filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+      for (const s of mapped) {
+        map.set(s.id, s);
+      }
+    }
+
+    // Also fetch backup submissions from cbt_sync_store
+    try {
+      const { data: storeSubs } = await supabase
+        .from('cbt_sync_store')
+        .select('key, value')
+        .like('key', 'sub_%');
+      if (storeSubs && storeSubs.length > 0) {
+        for (const row of storeSubs) {
+          if (row.value && typeof row.value === 'object' && row.value.id) {
+            const sub = row.value as ExamSubmission;
+            if (
+              (!examId || sub.examId === examId) &&
+              !isSubmissionDeleted(sub.id, sub.examId) &&
+              !isExamDeleted(sub.examId)
+            ) {
+              if (!map.has(sub.id)) map.set(sub.id, sub);
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const finalSubs = Array.from(map.values());
+    saveSubmissions(finalSubs, false);
+    return { success: true, submissions: finalSubs };
+  } catch (err: any) {
+    return { success: false, submissions: getAllSubmissions(), error: err?.message || 'Gagal mengambil data pengerjaan siswa' };
   }
 };
