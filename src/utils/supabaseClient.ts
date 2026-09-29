@@ -423,7 +423,9 @@ ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS violation_
 ALTER TABLE IF EXISTS public.cbt_submissions ADD COLUMN IF NOT EXISTS evaluated_answers JSONB;
 
 -- 1. VIEW REKAP NILAI LENGKAP PER KELAS & MAPEL
-CREATE OR REPLACE VIEW public.v_rekap_nilai_lengkap AS
+CREATE OR REPLACE VIEW public.v_rekap_nilai_lengkap 
+WITH (security_invoker = true)
+AS
 SELECT 
   ROW_NUMBER() OVER(PARTITION BY s.exam_id, s.student_class ORDER BY s.student_name ASC) AS no_absen,
   COALESCE(u.nip_or_nis, '-') AS nisn,
@@ -453,7 +455,9 @@ WHERE s.submitted_at IS NOT NULL
 ORDER BY s.student_class ASC, s.student_name ASC;
 
 -- 2. VIEW ANALISIS & STATISTIK KETUNTASAN PER KELAS & UJIAN
-CREATE OR REPLACE VIEW public.v_rekap_statistik_kelas AS
+CREATE OR REPLACE VIEW public.v_rekap_statistik_kelas 
+WITH (security_invoker = true)
+AS
 SELECT 
   s.exam_id,
   s.exam_title AS judul_ujian,
@@ -476,7 +480,9 @@ WHERE s.submitted_at IS NOT NULL
 GROUP BY s.exam_id, s.exam_title, s.subject_name, s.student_class;
 
 -- 3. VIEW DAFTAR SISWA REMEDIAL (Nilai < KKM 75)
-CREATE OR REPLACE VIEW public.v_siswa_remedial AS
+CREATE OR REPLACE VIEW public.v_siswa_remedial 
+WITH (security_invoker = true)
+AS
 SELECT 
   COALESCE(u.nip_or_nis, '-') AS nisn,
   s.student_name AS nama_siswa,
@@ -492,7 +498,9 @@ WHERE s.submitted_at IS NOT NULL AND s.percentage < 75
 ORDER BY s.student_class ASC, s.percentage ASC;
 
 -- 4. VIEW MONITORING SISWA YANG BELUM UJIAN (Berdasarkan Master Data Siswa)
-CREATE OR REPLACE VIEW public.v_siswa_belum_ujian AS
+CREATE OR REPLACE VIEW public.v_siswa_belum_ujian 
+WITH (security_invoker = true)
+AS
 SELECT 
   u.id AS student_id,
   u.nip_or_nis AS nisn,
@@ -803,7 +811,9 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = NOW();
 
 -- 8. VIEW BUKU RAPOR / LEDGER MATRIKS NILAI SISWA SEMUA MATA PELAJARAN
-CREATE OR REPLACE VIEW public.v_rekap_ledger_semua_mapel AS
+CREATE OR REPLACE VIEW public.v_rekap_ledger_semua_mapel 
+WITH (security_invoker = true)
+AS
 SELECT 
   ROW_NUMBER() OVER(PARTITION BY u.class_group ORDER BY u.name ASC) AS no_absen,
   u.id AS student_id,
