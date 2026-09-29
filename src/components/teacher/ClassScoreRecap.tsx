@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
-import { DEFAULT_CLASSES } from '../../utils/classHelper';
+import { DEFAULT_CLASSES, compareByClassAndName } from '../../utils/classHelper';
 import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions } from '../../utils/storage';
 import { pullFromSupabase } from '../../utils/supabaseSync';
 import { ConfirmModal } from '../ConfirmModal';
@@ -258,9 +258,9 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     return [...rawFiltered, ...missingRows];
   }, [submissions, selectedExamId, selectedClass, showAllClassRoster, allStudents, currentExam]);
 
-  // Filter submissions by Integrity, Score Filter, and Search keyword
+  // Filter submissions by Integrity, Score Filter, and Search keyword, and sort by Class & Name
   const filteredSubmissions = useMemo(() => {
-    return baseSubmissions.filter(sub => {
+    const list = baseSubmissions.filter(sub => {
       // Integrity filter
       const violations = sub.violationCount || 0;
       if (integrityFilter === 'clean' && violations > 0) return false;
@@ -284,6 +284,9 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
       }
       return true;
     });
+
+    // Urut Kelas (7A, 7B, ... 8A, ... 9A, ... 9H) lalu Urut Nama Siswa (A - Z)
+    return list.sort((a, b) => compareByClassAndName(a, b));
   }, [baseSubmissions, integrityFilter, scoreFilter, searchKeyword, currentExam]);
 
   // Calculate statistics from base submissions
@@ -862,12 +865,16 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
         
         {/* Table Header / Subtitle */}
         <div className="px-5 py-3.5 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-slate-700">
               Daftar Rekap Nilai Peserta Didik
             </span>
             <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md text-[11px] font-bold">
               Menampilkan {filteredSubmissions.length} Data
+            </span>
+            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-[11px] font-bold flex items-center gap-1">
+              <span>🔤</span>
+              <span>Urut: Kelas & Nama (A-Z)</span>
             </span>
           </div>
 

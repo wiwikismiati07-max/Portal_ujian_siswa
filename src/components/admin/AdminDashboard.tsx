@@ -21,7 +21,7 @@ import { ExcelManager } from '../teacher/ExcelManager';
 import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
 import { SUPABASE_SETUP_SQL, SUPABASE_REKAP_NILAI_SQL, SUPABASE_REKAP_NILAI_TABLE_SQL } from '../../utils/supabaseClient';
 import { ConfirmModal } from '../ConfirmModal';
-import { DEFAULT_CLASSES } from '../../utils/classHelper';
+import { DEFAULT_CLASSES, compareByClassAndName, compareClassNames } from '../../utils/classHelper';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
 import { PrintPreviewModal } from '../common/PrintPreviewModal';
@@ -213,12 +213,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     });
 
     return list.sort((a, b) => {
-      const classA = (a.classGroup || a.subjectName || 'ZZZ').toLowerCase();
-      const classB = (b.classGroup || b.subjectName || 'ZZZ').toLowerCase();
-      if (classA !== classB) {
-        return classA.localeCompare(classB);
+      if (a.role === 'siswa' && b.role === 'siswa') {
+        return compareByClassAndName(a, b);
       }
-      return a.name.localeCompare(b.name);
+      if (a.role !== b.role) {
+        const roleOrder: Record<UserRole, number> = { admin: 1, guru: 2, siswa: 3 };
+        return (roleOrder[a.role] || 9) - (roleOrder[b.role] || 9);
+      }
+      const classComp = compareClassNames(a.classGroup || a.subjectName, b.classGroup || b.subjectName);
+      if (classComp !== 0) return classComp;
+      return a.name.trim().localeCompare(b.name.trim(), 'id', { sensitivity: 'base' });
     });
   }, [users, roleFilter, selectedClass, searchQuery]);
 
