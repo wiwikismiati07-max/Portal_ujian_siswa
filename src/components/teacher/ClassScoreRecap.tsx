@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
-import { DEFAULT_CLASSES, compareByClassAndName } from '../../utils/classHelper';
-import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions, purgeNis999Records } from '../../utils/storage';
+import { DEFAULT_CLASSES, compareByClassAndName, compareClassNames, normalizeClassGroup } from '../../utils/classHelper';
+import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions, purgeNis999Records, migrateNonStandardClasses } from '../../utils/storage';
 import { pullFromSupabase } from '../../utils/supabaseSync';
 import { ConfirmModal } from '../ConfirmModal';
 import {
@@ -63,6 +63,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   const [printDocMode, setPrintDocMode] = useState<'rekap' | 'analisis'>('rekap');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [filterMultiAttemptOnly, setFilterMultiAttemptOnly] = useState<boolean>(false);
 
   // Date Filter State (List Siswa Mengerjakan Hari Ini / Per Tanggal)
   const todayWibStr = useMemo(() => getTodayWibDateString(), []);
@@ -174,10 +175,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     };
     // Purge NIS 999 records automatically on mount
     purgeNis999Records().catch(() => {});
+    // Otomatis normalkan penamaan kelas bertanda strip seperti 7-A ke 7A
+    migrateNonStandardClasses().catch(() => {});
     pullFromSupabase().catch(() => {});
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);
+
+  // Otomatis ubah pemilihan kelas jika sebelumnya bernilai '7-A' ke '7A'
+  useEffect(() => {
+    if (selectedClass === '7-A') {
+      setSelectedClass('7A');
+    }
+  }, [selectedClass]);
 
   const allStudents = useMemo(
     () =>
@@ -194,14 +204,18 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
   // Extract unique classes from submissions & exams & default classes (7A-9H)
   const availableClasses = useMemo(() => {
-    return Array.from(
-      new Set([
-        ...DEFAULT_CLASSES,
-        ...exams.flatMap(e => e.targetClasses || []),
-        ...submissions.map(s => s.studentClass).filter(Boolean),
-        ...allStudents.map(s => s.classGroup).filter(Boolean)
-      ])
-    ).filter(Boolean).sort();
+    const rawList = [
+      ...DEFAULT_CLASSES,
+      ...exams.flatMap(e => (e.targetClasses || []).map(normalizeClassGroup)),
+      ...submissions.map(s => normalizeClassGroup(s.studentClass)).filter(Boolean),
+      ...allStudents.map(s => normalizeClassGroup(s.classGroup)).filter(Boolean)
+    ];
+
+    const cleanUnique = Array.from(
+      new Set(rawList.map(c => normalizeClassGroup(c)))
+    ).filter(c => Boolean(c) && c !== '7-A' && !c.includes('-'));
+
+    return cleanUnique.sort((a, b) => compareClassNames(a, b));
   }, [exams, submissions, allStudents]);
 
   const currentExam = useMemo(() => exams.find(e => e.id === selectedExamId), [exams, selectedExamId]);
@@ -211,6 +225,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     setSyncStatusMsg(null);
     try {
       await purgeNis999Records();
+      await migrateNonStandardClasses();
       await pullFromSupabase();
       setSyncStatusMsg('Data berhasil disinkronkan & dibersihkan dari database cloud!');
       setTimeout(() => setSyncStatusMsg(null), 3000);
@@ -236,7 +251,11 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           sub.examTitle.trim().toLowerCase() === currentExam.title.trim().toLowerCase();
         if (!matchesId && !matchesTitle) return false;
       }
-      if (selectedClass !== 'all' && sub.studentClass !== selectedClass) return false;
+      if (selectedClass !== 'all') {
+        const subClass = normalizeClassGroup(sub.studentClass);
+        const selClass = normalizeClassGroup(selectedClass);
+        if (subClass !== selClass) return false;
+      }
       return true;
     });
 
@@ -247,13 +266,14 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     // Determine target students to include when roster is enabled
     let targetStudents: User[] = [];
     if (selectedClass !== 'all') {
-      targetStudents = allStudents.filter(s => s.classGroup === selectedClass);
+      const selClass = normalizeClassGroup(selectedClass);
+      targetStudents = allStudents.filter(s => normalizeClassGroup(s.classGroup) === selClass);
     } else if (currentExam) {
-      const examClasses = currentExam.targetClasses || [];
+      const examClasses = (currentExam.targetClasses || []).map(normalizeClassGroup);
       if (examClasses.length === 0 || examClasses.includes('Semua Kelas') || examClasses.includes('all')) {
         targetStudents = allStudents;
       } else {
-        targetStudents = allStudents.filter(s => s.classGroup && examClasses.includes(s.classGroup));
+        targetStudents = allStudents.filter(s => s.classGroup && examClasses.includes(normalizeClassGroup(s.classGroup)));
       }
     } else {
       targetStudents = allStudents;
@@ -271,7 +291,7 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           subjectName: currentExam ? currentExam.subjectName : 'Semua Mapel',
           studentId: stu.id,
           studentName: stu.name,
-          studentClass: stu.classGroup || (selectedClass !== 'all' ? selectedClass : 'Umum'),
+          studentClass: normalizeClassGroup(stu.classGroup) || (selectedClass !== 'all' ? normalizeClassGroup(selectedClass) : 'Umum'),
           studentNipOrNis: stu.nipOrNis || undefined,
           answers: {},
           earnedScore: 0,
@@ -290,9 +310,53 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     return [...rawFiltered, ...missingRows];
   }, [submissions, selectedExamId, selectedClass, showAllClassRoster, allStudents, currentExam]);
 
+  // Hitung berapa kali masing-masing siswa telah mengerjakan paket ujian ini
+  const studentAttemptCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    submissions.forEach(sub => {
+      if (sub.id.startsWith('unsub_') || sub.id.startsWith('unsubmitted_') || !sub.submittedAt) return;
+      if (sub.studentNipOrNis?.trim() === '999' || sub.studentId === '999') return;
+
+      if (selectedExamId !== 'all') {
+        const matchesId = sub.examId === selectedExamId;
+        const matchesTitle =
+          currentExam &&
+          sub.examTitle &&
+          sub.examTitle.trim().toLowerCase() === currentExam.title.trim().toLowerCase();
+        if (!matchesId && !matchesTitle) return;
+      }
+      if (selectedClass !== 'all') {
+        const subClass = normalizeClassGroup(sub.studentClass);
+        const selClass = normalizeClassGroup(selectedClass);
+        if (subClass !== selClass) return;
+      }
+
+      const key = (sub.studentNipOrNis && sub.studentNipOrNis.trim()) || sub.studentId || sub.studentName.trim().toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  }, [submissions, selectedExamId, selectedClass, currentExam]);
+
+  // Himpunan kunci siswa yang mengerjakan lebih dari 1 kali (> 1 kali submit)
+  const multiAttemptStudentKeys = useMemo(() => {
+    const keys = new Set<string>();
+    studentAttemptCounts.forEach((count, key) => {
+      if (count > 1) {
+        keys.add(key);
+      }
+    });
+    return keys;
+  }, [studentAttemptCounts]);
+
   // Filter submissions by Integrity, Date, Score Filter, and Search keyword, and sort by Class & Name
   const filteredSubmissions = useMemo(() => {
     const list = baseSubmissions.filter(sub => {
+      // Filter siswa mengerjakan lebih dari 1 kali (Ujian Ulang / Remedial)
+      if (filterMultiAttemptOnly) {
+        const studentKey = (sub.studentNipOrNis && sub.studentNipOrNis.trim()) || sub.studentId || sub.studentName.trim().toLowerCase();
+        if (!multiAttemptStudentKeys.has(studentKey)) return false;
+      }
+
       // Date Filter (List Siswa Mengerjakan Hari Ini / Per Tanggal)
       if (dateFilterMode === 'today') {
         if (!sub.submittedAt || sub.id.startsWith('unsub_') || sub.id.startsWith('unsubmitted_')) return false;
@@ -328,25 +392,54 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
     // Urut Kelas (7A, 7B, ... 8A, ... 9A, ... 9H) lalu Urut Nama Siswa (A - Z)
     return list.sort((a, b) => compareByClassAndName(a, b));
-  }, [baseSubmissions, integrityFilter, scoreFilter, searchKeyword, currentExam, dateFilterMode, selectedDate, todayWibStr]);
+  }, [baseSubmissions, filterMultiAttemptOnly, multiAttemptStudentKeys, integrityFilter, scoreFilter, searchKeyword, currentExam, dateFilterMode, selectedDate, todayWibStr]);
+
+  // Total siswa dalam 1 kelas sesuai jumlah total real (master data siswa kelas tersebut)
+  const totalClassStudents = useMemo(() => {
+    if (selectedClass !== 'all') {
+      const normSelected = normalizeClassGroup(selectedClass);
+      const masterCount = allStudents.filter(s => normalizeClassGroup(s.classGroup) === normSelected).length;
+      if (masterCount > 0) return masterCount;
+      // Fallback: hitung siswa unik dari pengerjaan kelas ini jika master data kosong
+      const uniqueInSubmissions = new Set(
+        baseSubmissions
+          .filter(s => normalizeClassGroup(s.studentClass) === normSelected)
+          .map(s => (s.studentNipOrNis && s.studentNipOrNis.trim()) || s.studentId || s.studentName.trim().toLowerCase())
+      );
+      return uniqueInSubmissions.size;
+    }
+    // Jika Semua Kelas dipilih: total seluruh siswa unik
+    const uniqueAllStudents = new Set(
+      allStudents.map(s => (s.nipOrNis && s.nipOrNis.trim()) || s.id || s.name.trim().toLowerCase())
+    );
+    const uniqueInSubs = new Set(
+      baseSubmissions.map(s => (s.studentNipOrNis && s.studentNipOrNis.trim()) || s.studentId || s.studentName.trim().toLowerCase())
+    );
+    return Math.max(uniqueAllStudents.size, uniqueInSubs.size, allStudents.length);
+  }, [selectedClass, allStudents, baseSubmissions]);
 
   // Calculate statistics from base submissions
   const totalBaseStudents = baseSubmissions.length;
+  const multiAttemptStudentsCount = multiAttemptStudentKeys.size;
+  const multiAttemptPercentage = totalClassStudents > 0
+    ? Math.round((multiAttemptStudentsCount / totalClassStudents) * 100)
+    : 0;
+
   const zeroScoreStudentsCount = baseSubmissions.filter(s => s.percentage === 0 || s.earnedScore === 0).length;
   const cleanStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) === 0 && !!s.submittedAt).length;
   const violatedStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) > 0).length;
   const criticalStudentsCount = baseSubmissions.filter(s => (s.violationCount || 0) >= 3).length;
 
-  const cleanPercentage = totalBaseStudents > 0 ? Math.round((cleanStudentsCount / totalBaseStudents) * 100) : 0;
-  const violatedPercentage = totalBaseStudents > 0 ? Math.round((violatedStudentsCount / totalBaseStudents) * 100) : 0;
-  const zeroPercentage = totalBaseStudents > 0 ? Math.round((zeroScoreStudentsCount / totalBaseStudents) * 100) : 0;
+  const cleanPercentage = totalClassStudents > 0 ? Math.round((cleanStudentsCount / totalClassStudents) * 100) : 0;
+  const violatedPercentage = totalClassStudents > 0 ? Math.round((violatedStudentsCount / totalClassStudents) * 100) : 0;
+  const zeroPercentage = totalClassStudents > 0 ? Math.round((zeroScoreStudentsCount / totalClassStudents) * 100) : 0;
 
   const scores = baseSubmissions.map(s => s.percentage);
-  const avgScore = totalBaseStudents > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / totalBaseStudents) : 0;
-  const maxScore = totalBaseStudents > 0 ? Math.max(...scores) : 0;
-  const minScore = totalBaseStudents > 0 ? Math.min(...scores) : 0;
+  const avgScore = baseSubmissions.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / baseSubmissions.length) : 0;
+  const maxScore = baseSubmissions.length > 0 ? Math.max(...scores) : 0;
+  const minScore = baseSubmissions.length > 0 ? Math.min(...scores) : 0;
   const passedCount = baseSubmissions.filter(s => s.passed).length;
-  const passedPercentage = totalBaseStudents > 0 ? Math.round((passedCount / totalBaseStudents) * 100) : 0;
+  const passedPercentage = totalClassStudents > 0 ? Math.round((passedCount / totalClassStudents) * 100) : 0;
 
   const handleExportExcel = () => {
     const title = currentExam ? `${currentExam.subjectName}_${currentExam.title}` : 'Semua_Ujian';
@@ -794,17 +887,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           {/* Statistical Summary Cards with Integrity & Zero Score Highlights */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         
-        {/* Total Peserta */}
+        {/* Total Siswa dalam 1 Kelas */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-1">
             <span className="text-xs font-bold uppercase tracking-wide">Total Siswa</span>
             <Users className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-slate-900">{totalBaseStudents}</span>
+            <span className="text-2xl font-extrabold text-slate-900">{totalClassStudents}</span>
             <span className="text-[11px] font-semibold text-slate-500">Siswa</span>
           </div>
-          <span className="text-[11px] text-slate-500 block mt-0.5">Daftar kelas & ujian</span>
+          <span className="text-[11px] text-slate-500 block mt-0.5">
+            {selectedClass !== 'all' ? `Jumlah 1 Kelas (${selectedClass})` : 'Total siswa seluruh kelas'}
+          </span>
         </div>
 
         {/* Siswa Nilai 0 */}
@@ -892,12 +987,62 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-extrabold text-slate-900">{passedPercentage}%</span>
             <span className="text-[11px] font-semibold text-slate-500">
-              ({passedCount}/{totalBaseStudents})
+              ({passedCount}/{totalClassStudents})
             </span>
           </div>
           <span className="text-[11px] text-slate-500 block mt-0.5">
             {passedCount} Siswa Lulus KKM
           </span>
+        </div>
+
+        {/* Siswa Mengerjakan Lebih Dari 1 Kali (Remedial / Ujian Ulang) */}
+        <div
+          onClick={() => {
+            if (multiAttemptStudentsCount > 0) {
+              setFilterMultiAttemptOnly(prev => !prev);
+            }
+          }}
+          className={`p-4 rounded-2xl border shadow-xs transition-all col-span-2 sm:col-span-1 select-none ${
+            multiAttemptStudentsCount > 0
+              ? filterMultiAttemptOnly
+                ? 'bg-purple-100 border-purple-400 ring-2 ring-purple-500/40 cursor-pointer shadow-sm'
+                : 'bg-purple-50/50 border-purple-200 hover:border-purple-300 hover:bg-purple-50 cursor-pointer'
+              : 'bg-white border-slate-200'
+          }`}
+          title={
+            multiAttemptStudentsCount > 0
+              ? filterMultiAttemptOnly
+                ? 'Klik untuk menampilkan semua siswa'
+                : 'Klik untuk memfilter siswa yang mengerjakan lebih dari 1 kali'
+              : 'Belum ada siswa yang mengerjakan lebih dari 1 kali'
+          }
+        >
+          <div className="flex items-center justify-between text-purple-700 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wide">Mengerjakan &gt; 1 Kali</span>
+            <RotateCcw className={`w-4 h-4 text-purple-600 ${filterMultiAttemptOnly ? 'animate-spin-slow' : ''}`} />
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-2xl font-extrabold ${multiAttemptStudentsCount > 0 ? 'text-purple-700' : 'text-slate-400'}`}>
+              {multiAttemptStudentsCount}
+            </span>
+            {multiAttemptStudentsCount > 0 ? (
+              <span className="text-[11px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-900 rounded">
+                {multiAttemptPercentage}%
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold text-slate-400">Siswa</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between mt-0.5">
+            <span className="text-[11px] text-slate-500">
+              {multiAttemptStudentsCount > 0 ? 'Ujian ulang / remedial' : '0 siswa ujian ulang'}
+            </span>
+            {multiAttemptStudentsCount > 0 && (
+              <span className="text-[10px] font-extrabold text-purple-700 hover:underline">
+                {filterMultiAttemptOnly ? '✕ Batal' : 'Lihat'}
+              </span>
+            )}
+          </div>
         </div>
 
       </div>
@@ -1008,6 +1153,19 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                 {integrityFilter === 'critical' && '🚨 Pelanggaran Kritis (≥3x)'}
               </span>
             )}
+            {filterMultiAttemptOnly && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1.5 animate-in fade-in">
+                <span>🔁 Filter: Mengerjakan &gt; 1 Kali ({multiAttemptStudentsCount} Siswa)</span>
+                <button
+                  type="button"
+                  onClick={() => setFilterMultiAttemptOnly(false)}
+                  className="hover:text-purple-950 cursor-pointer ml-0.5"
+                  title="Tampilkan semua siswa kembali"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
           </div>
         </div>
 
@@ -1047,6 +1205,9 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
                   const isCritical = violations >= 3;
                   const isZero = sub.percentage === 0 || sub.earnedScore === 0;
                   const isNotSubmitted = !sub.submittedAt;
+                  const studentKey = (sub.studentNipOrNis && sub.studentNipOrNis.trim()) || sub.studentId || sub.studentName.trim().toLowerCase();
+                  const attemptCount = studentAttemptCounts.get(studentKey) || 1;
+                  const isMultiAttempt = attemptCount > 1;
 
                   return (
                     <tr
@@ -1069,8 +1230,17 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
 
                       {/* Student Name */}
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                           <span>{sub.studentName}</span>
+                          {isMultiAttempt && !isNotSubmitted && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200 shrink-0"
+                              title={`Siswa telah mengerjakan ujian ini sebanyak ${attemptCount} kali (Ujian Ulang / Remedial)`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-purple-600" />
+                              <span>{attemptCount}x Ujian</span>
+                            </span>
+                          )}
                           {isNotSubmitted ? (
                             <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-bold">
                               Belum Submit

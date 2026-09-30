@@ -30,6 +30,7 @@ import {
   markSubmissionDeleted,
   syncTombstonesWithSupabase
 } from './tombstones';
+import { normalizeClassGroup } from './classHelper';
 
 export type SupabaseStatus = 'connecting' | 'connected' | 'needs_table_setup' | 'offline_fallback';
 
@@ -84,7 +85,7 @@ export const mapUserFromDb = (row: any): User => ({
   name: row.name,
   role: row.role,
   nipOrNis: row.nip_or_nis || undefined,
-  classGroup: row.class_group || undefined,
+  classGroup: row.class_group ? normalizeClassGroup(row.class_group) : undefined,
   subjectName: row.subject_name || undefined,
   avatar: row.avatar || undefined
 });
@@ -132,7 +133,9 @@ export const mapExamFromDb = (row: any): Exam => ({
   subjectName: row.subject_name,
   teacherId: row.teacher_id,
   teacherName: row.teacher_name,
-  targetClasses: Array.isArray(row.target_classes) ? row.target_classes : [],
+  targetClasses: Array.isArray(row.target_classes)
+    ? Array.from(new Set<string>(row.target_classes.map((c: any) => normalizeClassGroup(String(c))))).filter(c => Boolean(c) && c !== '7-A' && !c.includes('-'))
+    : [],
   durationMinutes: Number(row.duration_minutes) || 60,
   totalScore: Number(row.total_score) || 100,
   passingScore: Number(row.passing_score) || 75,
@@ -273,7 +276,7 @@ export const mapSubmissionFromDb = (row: any): ExamSubmission => {
     subjectName: row.subject_name,
     studentId: row.student_id,
     studentName: row.student_name,
-    studentClass: row.student_class,
+    studentClass: row.student_class ? normalizeClassGroup(row.student_class) : row.student_class,
     studentNipOrNis,
     answers: cleanAnswers,
     earnedScore: typeof row.earned_score === 'number' ? row.earned_score : (Number(row.earned_score) || 0),
@@ -489,6 +492,11 @@ export const pullFromSupabase = async (): Promise<void> => {
         .delete()
         .or('student_nip_or_nis.eq.999,student_nisn.eq.999,student_id.eq.999')
         .then(() => {});
+
+      // Otomatis ubah kelas '7-A' menjadi '7A' di Supabase Cloud
+      supabase.from('cbt_users').update({ class_group: '7A' }).eq('class_group', '7-A').then(() => {});
+      supabase.from('cbt_submissions').update({ student_class: '7A' }).eq('student_class', '7-A').then(() => {});
+      supabase.from('cbt_rekap_nilai_siswa').update({ student_class: '7A' }).eq('student_class', '7-A').then(() => {});
 
       const current = getCurrentUser();
       if (current) {

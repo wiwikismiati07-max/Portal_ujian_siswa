@@ -38,6 +38,7 @@ import {
   markQuestionDeleted,
   markSubmissionDeleted
 } from './tombstones';
+import { normalizeClassGroup } from './classHelper';
 
 export const INITIAL_APP_LINKS: AppLink[] = [
   {
@@ -183,6 +184,8 @@ export const initializeStorage = (): void => {
 
   // Otomatis bersihkan seluruh data siswa NIS 999 dan nilai palsunya pada saat startup
   purgeNis999Records().catch(() => {});
+  // Otomatis normalkan penamaan kelas bertanda strip seperti 7-A ke 7A
+  migrateNonStandardClasses().catch(() => {});
 };
 
 // --- AUTH ---
@@ -225,10 +228,20 @@ export const isSubmissionExcluded = (s: ExamSubmission): boolean => {
 
 export const getAllUsers = (): User[] => {
   if (memoryUsersCache !== null) {
-    return memoryUsersCache.filter(u => !isUserExcluded(u));
+    return memoryUsersCache.filter(u => !isUserExcluded(u)).map(u => {
+      if (u.classGroup && (u.classGroup.includes('-') || u.classGroup.includes(' '))) {
+        return { ...u, classGroup: normalizeClassGroup(u.classGroup) };
+      }
+      return u;
+    });
   }
   const stored = getStored<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const clean = stored.filter(u => !isUserExcluded(u));
+  const clean = stored.filter(u => !isUserExcluded(u)).map(u => {
+    if (u.classGroup && (u.classGroup.includes('-') || u.classGroup.includes(' '))) {
+      return { ...u, classGroup: normalizeClassGroup(u.classGroup) };
+    }
+    return u;
+  });
   if (clean.length !== stored.length) {
     setStored(STORAGE_KEYS.USERS, clean);
     deleteUserFromSupabase('user_guru_1').catch(() => {});
@@ -238,7 +251,12 @@ export const getAllUsers = (): User[] => {
 };
 
 export const saveUsers = (users: User[], syncToDb = true): void => {
-  const clean = users.filter(u => !isUserExcluded(u));
+  const clean = users.filter(u => !isUserExcluded(u)).map(u => {
+    if (u.classGroup && (u.classGroup.includes('-') || u.classGroup.includes(' '))) {
+      return { ...u, classGroup: normalizeClassGroup(u.classGroup) };
+    }
+    return u;
+  });
   memoryUsersCache = clean;
   setStored(STORAGE_KEYS.USERS, clean);
   if (syncToDb) {
@@ -548,10 +566,16 @@ export const getAllExams = (): Exam[] => {
     list = clean;
   }
   return list.map(e => {
-    if (!e.uploadDate && e.createdAt) {
-      return { ...e, uploadDate: e.createdAt, isUploadDateLocked: e.isUploadDateLocked ?? true };
+    let normalizedTargetClasses = e.targetClasses;
+    if (e.targetClasses && e.targetClasses.length > 0) {
+      normalizedTargetClasses = Array.from(
+        new Set(e.targetClasses.map(normalizeClassGroup))
+      ).filter(c => c !== '7-A' && !c.includes('-'));
     }
-    return e;
+    if (!e.uploadDate && e.createdAt) {
+      return { ...e, targetClasses: normalizedTargetClasses, uploadDate: e.createdAt, isUploadDateLocked: e.isUploadDateLocked ?? true };
+    }
+    return { ...e, targetClasses: normalizedTargetClasses };
   });
 };
 
@@ -807,10 +831,20 @@ export const deleteQuestion = async (questionId: string): Promise<void> => {
 // --- SUBMISSIONS & REKAP ---
 export const getAllSubmissions = (): ExamSubmission[] => {
   if (memorySubmissionsCache !== null) {
-    return memorySubmissionsCache.filter(s => !isSubmissionExcluded(s));
+    return memorySubmissionsCache.filter(s => !isSubmissionExcluded(s)).map(s => {
+      if (s.studentClass && (s.studentClass.includes('-') || s.studentClass.includes(' '))) {
+        return { ...s, studentClass: normalizeClassGroup(s.studentClass) };
+      }
+      return s;
+    });
   }
   const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, []);
-  const clean = stored.filter(s => !isSubmissionExcluded(s));
+  const clean = stored.filter(s => !isSubmissionExcluded(s)).map(s => {
+    if (s.studentClass && (s.studentClass.includes('-') || s.studentClass.includes(' '))) {
+      return { ...s, studentClass: normalizeClassGroup(s.studentClass) };
+    }
+    return s;
+  });
   if (clean.length !== stored.length) {
     setStored(STORAGE_KEYS.SUBMISSIONS, clean);
   }
@@ -819,7 +853,12 @@ export const getAllSubmissions = (): ExamSubmission[] => {
 };
 
 export const saveSubmissions = (submissions: ExamSubmission[], syncToDb = true): void => {
-  const clean = submissions.filter(s => !isSubmissionExcluded(s));
+  const clean = submissions.filter(s => !isSubmissionExcluded(s)).map(s => {
+    if (s.studentClass && (s.studentClass.includes('-') || s.studentClass.includes(' '))) {
+      return { ...s, studentClass: normalizeClassGroup(s.studentClass) };
+    }
+    return s;
+  });
   memorySubmissionsCache = clean;
   setStored(STORAGE_KEYS.SUBMISSIONS, clean);
   notifyDataUpdated();
@@ -1000,6 +1039,74 @@ export const purgeNis999Records = async (): Promise<{
     purgedUsersCount,
     purgedSubmissionsCount
   };
+};
+
+/**
+ * Memperbaiki dan menormalkan penamaan kelas yang bertanda strip seperti '7-A' menjadi '7A'
+ * baik di penyimpanan lokal maupun di database Supabase Cloud (cbt_users, cbt_submissions, cbt_rekap_nilai_siswa).
+ */
+export const migrateNonStandardClasses = async (): Promise<void> => {
+  // 1. Perbaiki users di lokal
+  const users = getAllUsers();
+  let usersChanged = false;
+  const fixedUsers = users.map(u => {
+    if (u.classGroup && (u.classGroup.includes('-') || u.classGroup.includes(' '))) {
+      usersChanged = true;
+      return { ...u, classGroup: normalizeClassGroup(u.classGroup) };
+    }
+    return u;
+  });
+  if (usersChanged) {
+    memoryUsersCache = fixedUsers;
+    setStored(STORAGE_KEYS.USERS, fixedUsers);
+  }
+
+  // 2. Perbaiki submissions di lokal
+  const subs = getAllSubmissions();
+  let subsChanged = false;
+  const fixedSubs = subs.map(s => {
+    if (s.studentClass && (s.studentClass.includes('-') || s.studentClass.includes(' '))) {
+      subsChanged = true;
+      return { ...s, studentClass: normalizeClassGroup(s.studentClass) };
+    }
+    return s;
+  });
+  if (subsChanged) {
+    memorySubmissionsCache = fixedSubs;
+    setStored(STORAGE_KEYS.SUBMISSIONS, fixedSubs);
+  }
+
+  // 3. Perbaiki exams di lokal
+  const exams = getAllExams();
+  let examsChanged = false;
+  const fixedExams = exams.map(e => {
+    if (e.targetClasses && e.targetClasses.some(c => c.includes('-') || c.includes(' '))) {
+      examsChanged = true;
+      return {
+        ...e,
+        targetClasses: Array.from(new Set(e.targetClasses.map(normalizeClassGroup))).filter(c => c !== '7-A' && !c.includes('-'))
+      };
+    }
+    return e;
+  });
+  if (examsChanged) {
+    memoryExamsCache = fixedExams;
+    setStored(STORAGE_KEYS.EXAMS, fixedExams);
+  }
+
+  // 4. Update di Supabase Cloud secara langsung
+  try {
+    const { supabase } = await import('./supabaseClient');
+    await supabase.from('cbt_users').update({ class_group: '7A' }).eq('class_group', '7-A');
+    await supabase.from('cbt_submissions').update({ student_class: '7A' }).eq('student_class', '7-A');
+    await supabase.from('cbt_rekap_nilai_siswa').update({ student_class: '7A' }).eq('student_class', '7-A');
+  } catch (err) {
+    console.warn('Non-blocking: Error updating 7-A in Supabase:', err);
+  }
+
+  if (usersChanged || subsChanged || examsChanged) {
+    notifyDataUpdated();
+  }
 };
 
 // Calculate automated grading for student submission

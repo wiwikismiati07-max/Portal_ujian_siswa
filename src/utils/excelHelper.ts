@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { User, Subject } from '../types';
+import { normalizeClassGroup } from './classHelper';
 
 export interface ExcelImportResult {
   success: boolean;
@@ -20,21 +21,21 @@ export const downloadExcelTemplate = (type: 'siswa' | 'guru' | 'mapel') => {
       {
         'Nomor Induk Siswa (NIS)': '20241010',
         'Nama Lengkap': 'Muhammad Rizky Pratama',
-        'Kelas': '7-A',
+        'Kelas': '7A',
         'Username': 'rizky_siswa',
         'Password': 'siswa123'
       },
       {
         'Nomor Induk Siswa (NIS)': '20241011',
         'Nama Lengkap': 'Nabila Putri Zahra',
-        'Kelas': '7-A',
+        'Kelas': '7A',
         'Username': 'nabila_siswa',
         'Password': 'siswa123'
       },
       {
         'Nomor Induk Siswa (NIS)': '20241012',
         'Nama Lengkap': 'Dimas Anggara',
-        'Kelas': '7-B',
+        'Kelas': '7B',
         'Username': 'dimas_siswa',
         'Password': 'siswa123'
       }
@@ -178,15 +179,16 @@ export const parseUploadedExcel = async (
           'idpeserta'
         ]);
 
-        // Flexible search for class/rombel
-        const classGroup = findField(row, [
+        // Flexible search for class/rombel (normalized to standard 7A-9H)
+        const rawClassGroup = findField(row, [
           'kelas',
           'rombel',
           'kelasrombel',
           'tingkat',
           'ruang',
           'kelassiswa'
-        ]) || '7-A';
+        ]) || '7A';
+        const classGroup = normalizeClassGroup(rawClassGroup) || '7A';
 
         // Flexible search for username
         let rawUsername = findField(row, [

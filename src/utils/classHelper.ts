@@ -5,6 +5,20 @@ export const DEFAULT_CLASSES = [
 ];
 
 /**
+ * Mengubah nama kelas ke format standar resmi SMPN 7 tanpa tanda hubung strip (misal: '7-A' -> '7A', '7 - A' -> '7A').
+ */
+export function normalizeClassGroup(rawClass?: string): string {
+  if (!rawClass) return '';
+  const clean = rawClass.trim().toUpperCase();
+  // Deteksi kelas bertanda hubung strip seperti 7-A, 8-B, 9-H atau spasi
+  const match = clean.match(/^(?:KELAS\s*)?(\d+)\s*[-_ ]*\s*([A-Z0-9]+)$/);
+  if (match) {
+    return `${match[1]}${match[2]}`;
+  }
+  return clean;
+}
+
+/**
  * Checks if a student's class matches any target classes configured for an exam.
  * Handles exact matches, grade levels (e.g., '7' matches '7A', '7-A', 'Kelas 7A'),
  * and variations with hyphens or spaces (e.g., '7-A' matches '7A').

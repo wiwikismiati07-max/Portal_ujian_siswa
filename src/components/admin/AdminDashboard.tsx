@@ -23,7 +23,7 @@ import { ExcelManager } from '../teacher/ExcelManager';
 import { ClassScoreRecap } from '../teacher/ClassScoreRecap';
 import { SUPABASE_SETUP_SQL, SUPABASE_REKAP_NILAI_SQL, SUPABASE_REKAP_NILAI_TABLE_SQL } from '../../utils/supabaseClient';
 import { ConfirmModal } from '../ConfirmModal';
-import { DEFAULT_CLASSES, compareByClassAndName, compareClassNames } from '../../utils/classHelper';
+import { DEFAULT_CLASSES, compareByClassAndName, compareClassNames, normalizeClassGroup } from '../../utils/classHelper';
 import { OfficialLetterhead } from '../common/OfficialLetterhead';
 import { OfficialReportSignature } from '../common/OfficialReportSignature';
 import { PrintPreviewModal } from '../common/PrintPreviewModal';
@@ -160,20 +160,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('siswa');
   const [formNipNis, setFormNipNis] = useState('');
-  const [formClassOrSubject, setFormClassOrSubject] = useState('7-A');
+  const [formClassOrSubject, setFormClassOrSubject] = useState('7A');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
 
-  // Available classes for filter
+  // Available classes for filter (standardized to 7A-9H without hyphens)
   const availableClasses = useMemo(() => {
     const classes = new Set<string>(DEFAULT_CLASSES);
     users.forEach(u => {
       if (u.classGroup && u.role === 'siswa') {
-        classes.add(u.classGroup);
+        const norm = normalizeClassGroup(u.classGroup);
+        if (norm && norm !== '7-A' && !norm.includes('-')) {
+          classes.add(norm);
+        }
       }
     });
-    return Array.from(classes).sort();
+    return Array.from(classes)
+      .filter(c => Boolean(c) && c !== '7-A' && !c.includes('-'))
+      .sort((a, b) => compareClassNames(a, b));
   }, [users]);
 
   // Counts by role
