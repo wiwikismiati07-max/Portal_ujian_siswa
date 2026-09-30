@@ -180,6 +180,9 @@ export const initializeStorage = (): void => {
     memoryQuestionsCache = [];
     memorySubmissionsCache = [];
   }
+
+  // Otomatis bersihkan seluruh data siswa NIS 999 dan nilai palsunya pada saat startup
+  purgeNis999Records().catch(() => {});
 };
 
 // --- AUTH ---
@@ -191,22 +194,41 @@ export const setCurrentUser = (user: User | null): void => {
   setStored(STORAGE_KEYS.CURRENT_USER, user);
 };
 
+// --- USER EXCLUSION CHECK ---
+export const isUserExcluded = (u: User): boolean => {
+  if (
+    u.id === 'user_guru_1' ||
+    u.username === 'budi_guru' ||
+    u.nipOrNis === '198305142008011012' ||
+    u.name?.toLowerCase().includes('budi santoso, s.kom') ||
+    u.name?.toLowerCase().includes('budi pratama wijaya') ||
+    ['user_siswa_1', 'user_siswa_2', 'user_siswa_3', 'user_siswa_4', 'user_siswa_5'].includes(u.id) ||
+    u.classGroup === 'X-IPA-1' ||
+    u.classGroup === 'X-IPA-2' ||
+    u.nipOrNis === '999' ||
+    u.username === '999' ||
+    u.id === '999' ||
+    u.nipOrNis?.trim() === '999'
+  ) {
+    return true;
+  }
+  return false;
+};
+
+export const isSubmissionExcluded = (s: ExamSubmission): boolean => {
+  if (isSubmissionDeleted(s.id, s.examId) || isExamDeleted(s.examId)) return true;
+  const cleanNis = s.studentNipOrNis?.trim();
+  if (cleanNis === '999') return true;
+  if (s.studentId === '999') return true;
+  return false;
+};
+
 export const getAllUsers = (): User[] => {
   if (memoryUsersCache !== null) {
-    return memoryUsersCache;
+    return memoryUsersCache.filter(u => !isUserExcluded(u));
   }
   const stored = getStored<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-  const clean = stored.filter(
-    u =>
-      u.id !== 'user_guru_1' &&
-      u.username !== 'budi_guru' &&
-      u.nipOrNis !== '198305142008011012' &&
-      !u.name?.toLowerCase().includes('budi santoso, s.kom') &&
-      !u.name?.toLowerCase().includes('budi pratama wijaya') &&
-      !['user_siswa_1', 'user_siswa_2', 'user_siswa_3', 'user_siswa_4', 'user_siswa_5'].includes(u.id) &&
-      u.classGroup !== 'X-IPA-1' &&
-      u.classGroup !== 'X-IPA-2'
-  );
+  const clean = stored.filter(u => !isUserExcluded(u));
   if (clean.length !== stored.length) {
     setStored(STORAGE_KEYS.USERS, clean);
     deleteUserFromSupabase('user_guru_1').catch(() => {});
@@ -216,10 +238,11 @@ export const getAllUsers = (): User[] => {
 };
 
 export const saveUsers = (users: User[], syncToDb = true): void => {
-  memoryUsersCache = users;
-  setStored(STORAGE_KEYS.USERS, users);
+  const clean = users.filter(u => !isUserExcluded(u));
+  memoryUsersCache = clean;
+  setStored(STORAGE_KEYS.USERS, clean);
   if (syncToDb) {
-    syncUsersBatchToSupabase(users).catch(() => {});
+    syncUsersBatchToSupabase(clean).catch(() => {});
   }
   notifyDataUpdated();
 };
@@ -784,10 +807,10 @@ export const deleteQuestion = async (questionId: string): Promise<void> => {
 // --- SUBMISSIONS & REKAP ---
 export const getAllSubmissions = (): ExamSubmission[] => {
   if (memorySubmissionsCache !== null) {
-    return memorySubmissionsCache.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+    return memorySubmissionsCache.filter(s => !isSubmissionExcluded(s));
   }
   const stored = getStored<ExamSubmission[]>(STORAGE_KEYS.SUBMISSIONS, []);
-  const clean = stored.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+  const clean = stored.filter(s => !isSubmissionExcluded(s));
   if (clean.length !== stored.length) {
     setStored(STORAGE_KEYS.SUBMISSIONS, clean);
   }
@@ -796,7 +819,7 @@ export const getAllSubmissions = (): ExamSubmission[] => {
 };
 
 export const saveSubmissions = (submissions: ExamSubmission[], syncToDb = true): void => {
-  const clean = submissions.filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+  const clean = submissions.filter(s => !isSubmissionExcluded(s));
   memorySubmissionsCache = clean;
   setStored(STORAGE_KEYS.SUBMISSIONS, clean);
   notifyDataUpdated();
@@ -893,6 +916,89 @@ export const resetMultipleStudentSubmissions = async (
     success: true,
     count: submissionIds.length,
     message: `${submissionIds.length} data pengerjaan remedial berhasil direset.`
+  };
+};
+
+/**
+ * Menghapus permanen seluruh data siswa dengan nomor NIS 999 beserta seluruh perolehan nilainya
+ * baik dari memori, localStorage, maupun langsung dari database Supabase Cloud.
+ */
+export const purgeNis999Records = async (): Promise<{
+  success: boolean;
+  purgedUsersCount: number;
+  purgedSubmissionsCount: number;
+}> => {
+  // 1. Bersihkan User dari memori & localStorage
+  const currentUsers = getAllUsers();
+  const targetUserIds = new Set(
+    currentUsers
+      .filter(u => u.nipOrNis === '999' || u.username === '999' || u.id === '999' || u.nipOrNis?.trim() === '999')
+      .map(u => u.id)
+  );
+  targetUserIds.add('999');
+
+  const cleanUsers = currentUsers.filter(u => !targetUserIds.has(u.id) && !isUserExcluded(u));
+  const purgedUsersCount = currentUsers.length - cleanUsers.length;
+  memoryUsersCache = cleanUsers;
+  setStored(STORAGE_KEYS.USERS, cleanUsers);
+
+  // 2. Bersihkan Submisi / Nilai dari memori & localStorage
+  const currentSubs = getAllSubmissions();
+  const cleanSubs = currentSubs.filter(s => {
+    if (isSubmissionExcluded(s)) return false;
+    if (targetUserIds.has(s.studentId)) return false;
+    return true;
+  });
+  const purgedSubmissionsCount = currentSubs.length - cleanSubs.length;
+  memorySubmissionsCache = cleanSubs;
+  setStored(STORAGE_KEYS.SUBMISSIONS, cleanSubs);
+
+  // 3. Hapus langsung dari Supabase Cloud (cbt_users, cbt_submissions, cbt_rekap_nilai_siswa, cbt_sync_store)
+  try {
+    const { supabase } = await import('./supabaseClient');
+
+    // Hapus dari cbt_users
+    await supabase.from('cbt_users').delete().or('nip_or_nis.eq.999,username.eq.999,id.eq.999');
+
+    // Hapus dari cbt_submissions
+    await supabase.from('cbt_submissions').delete().or('student_nip_or_nis.eq.999,student_id.eq.999');
+    if (targetUserIds.size > 0) {
+      await supabase.from('cbt_submissions').delete().in('student_id', Array.from(targetUserIds));
+    }
+
+    // Hapus dari cbt_rekap_nilai_siswa
+    await supabase.from('cbt_rekap_nilai_siswa').delete().or('student_nip_or_nis.eq.999,student_nisn.eq.999,student_id.eq.999');
+    if (targetUserIds.size > 0) {
+      await supabase.from('cbt_rekap_nilai_siswa').delete().in('student_id', Array.from(targetUserIds));
+    }
+
+    // Hapus dari cbt_sync_store
+    try {
+      const { data: storeRows } = await supabase.from('cbt_sync_store').select('key, value').like('key', 'sub_%');
+      if (storeRows && storeRows.length > 0) {
+        const keysToDelete: string[] = [];
+        for (const row of storeRows) {
+          if (row.value) {
+            const val = row.value;
+            if (val.studentNipOrNis === '999' || val.studentId === '999' || targetUserIds.has(val.studentId)) {
+              keysToDelete.push(row.key);
+            }
+          }
+        }
+        if (keysToDelete.length > 0) {
+          await supabase.from('cbt_sync_store').delete().in('key', keysToDelete);
+        }
+      }
+    } catch {}
+  } catch (err) {
+    console.warn('Non-blocking: Error purging NIS 999 from Supabase:', err);
+  }
+
+  notifyDataUpdated();
+  return {
+    success: true,
+    purgedUsersCount,
+    purgedSubmissionsCount
   };
 };
 

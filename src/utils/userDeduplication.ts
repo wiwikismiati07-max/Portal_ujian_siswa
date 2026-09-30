@@ -62,12 +62,16 @@ export const cleanAndDeduplicateUsers = (users: User[]): DeduplicationResult => 
   const removedUserIds: string[] = [];
 
   for (const user of users) {
-    // Specifically remove legacy demo user Budi Santoso
+    // Specifically remove legacy demo user Budi Santoso and invalid dummy student NIS 999
     if (
       user.id === 'user_guru_1' ||
       user.username === 'budi_guru' ||
       user.nipOrNis === '198305142008011012' ||
-      user.name?.toLowerCase().includes('budi santoso, s.kom')
+      user.name?.toLowerCase().includes('budi santoso, s.kom') ||
+      user.nipOrNis === '999' ||
+      user.username === '999' ||
+      user.id === '999' ||
+      user.nipOrNis?.trim() === '999'
     ) {
       removedUserIds.push(user.id);
       continue;

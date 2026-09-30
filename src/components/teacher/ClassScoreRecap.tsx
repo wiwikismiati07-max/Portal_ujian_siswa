@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Exam, ExamSubmission, Subject, User } from '../../types';
 import { exportExamResultsToExcel } from '../../utils/excelHelper';
 import { DEFAULT_CLASSES, compareByClassAndName } from '../../utils/classHelper';
-import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions } from '../../utils/storage';
+import { getAllUsers, resetStudentSubmission, resetMultipleStudentSubmissions, purgeNis999Records } from '../../utils/storage';
 import { pullFromSupabase } from '../../utils/supabaseSync';
 import { ConfirmModal } from '../ConfirmModal';
 import {
@@ -172,12 +172,25 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     const handleUpdate = () => {
       setAllUsers(getAllUsers());
     };
+    // Purge NIS 999 records automatically on mount
+    purgeNis999Records().catch(() => {});
     pullFromSupabase().catch(() => {});
     window.addEventListener('cbt_storage_update', handleUpdate);
     return () => window.removeEventListener('cbt_storage_update', handleUpdate);
   }, []);
 
-  const allStudents = useMemo(() => allUsers.filter(u => u.role === 'siswa'), [allUsers]);
+  const allStudents = useMemo(
+    () =>
+      allUsers.filter(
+        u =>
+          u.role === 'siswa' &&
+          u.nipOrNis !== '999' &&
+          u.username !== '999' &&
+          u.id !== '999' &&
+          u.nipOrNis?.trim() !== '999'
+      ),
+    [allUsers]
+  );
 
   // Extract unique classes from submissions & exams & default classes (7A-9H)
   const availableClasses = useMemo(() => {
@@ -197,8 +210,9 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
     setIsSyncing(true);
     setSyncStatusMsg(null);
     try {
+      await purgeNis999Records();
       await pullFromSupabase();
-      setSyncStatusMsg('Data berhasil disinkronkan dari database cloud!');
+      setSyncStatusMsg('Data berhasil disinkronkan & dibersihkan dari database cloud!');
       setTimeout(() => setSyncStatusMsg(null), 3000);
     } catch {
       setSyncStatusMsg('Gagal menyinkronkan data dari cloud.');
@@ -211,6 +225,9 @@ export const ClassScoreRecap: React.FC<ClassScoreRecapProps> = ({
   // Base filtered by Exam & Class (with optional full class roster inclusion)
   const baseSubmissions = useMemo(() => {
     const rawFiltered = submissions.filter(sub => {
+      // Exclude invalid NIS 999 submissions
+      if (sub.studentNipOrNis?.trim() === '999' || sub.studentId === '999') return false;
+
       if (selectedExamId !== 'all') {
         const matchesId = sub.examId === selectedExamId;
         const matchesTitle =

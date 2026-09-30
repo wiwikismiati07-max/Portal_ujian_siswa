@@ -471,11 +471,23 @@ export const pullFromSupabase = async (): Promise<void> => {
 
       saveUsers(cleanedUsers, false); // false = don't re-upload back to Supabase
       
-      // Clean up legacy demo user Budi Santoso in Supabase database in background
+      // Clean up legacy demo user Budi Santoso & NIS 999 test users in Supabase database in background
       supabase
         .from('cbt_users')
         .delete()
-        .or('id.eq.user_guru_1,username.eq.budi_guru,nip_or_nis.eq.198305142008011012')
+        .or('id.eq.user_guru_1,username.eq.budi_guru,nip_or_nis.eq.198305142008011012,nip_or_nis.eq.999,username.eq.999,id.eq.999')
+        .then(() => {});
+
+      supabase
+        .from('cbt_submissions')
+        .delete()
+        .or('student_nip_or_nis.eq.999,student_id.eq.999')
+        .then(() => {});
+
+      supabase
+        .from('cbt_rekap_nilai_siswa')
+        .delete()
+        .or('student_nip_or_nis.eq.999,student_nisn.eq.999,student_id.eq.999')
         .then(() => {});
 
       const current = getCurrentUser();
@@ -610,7 +622,12 @@ export const pullFromSupabase = async (): Promise<void> => {
     if (!subError && dbSubmissions) {
       const cleanSubs = dbSubmissions
         .map(mapSubmissionFromDb)
-        .filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+        .filter(s => 
+          !isSubmissionDeleted(s.id, s.examId) && 
+          !isExamDeleted(s.examId) &&
+          s.studentNipOrNis?.trim() !== '999' &&
+          s.studentId !== '999'
+        );
 
       for (const s of cleanSubs) {
         pulledSubMap.set(s.id, s);
@@ -628,7 +645,12 @@ export const pullFromSupabase = async (): Promise<void> => {
         for (const row of storeSubs) {
           if (row.value && typeof row.value === 'object' && row.value.id) {
             const sub = row.value as ExamSubmission;
-            if (!isSubmissionDeleted(sub.id, sub.examId) && !isExamDeleted(sub.examId)) {
+            if (
+              !isSubmissionDeleted(sub.id, sub.examId) && 
+              !isExamDeleted(sub.examId) &&
+              sub.studentNipOrNis?.trim() !== '999' &&
+              sub.studentId !== '999'
+            ) {
               if (!pulledSubMap.has(sub.id)) {
                 pulledSubMap.set(sub.id, sub);
               }
@@ -1559,7 +1581,12 @@ export const fetchSubmissionsDirectFromSupabase = async (examId?: string): Promi
     if (data && data.length > 0) {
       const mapped = data
         .map(mapSubmissionFromDb)
-        .filter(s => !isSubmissionDeleted(s.id, s.examId) && !isExamDeleted(s.examId));
+        .filter(s => 
+          !isSubmissionDeleted(s.id, s.examId) && 
+          !isExamDeleted(s.examId) &&
+          s.studentNipOrNis?.trim() !== '999' &&
+          s.studentId !== '999'
+        );
       for (const s of mapped) {
         map.set(s.id, s);
       }
@@ -1578,7 +1605,9 @@ export const fetchSubmissionsDirectFromSupabase = async (examId?: string): Promi
             if (
               (!examId || sub.examId === examId) &&
               !isSubmissionDeleted(sub.id, sub.examId) &&
-              !isExamDeleted(sub.examId)
+              !isExamDeleted(sub.examId) &&
+              sub.studentNipOrNis?.trim() !== '999' &&
+              sub.studentId !== '999'
             ) {
               if (!map.has(sub.id)) map.set(sub.id, sub);
             }

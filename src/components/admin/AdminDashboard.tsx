@@ -14,7 +14,8 @@ import {
   overwriteUsersByRoleDirect,
   importUsersWithModeDirect,
   deduplicateUsersDirect,
-  overwriteSubjectsDirect
+  overwriteSubjectsDirect,
+  purgeNis999Records
 } from '../../utils/storage';
 import { cleanAndDeduplicateUsers } from '../../utils/userDeduplication';
 import { pullFromSupabase } from '../../utils/supabaseSync';
@@ -51,7 +52,8 @@ import {
   RefreshCw,
   BarChart3,
   Printer,
-  Download
+  Download,
+  UserX
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -139,6 +141,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
       setSubmissions(getAllSubmissions());
       setSubjects(getAllSubjects());
     };
+
+    // Purge NIS 999 records automatically on mount
+    purgeNis999Records().catch(() => {});
 
     // Immediately pull fresh multi-user data from Supabase Cloud on mount
     pullFromSupabase().then(() => {
@@ -423,6 +428,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
     });
   };
 
+  const handlePurgeNis999 = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Siswa & Nilai NIS 999?',
+      message: 'PERINGATAN: Seluruh akun siswa bernama dengan NIS 999 dan seluruh perolehan nilainya yang tidak sesuai master data akan dihapus permanen dari memori dan database Supabase Cloud. Lanjutkan?',
+      confirmLabel: 'Ya, Hapus Data NIS 999',
+      isDanger: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        try {
+          const res = await purgeNis999Records();
+          await pullFromSupabase();
+          setUsers(getAllUsers());
+          setSubmissions(getAllSubmissions());
+          showNotification(
+            'success',
+            `Berhasil membersihkan ${res.purgedUsersCount} akun dan ${res.purgedSubmissionsCount} nilai dengan NIS 999!`
+          );
+        } catch {
+          showNotification('error', 'Gagal membersihkan data NIS 999.');
+        } finally {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      }
+    });
+  };
+
   const currentSql =
     sqlTab === 'rekap_table'
       ? SUPABASE_REKAP_NILAI_TABLE_SQL
@@ -534,6 +567,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin }) => {
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset Awal</span>
+          </button>
+          <button
+            type="button"
+            onClick={handlePurgeNis999}
+            className="px-3.5 py-2.5 bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-600/60 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer backdrop-blur-xs"
+            title="Hapus data siswa dengan NIS 999 dan seluruh nilainya yang tidak sesuai master data"
+          >
+            <UserX className="w-4 h-4 text-rose-300" />
+            <span>Hapus NIS 999 & Nilai</span>
           </button>
           <button
             type="button"
